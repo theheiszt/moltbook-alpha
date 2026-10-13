@@ -12,5 +12,6 @@ api_keys.json
 *.key
 
 # Local dynamic runtime caches / temp files
-*.html
 *.log
+clawnch_home.html
+clawncher.html
