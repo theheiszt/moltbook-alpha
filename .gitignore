@@ -1,0 +1,16 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Secrets and private credentials
+api_keys.json
+*credentials*.json
+*wallet*.json
+.env
+*.pem
+*.key
+
+# Local dynamic runtime caches / temp files
+*.html
+*.log

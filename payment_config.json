@@ -1,0 +1,18 @@
+{
+  "solana_treasury_wallet": "2sW9nZ1Q65qY8mD7xXvF4uL3kR9pE1wB7vC5nA2mG8hK",
+  "rpc_url": "https://api.mainnet-beta.solana.com",
+  "rates": {
+    "tier_starter": {
+      "usd": 1.0,
+      "credits": 50
+    },
+    "tier_pro": {
+      "usd": 5.0,
+      "credits": 300
+    },
+    "tier_unlimited": {
+      "usd": 20.0,
+      "credits": 999999
+    }
+  }
+}
