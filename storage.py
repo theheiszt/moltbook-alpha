@@ -8,6 +8,7 @@ import sqlite3
 import hashlib
 import secrets
 import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +25,8 @@ class StorageManager:
         self.db_path = Path(db_path).resolve()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        self._cached_active_count: Optional[int] = None
+        self._cached_active_count_time: float = 0.0
         self._init_db()
 
     def _open_connection(self) -> sqlite3.Connection:
@@ -102,6 +105,7 @@ class StorageManager:
                     """,
                     (k_hash, k_prefix, tier, credits, now_iso)
                 )
+                self._cached_active_count = None
 
         return raw_token, {
             "key_hash": k_hash,
@@ -231,6 +235,7 @@ class StorageManager:
                         """,
                         (sig, k_hash, asset, amount_raw, tier, credits_to_grant, now_iso)
                     )
+                    self._cached_active_count = None
                 return {
                     "status": "newly_minted",
                     "tx_signature": sig,
@@ -339,6 +344,7 @@ class StorageManager:
                         """,
                         (k_hash, k_prefix, tier, credits, now_iso)
                     )
+                self._cached_active_count = None
 
     def log_audit_event(
         self,
@@ -415,6 +421,8 @@ class StorageManager:
                 revoked = cur.rowcount > 0
 
         if revoked:
+            with self._lock:
+                self._cached_active_count = None
             self.log_audit_event("key_revocation", f"Revoked API key matching target: {target}")
         return revoked
 
@@ -432,10 +440,24 @@ class StorageManager:
         except Exception as e:
             raise StorageError(f"Database health check failed: {e!s}") from e
 
-    def get_active_keys_count(self) -> int:
-        """Returns the current count of active API keys in SQLite."""
-        with self._lock, self.connection() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT COUNT(*) FROM api_keys WHERE is_active = 1")
-            row = cur.fetchone()
-            return int(row[0]) if row else 0
+    def get_active_keys_count(self, max_age_seconds: float = 15.0) -> int:
+        """
+        Returns the count of active API keys in SQLite with thread-safe TTL caching.
+        Prevents repeated disk queries during high-frequency Prometheus metrics scraping.
+        Freshness guarantee: at most `max_age_seconds` old (default 15s), and invalidated
+        immediately on local key creations, redemptions, or revocations.
+        """
+        now = time.monotonic()
+        with self._lock:
+            if max_age_seconds > 0 and self._cached_active_count is not None:
+                if (now - self._cached_active_count_time) < max_age_seconds:
+                    return self._cached_active_count
+
+            with self.connection() as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT COUNT(*) FROM api_keys WHERE is_active = 1")
+                row = cur.fetchone()
+                count = int(row[0]) if row else 0
+                self._cached_active_count = count
+                self._cached_active_count_time = now
+                return count

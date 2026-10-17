@@ -4,6 +4,7 @@ Verifies on-chain transactions on Solana mainnet and automatically mints API key
 with ACID transactional SQLite storage, zero backdoors, rate limiting, and fail-closed security.
 """
 
+import os
 from typing import Optional, Dict, Any
 from fastapi import FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse
@@ -55,8 +56,19 @@ async def metrics_middleware(request: Request, call_next):
         endpoint = request.url.path
         if endpoint.startswith("/v1/payments/status/"):
             norm_endpoint = "/v1/payments/status/:signature"
-        else:
+        elif endpoint in {
+            "/",
+            "/metrics",
+            "/v1/health",
+            "/v1/payments/config",
+            "/v1/payments/verify-solana",
+            "/v1/payments/webhook",
+            "/v1/keys/generate-demo",
+            "/v1/briefing/latest",
+        }:
             norm_endpoint = endpoint
+        else:
+            norm_endpoint = "unmatched_route"
         record_request(norm_endpoint, request.method, status_code)
 
 
@@ -143,11 +155,22 @@ def health_check():
 
 
 @app.get("/metrics")
-def get_prometheus_metrics():
+def get_prometheus_metrics(request: Request):
     """
     Prometheus and OpenTelemetry-compatible metrics exposition endpoint.
     Returns plain text in standard Prometheus 0.0.4 exposition format.
+    Supports optional METRICS_BEARER_TOKEN authorization header if configured in production.
     """
+    metrics_token = os.getenv("METRICS_BEARER_TOKEN", "").strip()
+    if metrics_token:
+        auth_header = request.headers.get("authorization", "")
+        if auth_header != f"Bearer {metrics_token}":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unauthorized access to metrics exposition endpoint.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
     try:
         update_active_keys_gauge(storage.get_active_keys_count())
     except Exception:
@@ -367,7 +390,7 @@ def get_payment_status(signature: str):
     sig = signature.strip()
     if not (80 <= len(sig) <= 90) or not BASE58_PATTERN.match(sig):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=getattr(status, "HTTP_422_UNPROCESSABLE_CONTENT", 422),
             detail="Solana transaction signature must be valid Base58 between 80 and 90 characters.",
         )
 

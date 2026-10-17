@@ -124,7 +124,8 @@ def test_convenience_functions_and_rpc_hops():
     record_payment("SOL", "tier_starter", "newly_minted")
     record_webhook("auth_failed")
     record_rate_limit("/v1/payments/verify-solana")
-    record_request("/v1/custom", "POST", 201)
+    record_request("/v1/payments/config", "GET", 200)
+    record_request("/v1/custom", "POST", 201)  # unknown route -> clamped to unmatched_route
     update_active_keys_gauge(7)
 
     text = registry.export_prometheus_text()
@@ -134,7 +135,169 @@ def test_convenience_functions_and_rpc_hops():
     assert 'moltbook_payments_verified_total{asset="SOL",status="newly_minted",tier="tier_starter"} 1' in text
     assert 'moltbook_webhooks_processed_total{status="auth_failed"} 1' in text
     assert 'moltbook_rate_limit_exceeded_total{endpoint="/v1/payments/verify-solana"} 1' in text
-    assert 'moltbook_api_requests_total{endpoint="/v1/custom",method="POST",status_code="201"} 1' in text
+    assert 'moltbook_api_requests_total{endpoint="/v1/payments/config",method="GET",status_code="200"} 1' in text
+    assert 'moltbook_api_requests_total{endpoint="unmatched_route",method="POST",status_code="201"} 1' in text
     assert "moltbook_api_keys_active_total 7" in text
     assert 'moltbook_payment_verification_duration_seconds_count{asset="SOL"} 1' in text
+
+
+def test_empty_registry_and_zero_values():
+    reg = MetricsRegistry()
+    assert reg.export_prometheus_text() == "\n"
+
+    reg.register("zero_counter", "Counter at zero", "counter")
+    reg.register("zero_gauge", "Gauge at zero", "gauge")
+    reg.register("zero_hist", "Hist at zero", "histogram")
+
+    reg.counter_inc("zero_counter", {"status": "ok"}, value=0.0)
+    reg.gauge_set("zero_gauge", value=0.0)
+    reg.histogram_observe("zero_hist", 0.0, buckets=(0.1, 1.0))
+
+    out = reg.export_prometheus_text()
+    assert 'zero_counter{status="ok"} 0' in out
+    assert "zero_gauge 0" in out
+    assert 'zero_hist_bucket{le="0.1"} 1' in out
+    assert 'zero_hist_bucket{le="1"} 1' in out
+    assert 'zero_hist_bucket{le="+Inf"} 1' in out
+    assert "zero_hist_sum 0.000000" in out
+    assert "zero_hist_count 1" in out
+
+
+def test_label_and_help_text_escaping():
+    reg = MetricsRegistry()
+    reg.register("escaped_metric", 'Help with "quotes", \\backslashes\\, and \nnewlines', "counter")
+    reg.counter_inc(
+        "escaped_metric",
+        {"label_with_quote": 'value"with"quotes', "label_with_newline": "val\nnewline", "label_slash": "val\\slash"},
+        value=5.0,
+    )
+    out = reg.export_prometheus_text()
+    assert r'# HELP escaped_metric Help with "quotes", \\backslashes\\, and \nnewlines' in out
+    assert r'label_with_quote="value\"with\"quotes"' in out
+    assert r'label_with_newline="val\nnewline"' in out
+    assert r'label_slash="val\\slash"' in out
+    assert " 5" in out
+
+
+def test_cardinality_bounds_and_input_sanitization():
+    # Asset clamping
+    record_payment("DOGECOIN", "tier_starter", "newly_minted")
+    # Tier clamping
+    record_payment("SOL", "unconfigured_tier_hacker", "newly_minted")
+    # Status clamping
+    record_payment("SOL", "tier_starter", "arbitrary_status_injection")
+    # Provider URL sanitization with port, credentials, path, query
+    record_rpc_hop("https://user:password@rpc.helius.xyz:8899/v1/?api-key=secret", "success")
+    # Provider with excessive length
+    record_rpc_hop("https://" + "a" * 100 + ".com", "error")
+    # Endpoint normalization
+    record_rate_limit("/attacker/probing/for/paths/12345")
+    # Invalid method and status code
+    record_request("/random/404/path", "PATCH_EXPLOIT", 999)
+
+    out = registry.export_prometheus_text()
+    # Clamped asset
+    assert 'moltbook_payments_verified_total{asset="UNKNOWN",status="newly_minted",tier="tier_starter"} 1' in out
+    # Clamped tier
+    assert 'moltbook_payments_verified_total{asset="SOL",status="newly_minted",tier="unknown"} 1' in out
+    # Clamped status
+    assert 'moltbook_payments_verified_total{asset="SOL",status="unknown",tier="tier_starter"} 1' in out
+    # Sanitized host (no credentials, port, path, query, secrets)
+    assert 'provider="rpc.helius.xyz"' in out
+    assert "secret" not in out
+    assert "8899" not in out
+    # Excessive length clamped
+    assert 'provider="unknown_provider"' in out
+    # Clamped rate limit endpoint
+    assert 'moltbook_rate_limit_exceeded_total{endpoint="unmatched_route"} 1' in out
+    # Clamped request endpoint, method, status_code
+    assert 'moltbook_api_requests_total{endpoint="unmatched_route",method="UNKNOWN",status_code="unknown"} 1' in out
+
+
+def test_concurrent_scraping_and_mutation_thread_safety():
+    import threading
+
+    reg = MetricsRegistry()
+    reg.register("concurrent_counter", "Concurrent counter", "counter")
+    reg.register("concurrent_hist", "Concurrent histogram", "histogram")
+
+    num_threads = 16
+    increments_per_thread = 250
+    exceptions = []
+
+    def worker(tid: int):
+        try:
+            for _ in range(increments_per_thread):
+                reg.counter_inc("concurrent_counter", {"worker": f"w_{tid % 4}"}, value=1.0)
+                reg.histogram_observe("concurrent_hist", 0.05, {"worker": f"w_{tid % 4}"})
+                # Periodic concurrent read / scrape simulation
+                _ = reg.export_prometheus_text()
+        except Exception as e:
+            exceptions.append(e)
+
+    threads = [threading.Thread(target=worker, args=(i,)) for i in range(num_threads)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not exceptions, f"Exceptions occurred during concurrent metrics execution: {exceptions}"
+
+    final_text = reg.export_prometheus_text()
+    expected_total = num_threads * increments_per_thread
+    assert "concurrent_hist_count" in final_text
+    # All 4 workers combined sum to expected_total
+    total_obs = sum(
+        v["count"] for v in reg._histograms.values()
+    )
+    assert total_obs == expected_total
+
+
+def test_storage_active_keys_count_ttl_caching(tmp_path):
+    from storage import StorageManager
+
+    db_file = tmp_path / "test_ttl.db"
+    storage = StorageManager(db_file)
+
+    # Initially 0
+    assert storage.get_active_keys_count() == 0
+
+    # Create 3 keys
+    storage.create_api_key("tier_starter", 50)
+    storage.create_api_key("tier_pro", 300)
+    raw3, rec3 = storage.create_api_key("tier_unlimited", 999999)
+
+    # First call updates cache
+    assert storage.get_active_keys_count() == 3
+
+    # Direct DB mutation without going through StorageManager cache invalidation
+    with storage.connection() as conn:
+        conn.execute("UPDATE api_keys SET is_active = 0 WHERE key_hash = ?", (rec3["key_hash"],))
+        conn.commit()
+
+    # Cached value is returned within TTL (15s)
+    assert storage.get_active_keys_count(max_age_seconds=15.0) == 3
+
+    # Forcing refresh or expiration returns fresh value (2)
+    assert storage.get_active_keys_count(max_age_seconds=0.0) == 2
+
+
+def test_metrics_endpoint_bearer_token_protection(monkeypatch):
+    monkeypatch.setenv("METRICS_BEARER_TOKEN", "prod_super_secret_metrics_token")
+
+    client = TestClient(app)
+
+    # 1. Without auth header -> 401 Unauthorized
+    resp_no_auth = client.get("/metrics")
+    assert resp_no_auth.status_code == 401
+    assert "Unauthorized" in resp_no_auth.json()["detail"]
+
+    # 2. With wrong auth header -> 401 Unauthorized
+    resp_wrong_auth = client.get("/metrics", headers={"Authorization": "Bearer wrong_token"})
+    assert resp_wrong_auth.status_code == 401
+
+    # 3. With correct auth header -> 200 OK with Prometheus exposition
+    resp_valid = client.get("/metrics", headers={"Authorization": "Bearer prod_super_secret_metrics_token"})
+    assert resp_valid.status_code == 200
+    assert "# HELP" in resp_valid.text
 

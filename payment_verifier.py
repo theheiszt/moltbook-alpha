@@ -8,6 +8,7 @@ import json
 import time
 import urllib.request
 import urllib.error
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, Callable
 from pydantic import BaseModel, field_validator
 
@@ -56,6 +57,9 @@ class VerifiedPayment:
         credits: int,
         recipient: str,
         rpc_endpoint_used: Optional[str] = None,
+        commitment: str = "finalized",
+        verified_at_utc: Optional[str] = None,
+        cluster: str = "mainnet-beta",
     ):
         self.tx_signature = tx_signature
         self.asset = asset
@@ -64,6 +68,9 @@ class VerifiedPayment:
         self.credits = credits
         self.recipient = recipient
         self.rpc_endpoint_used = rpc_endpoint_used
+        self.commitment = commitment
+        self.verified_at_utc = verified_at_utc or datetime.now(timezone.utc).isoformat()
+        self.cluster = cluster
 
 
 class SolanaPaymentVerifier:
@@ -252,6 +259,9 @@ class SolanaPaymentVerifier:
                 credits=credits_to_grant,
                 recipient=self.treasury_wallet,
                 rpc_endpoint_used=self.active_rpc_endpoint or self.rpc_url,
+                commitment="finalized",
+                verified_at_utc=datetime.now(timezone.utc).isoformat(),
+                cluster="mainnet-beta",
             )
         except Exception:
             record_verification_latency(asset_label, time.perf_counter() - t0)

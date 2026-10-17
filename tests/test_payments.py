@@ -263,3 +263,99 @@ def test_api_verify_invalid_signature_format():
     # Too short
     res = client.post("/v1/payments/verify-solana", json={"transaction_signature": "short_sig"})
     assert res.status_code == 422
+
+
+def test_verified_payment_contains_integrity_invariants():
+    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000)
+    verifier = SolanaPaymentVerifier(rpc_caller=lambda method, params: {"result": tx})
+    result = verifier.verify_payment(SAMPLE_SIGNATURE)
+
+    assert result.commitment == "finalized"
+    assert result.cluster == "mainnet-beta"
+    assert result.verified_at_utc is not None
+    assert result.recipient == TREASURY
+    assert result.asset == "USDC"
+    assert result.amount_raw == 1_000_000
+    assert result.tier == "tier_starter"
+    assert result.credits == 50
+
+
+def test_wrong_decimals_rejected():
+    # Canonical USDC is 6 decimals; an attacker creating fake SPL token with 9 decimals must be rejected
+    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000, decimals=9)
+    verifier = SolanaPaymentVerifier(rpc_caller=lambda method, params: {"result": tx})
+
+    try:
+        verifier.verify_payment(SAMPLE_SIGNATURE)
+        assert False, "Expected VerificationError for wrong decimals"
+    except VerificationError as e:
+        assert "No verified transfer to the configured treasury wallet found" in str(e)
+
+
+def test_missing_or_corrupt_metadata_rejected():
+    # Missing meta
+    tx_no_meta = {"slot": 12345, "transaction": {}}
+    verifier = SolanaPaymentVerifier(rpc_caller=lambda method, params: {"result": tx_no_meta})
+
+    try:
+        verifier.verify_payment(SAMPLE_SIGNATURE)
+        assert False, "Expected VerificationError for missing meta"
+    except VerificationError as e:
+        assert "Transaction metadata is missing" in str(e)
+
+
+def test_concurrent_in_flight_deduplication():
+    import threading
+    from rate_limiter import InFlightDeduplicator
+
+    dedup = InFlightDeduplicator()
+    call_count = 0
+    lock = threading.Lock()
+
+    def slow_verify():
+        nonlocal call_count
+        import time
+        with lock:
+            call_count += 1
+        time.sleep(0.05)
+        return "verified_result"
+
+    results = []
+
+    def task():
+        r = dedup.execute("concurrent_sig_test", slow_verify)
+        results.append(r)
+
+    threads = [threading.Thread(target=task) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert call_count == 1
+    assert len(results) == 8
+    assert all(r == "verified_result" for r in results)
+
+
+def test_transport_retries_vs_payment_metrics_accounting(monkeypatch):
+    from metrics import registry
+
+    registry.reset()
+    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000)
+    endpoints = ["https://primary-429.solana.com", "https://backup-ok.solana.com"]
+
+    def mock_rpc_caller(endpoint, method, params):
+        if "primary-429" in endpoint:
+            raise RPCError("429 Too Many Requests")
+        return {"result": tx}
+
+    verifier = SolanaPaymentVerifier(rpc_endpoints=endpoints, rpc_caller=mock_rpc_caller)
+    verified = verifier.verify_payment(SAMPLE_SIGNATURE, "tier_starter")
+    assert verified.asset == "USDC"
+
+    text = registry.export_prometheus_text()
+    # Exactly 2 RPC hops recorded (1 failed 429, 1 success)
+    assert 'moltbook_rpc_failover_hops_total{outcome="rate_limited_429",provider="primary-429.solana.com"} 1' in text
+    assert 'moltbook_rpc_failover_hops_total{outcome="success",provider="backup-ok.solana.com"} 1' in text
+    # Latency histogram recorded exactly 1 observation
+    assert 'moltbook_payment_verification_duration_seconds_count{asset="USDC"} 1' in text

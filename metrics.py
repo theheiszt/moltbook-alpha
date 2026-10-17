@@ -7,11 +7,64 @@ webhook throughput, rate limit breaches, and active key counts.
 """
 
 import threading
-from typing import Dict, Tuple, List, Optional, Sequence
-
+import urllib.parse
+from typing import Dict, Tuple, List, Optional, Sequence, Any
 
 
 DEFAULT_LATENCY_BUCKETS: Sequence[float] = (0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0)
+
+# Bounded label allowlists to strictly prevent cardinality explosion
+ALLOWED_ASSETS = {"SOL", "USDC", "UNKNOWN"}
+ALLOWED_TIERS = {"tier_starter", "tier_pro", "tier_unlimited", "trial", "unknown"}
+ALLOWED_PAYMENT_STATUSES = {"newly_minted", "already_redeemed", "failed", "rpc_error", "unknown"}
+ALLOWED_WEBHOOK_STATUSES = {"newly_minted", "already_redeemed", "auth_failed", "verification_failed", "rpc_error", "unknown"}
+ALLOWED_RPC_OUTCOMES = {"success", "rate_limited_429", "timeout", "error", "unknown"}
+ALLOWED_HTTP_METHODS = {"GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "UNKNOWN"}
+KNOWN_NORMALIZED_ENDPOINTS = {
+    "/",
+    "/metrics",
+    "/v1/health",
+    "/v1/payments/config",
+    "/v1/payments/verify-solana",
+    "/v1/payments/webhook",
+    "/v1/payments/status/:signature",
+    "/v1/keys/generate-demo",
+    "/v1/briefing/latest",
+    "unmatched_route",
+}
+
+
+def sanitize_label_value(val: Any) -> str:
+    """Escapes backslashes, double-quotes, and newlines in Prometheus label values."""
+    s = str(val)
+    return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
+def sanitize_help_text(text: str) -> str:
+    """Escapes backslashes and newlines in Prometheus HELP strings."""
+    return text.replace("\\", "\\\\").replace("\n", "\\n")
+
+
+def sanitize_provider_host(provider: str) -> str:
+    """
+    Extracts and strictly sanitizes hostname from RPC URL to prevent label cardinality attacks.
+    Removes port numbers, authentication credentials, queries, and path components.
+    """
+    if not provider:
+        return "unknown_provider"
+    p = provider.strip()
+    if not (p.startswith("http://") or p.startswith("https://")):
+        p = "https://" + p
+    try:
+        parsed = urllib.parse.urlparse(p)
+        host = parsed.hostname or "unknown_provider"
+    except Exception:
+        host = "unknown_provider"
+    # Keep only safe hostname characters (alphanumeric, dot, dash)
+    clean_host = "".join(c for c in host.lower() if c.isalnum() or c in ".-")
+    if not clean_host or len(clean_host) > 64:
+        return "unknown_provider"
+    return clean_host
 
 
 class MetricsRegistry:
@@ -21,7 +74,7 @@ class MetricsRegistry:
         self._counters: Dict[Tuple[str, Tuple[Tuple[str, str], ...]], float] = {}
         # Gauges: (name, tuple_of_sorted_label_pairs) -> float
         self._gauges: Dict[Tuple[str, Tuple[Tuple[str, str], ...]], float] = {}
-        # Histograms: (name, tuple_of_sorted_label_pairs) -> { "buckets": dict(le -> count), "sum": float, "count": int }
+        # Histograms: (name, tuple_of_sorted_label_pairs) -> { "bucket_counts": dict, "sum": float, "count": int, "buckets": list }
         self._histograms: Dict[Tuple[str, Tuple[Tuple[str, str], ...]], Dict] = {}
         # Metadata: name -> (help_text, metric_type)
         self._meta: Dict[str, Tuple[str, str]] = {}
@@ -31,6 +84,8 @@ class MetricsRegistry:
             self._meta[name] = (help_text, metric_type)
 
     def counter_inc(self, name: str, labels: Optional[Dict[str, str]] = None, value: float = 1.0):
+        if value < 0:
+            raise ValueError(f"Counter increments must be non-negative, received {value}")
         key = self._make_key(name, labels)
         with self._lock:
             self._counters[key] = self._counters.get(key, 0.0) + value
@@ -38,7 +93,7 @@ class MetricsRegistry:
     def gauge_set(self, name: str, labels: Optional[Dict[str, str]] = None, value: float = 0.0):
         key = self._make_key(name, labels)
         with self._lock:
-            self._gauges[key] = value
+            self._gauges[key] = float(value)
 
     def histogram_observe(
         self,
@@ -60,7 +115,7 @@ class MetricsRegistry:
                 }
 
             hist = self._histograms[key]
-            hist["sum"] += value
+            hist["sum"] += float(value)
             hist["count"] += 1
             for b in hist["buckets"]:
                 if value <= b:
@@ -71,7 +126,7 @@ class MetricsRegistry:
     def _make_key(name: str, labels: Optional[Dict[str, str]]) -> Tuple[str, Tuple[Tuple[str, str], ...]]:
         if not labels:
             return name, ()
-        sorted_pairs = tuple(sorted(labels.items()))
+        sorted_pairs = tuple(sorted((str(k), str(v)) for k, v in labels.items()))
         return name, sorted_pairs
 
     @staticmethod
@@ -83,58 +138,80 @@ class MetricsRegistry:
             return ""
         items = []
         for k in sorted(d.keys()):
-            val = str(d[k]).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+            val = sanitize_label_value(d[k])
             items.append(f'{k}="{val}"')
         return "{" + ",".join(items) + "}"
 
     def export_prometheus_text(self) -> str:
         """
         Exports all recorded metrics in the official Prometheus text exposition format (0.0.4).
+        Takes a point-in-time snapshot under lock, then renders text without holding lock.
         """
-        lines: List[str] = []
-
         with self._lock:
-            # Group keys by metric name
-            all_names = sorted(set(
-                [k[0] for k in self._counters] +
-                [k[0] for k in self._gauges] +
-                [k[0] for k in self._histograms] +
-                list(self._meta.keys())
-            ))
+            counters_snap = dict(self._counters)
+            gauges_snap = dict(self._gauges)
+            meta_snap = dict(self._meta)
+            histograms_snap = {
+                k: {
+                    "bucket_counts": dict(v["bucket_counts"]),
+                    "sum": v["sum"],
+                    "count": v["count"],
+                    "buckets": list(v["buckets"]),
+                }
+                for k, v in self._histograms.items()
+            }
 
-            for name in all_names:
-                help_text, metric_type = self._meta.get(name, ("Moltbook API metric", "untyped"))
-                lines.append(f"# HELP {name} {help_text}")
-                lines.append(f"# TYPE {name} {metric_type}")
+        # If nothing is registered or recorded, return empty exposition
+        if not (counters_snap or gauges_snap or histograms_snap or meta_snap):
+            return "\n"
 
-                if metric_type == "counter":
-                    for (m_name, pairs), val in sorted(self._counters.items()):
-                        if m_name == name:
-                            lbls = self._format_labels(pairs)
-                            lines.append(f"{name}{lbls} {val:g}")
+        lines: List[str] = []
+        all_names = sorted(set(
+            [k[0] for k in counters_snap] +
+            [k[0] for k in gauges_snap] +
+            [k[0] for k in histograms_snap] +
+            list(meta_snap.keys())
+        ))
 
-                elif metric_type == "gauge":
-                    for (m_name, pairs), val in sorted(self._gauges.items()):
-                        if m_name == name:
-                            lbls = self._format_labels(pairs)
-                            lines.append(f"{name}{lbls} {val:g}")
+        for name in all_names:
+            help_text, metric_type = meta_snap.get(name, ("Moltbook API metric", "untyped"))
+            lines.append(f"# HELP {name} {sanitize_help_text(help_text)}")
+            lines.append(f"# TYPE {name} {metric_type}")
 
-                elif metric_type == "histogram":
-                    for (m_name, pairs), hist in sorted(self._histograms.items()):
-                        if m_name == name:
-                            # Buckets
-                            cum_count = 0
-                            for b in hist["buckets"]:
-                                cum_count = hist["bucket_counts"][b]
-                                lbls = self._format_labels(pairs, extra={"le": f"{b:g}"})
-                                lines.append(f"{name}_bucket{lbls} {cum_count}")
-                            inf_lbls = self._format_labels(pairs, extra={"le": "+Inf"})
-                            lines.append(f"{name}_bucket{inf_lbls} {hist['count']}")
-                            # Sum and Count
-                            lbls_sum_count = self._format_labels(pairs)
-                            lines.append(f"{name}_sum{lbls_sum_count} {hist['sum']:.6f}")
-                            lines.append(f"{name}_count{lbls_sum_count} {hist['count']}")
+            has_samples = False
 
+            if metric_type == "counter":
+                for (m_name, pairs), val in sorted(counters_snap.items()):
+                    if m_name == name:
+                        lbls = self._format_labels(pairs)
+                        lines.append(f"{name}{lbls} {val:g}")
+                        has_samples = True
+
+            elif metric_type == "gauge":
+                for (m_name, pairs), val in sorted(gauges_snap.items()):
+                    if m_name == name:
+                        lbls = self._format_labels(pairs)
+                        lines.append(f"{name}{lbls} {val:g}")
+                        has_samples = True
+
+            elif metric_type == "histogram":
+                for (m_name, pairs), hist in sorted(histograms_snap.items()):
+                    if m_name == name:
+                        has_samples = True
+                        for b in hist["buckets"]:
+                            cum_count = hist["bucket_counts"][b]
+                            lbls = self._format_labels(pairs, extra={"le": f"{b:g}"})
+                            lines.append(f"{name}_bucket{lbls} {cum_count}")
+                        inf_lbls = self._format_labels(pairs, extra={"le": "+Inf"})
+                        lines.append(f"{name}_bucket{inf_lbls} {hist['count']}")
+                        lbls_sum_count = self._format_labels(pairs)
+                        lines.append(f"{name}_sum{lbls_sum_count} {hist['sum']:.6f}")
+                        lines.append(f"{name}_count{lbls_sum_count} {hist['count']}")
+
+            # Only append section separator if samples were rendered
+            if has_samples:
+                lines.append("")
+            else:
                 lines.append("")
 
         return "\n".join(lines).strip() + "\n"
@@ -187,51 +264,95 @@ registry.register(
 )
 
 
-# Convenience Instrumentation Functions
+# Convenience Instrumentation Functions with Cardinality Bounds
 def record_payment(asset: str, tier: str, status: str):
+    clean_asset = asset.upper().strip() if asset else "UNKNOWN"
+    if clean_asset not in ALLOWED_ASSETS:
+        clean_asset = "UNKNOWN"
+
+    clean_tier = tier.strip() if tier else "unknown"
+    if clean_tier not in ALLOWED_TIERS:
+        clean_tier = "unknown"
+
+    clean_status = status.strip() if status else "unknown"
+    if clean_status not in ALLOWED_PAYMENT_STATUSES:
+        clean_status = "unknown"
+
     registry.counter_inc(
         "moltbook_payments_verified_total",
-        {"asset": asset.upper(), "tier": tier, "status": status},
+        {"asset": clean_asset, "tier": clean_tier, "status": clean_status},
     )
 
 
 def record_verification_latency(asset: str, duration_seconds: float):
+    clean_asset = asset.upper().strip() if asset else "UNKNOWN"
+    if clean_asset not in ALLOWED_ASSETS:
+        clean_asset = "UNKNOWN"
+
     registry.histogram_observe(
         "moltbook_payment_verification_duration_seconds",
-        duration_seconds,
-        {"asset": asset.upper()},
+        max(0.0, float(duration_seconds)),
+        {"asset": clean_asset},
     )
 
 
 def record_rpc_hop(provider: str, outcome: str):
-    # Simplify provider domain for clean cardinality (e.g. 'api.mainnet-beta.solana.com')
-    clean_provider = provider.replace("https://", "").replace("http://", "").split("/")[0]
+    clean_provider = sanitize_provider_host(provider)
+    clean_outcome = outcome.strip() if outcome else "unknown"
+    if clean_outcome not in ALLOWED_RPC_OUTCOMES:
+        clean_outcome = "unknown"
+
     registry.counter_inc(
         "moltbook_rpc_failover_hops_total",
-        {"provider": clean_provider, "outcome": outcome},
+        {"provider": clean_provider, "outcome": clean_outcome},
     )
 
 
 def record_webhook(status: str):
+    clean_status = status.strip() if status else "unknown"
+    if clean_status not in ALLOWED_WEBHOOK_STATUSES:
+        clean_status = "unknown"
+
     registry.counter_inc(
         "moltbook_webhooks_processed_total",
-        {"status": status},
+        {"status": clean_status},
     )
 
 
 def record_rate_limit(endpoint: str):
+    clean_endpoint = endpoint.strip() if endpoint else "unmatched_route"
+    if clean_endpoint not in KNOWN_NORMALIZED_ENDPOINTS:
+        clean_endpoint = "unmatched_route"
+
     registry.counter_inc(
         "moltbook_rate_limit_exceeded_total",
-        {"endpoint": endpoint},
+        {"endpoint": clean_endpoint},
     )
 
 
 def record_request(endpoint: str, method: str, status_code: int):
+    clean_endpoint = endpoint.strip() if endpoint else "unmatched_route"
+    if clean_endpoint not in KNOWN_NORMALIZED_ENDPOINTS:
+        clean_endpoint = "unmatched_route"
+
+    clean_method = method.upper().strip() if method else "UNKNOWN"
+    if clean_method not in ALLOWED_HTTP_METHODS:
+        clean_method = "UNKNOWN"
+
+    try:
+        code_int = int(status_code)
+        if 100 <= code_int <= 599:
+            clean_status = str(code_int)
+        else:
+            clean_status = "unknown"
+    except Exception:
+        clean_status = "unknown"
+
     registry.counter_inc(
         "moltbook_api_requests_total",
-        {"endpoint": endpoint, "method": method.upper(), "status_code": str(status_code)},
+        {"endpoint": clean_endpoint, "method": clean_method, "status_code": clean_status},
     )
 
 
 def update_active_keys_gauge(active_count: int):
-    registry.gauge_set("moltbook_api_keys_active_total", value=float(active_count))
+    registry.gauge_set("moltbook_api_keys_active_total", value=float(max(0, active_count)))

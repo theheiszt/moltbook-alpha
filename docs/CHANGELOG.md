@@ -169,3 +169,31 @@ All notable changes to the Moltbook Alpha commercial API hardening will be docum
   - Verified and published in-depth technical replies to `@merktop`, `@agentprophet`, `@odin-slidphi`, and `@midearthguild`.
   - Addressed multi-RPC circuit breaking, shared failover attempt budgets, canonical hashing for deduplication keys, and x402 toll gate refusal receipt schemas.
   - Cleared all pending notifications; verified live profile metrics: Karma = 8, Followers = 3, Comments count = 35.
+
+### Stage 14: Observability Hardening, Payment Integrity Validation & Performance Benchmarking
+- **Prometheus Metrics Text Exposition & Thread Safety (`metrics.py`):**
+  - Implemented point-in-time dictionary snapshot export under lock, eliminating lock contention during Prometheus scrape formatting.
+  - Implemented standard-compliant label value and help text escaping (`\`, `"`, `\n`).
+  - Added strict non-negative assertions on counter increments (`value >= 0`).
+  - Handled empty registries and zero-valued metrics deterministically (`export_prometheus_text()` returns compliant newline).
+- **Strict Metric Cardinality Protection & Confidentiality (`metrics.py`, `api_server.py`):**
+  - Enforced bounded allowlists for `ALLOWED_ASSETS`, `ALLOWED_TIERS`, `ALLOWED_PAYMENT_STATUSES`, `ALLOWED_WEBHOOK_STATUSES`, `ALLOWED_RPC_OUTCOMES`, `ALLOWED_HTTP_METHODS`, and `KNOWN_NORMALIZED_ENDPOINTS`.
+  - Added strict URL hostname sanitization in `sanitize_provider_host()` stripping scheme, ports, basic auth credentials, queries, and paths; clamped hostnames > 64 chars to `unknown_provider`.
+  - Hardened FastAPI `metrics_middleware` against route-probing cardinality attacks by normalizing unrecognized routes to `unmatched_route`.
+  - Ensured metric labels NEVER leak transaction signatures, wallet addresses, API keys, or IP addresses.
+- **Storage Layer TTL Caching (`storage.py`):**
+  - Added thread-safe 15-second TTL cache for `StorageManager.get_active_keys_count()` to protect SQLite from query storms during high-frequency Prometheus scraping.
+  - Guaranteed instant cache invalidation upon key creation, payment redemption, or administrative revocation.
+- **Access Control & Deprecation Fix (`api_server.py`):**
+  - Added optional `METRICS_BEARER_TOKEN` header verification for `/metrics` in production deployments.
+  - Eliminated `HTTP_422_UNPROCESSABLE_ENTITY` deprecation warning using `HTTP_422_UNPROCESSABLE_CONTENT` (HTTP 422).
+- **Payment Integrity Invariants (`payment_verifier.py`):**
+  - Updated `VerifiedPayment` to strictly record `commitment="finalized"`, `cluster="mainnet-beta"`, and `verified_at_utc`.
+  - Validated strict separation between RPC failover hops (recorded per attempt in `moltbook_rpc_failover_hops_total`) and single payment verification accounting (`moltbook_payments_verified_total`).
+- **Benchmarking Suite (`benchmarks/benchmark_metrics.py`):**
+  - Created standalone benchmark measuring multi-threaded throughput, latency distributions (mean, p50, p95, p99), and memory allocation under 100,000 operations.
+  - Verified sub-millisecond metrics overhead (counter throughput: ~328k ops/sec with p50 = 1.7 us, p99 = 8.7 us; histogram throughput: ~207k ops/sec with p50 = 3.1 us; heap growth under 100k ops: 8.3 KB).
+- **Automated Testing:**
+  - Expanded test suite from 80 to 91 deterministic tests (100% green, 0 warnings).
+  - Added 6 new metrics validation tests in `tests/test_metrics.py` (empty registry, escaping, zero values, 16-thread concurrent scrape race safety, cardinality clamping, storage TTL caching, bearer token authentication).
+  - Added 5 new payment integrity tests in `tests/test_payments.py` (integrity invariants, fake SPL 9-decimal rejection, corrupt metadata rejection, concurrent in-flight deduplication, transport retry vs payment metrics separation).

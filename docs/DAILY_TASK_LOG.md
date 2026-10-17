@@ -337,3 +337,69 @@ python -m ruff check .
 git diff --check
 ```
 **Results:** `Clean` (0 whitespace errors).
+
+---
+
+## Daily Cycle Run — 2026-10-17 13:45 EDT (`RUN-20261017-1345`)
+
+### 1. Environment & Branch State
+- **Branch:** `feat/commercial-api-hardening`
+- **Head Commit:** `f9f8ac8` (`feat(client): harden challenge gate against explicit operators, noise prefixes, and per-unit rate word problems`)
+- **Working Tree:** Clean (verified 0 uncommitted edits).
+- **Initial Baseline:** 80 passed, 1 deprecation warning (`HTTP_422_UNPROCESSABLE_ENTITY`).
+
+### 2. Audit & Defect Identification
+- **Priority 4 (Observability) & Priority 1 (Payment Security) Audit:**
+  - *Defect (Cardinality Explosion Risk):* Metric labels accepted arbitrary raw route paths, allowing path fuzzing attacks to explode memory. RPC provider labels accepted arbitrary URLs containing basic auth secrets, ports, and paths.
+  - *Defect (SQLite Contention under Scrape):* `GET /metrics` queried `SELECT COUNT(*) FROM api_keys WHERE is_active = 1` on every single scrape without caching, creating disk read locks under frequent scraping.
+  - *Defect (Export Formatting Lock Contention):* `export_prometheus_text()` held `self._lock` during string formatting, creating lock contention during heavy scrapes.
+  - *Defect (Deprecation Warning):* Starlette/FastAPI `status.HTTP_422_UNPROCESSABLE_ENTITY` raised a deprecation warning on Python 3.14.
+  - *Defect (Payment Invariants Metadata):* `VerifiedPayment` lacked explicit binding of `commitment="finalized"`, `cluster="mainnet-beta"`, and `verified_at_utc`.
+- **Chosen Improvement:** Complete Observability Hardening, Strict Metric Cardinality Bounds, SQLite Gauge TTL Caching, Payment Invariant Verification, and Repeatable Benchmarking.
+
+### 3. Implementation Details
+1. **Prometheus Metrics Engine Hardening (`metrics.py`):**
+   - Implemented point-in-time dictionary snapshot export under lock, releasing lock before string rendering.
+   - Enforced strict allowlists for `ALLOWED_ASSETS`, `ALLOWED_TIERS`, `ALLOWED_PAYMENT_STATUSES`, `ALLOWED_WEBHOOK_STATUSES`, `ALLOWED_RPC_OUTCOMES`, `ALLOWED_HTTP_METHODS`, and `KNOWN_NORMALIZED_ENDPOINTS`.
+   - Added `sanitize_provider_host()` stripping protocols, credentials, ports, paths, and queries; clamped hostnames > 64 chars to `unknown_provider`.
+   - Implemented standard Prometheus escaping for HELP text and label values (`\`, `"`, `\n`).
+   - Added non-negative counter increment validation (`value >= 0`).
+2. **Storage Layer Active Key Count TTL Caching (`storage.py`):**
+   - Added thread-safe 15-second TTL cache for `StorageManager.get_active_keys_count()`.
+   - Invalidated cache instantly on `create_api_key`, `redeem_payment`, `revoke_key`, and `migrate_from_json`.
+3. **API Server Observability & Perimeter Hardening (`api_server.py`):**
+   - Normalizing unmatched routes to `unmatched_route` in `metrics_middleware`.
+   - Added support for optional `METRICS_BEARER_TOKEN` header protection on `GET /metrics`.
+   - Resolved `HTTP_422_UNPROCESSABLE_ENTITY` deprecation warning using `HTTP_422_UNPROCESSABLE_CONTENT`.
+4. **Payment Integrity Validation (`payment_verifier.py`):**
+   - Explicitly bound `commitment="finalized"`, `cluster="mainnet-beta"`, and `verified_at_utc` in `VerifiedPayment`.
+   - Ensured transport retries increment `record_rpc_hop` per provider attempt while `record_payment` is recorded strictly once.
+5. **Repeatable Performance Benchmark Suite (`benchmarks/benchmark_metrics.py`):**
+   - Measured counter increments, histogram observations, text format export, HTTP GET `/metrics` latency, and heap memory allocation under 100,000 operations.
+   - Verified sub-millisecond metrics overhead (counter throughput: ~328k ops/sec with p50 = 1.7 us, p99 = 8.7 us; histogram throughput: ~207k ops/sec with p50 = 3.1 us; heap growth under 100k ops: 8.3 KB).
+
+### 4. Verification Results
+```bash
+python -m pytest tests/
+```
+**Results:** `91 passed in 4.60s` (100% green, **0 warnings**).
+
+```bash
+python -m ruff check .
+```
+**Results:** `All checks passed!` (0 lint errors).
+
+```bash
+git diff --check
+```
+**Results:** `Clean` (0 whitespace errors).
+
+```bash
+python benchmarks/benchmark_metrics.py
+```
+**Results:** Verified sub-millisecond overhead:
+- Counter throughput: 328,578 ops/sec (p50: 1.70 us, p99: 8.70 us)
+- Histogram throughput: 207,444 ops/sec (p50: 3.10 us, p99: 12.30 us)
+- Text Export throughput: 22,436 exports/sec (mean: 44.57 us, p99: 119.60 us)
+- HTTP /metrics latency: mean 3.89 ms, p50 3.80 ms
+- Memory growth: 8.3 KB net allocation across 100,000 ops (0.09 bytes/op)
