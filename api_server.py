@@ -28,6 +28,14 @@ from payment_verifier import (
     RPCError,
 )
 from rate_limiter import SlidingWindowRateLimiter, InFlightDeduplicator
+from metrics import (
+    registry,
+    record_payment,
+    record_webhook,
+    record_rate_limit,
+    record_request,
+    update_active_keys_gauge,
+)
 
 app = FastAPI(
     title="Moltbook Alpha Intelligence API",
@@ -35,10 +43,28 @@ app = FastAPI(
     version="1.2.0",
 )
 
+
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        endpoint = request.url.path
+        if endpoint.startswith("/v1/payments/status/"):
+            norm_endpoint = "/v1/payments/status/:signature"
+        else:
+            norm_endpoint = endpoint
+        record_request(norm_endpoint, request.method, status_code)
+
+
 # Initialize storage, rate limiter, and deduplicator
 storage = StorageManager(DB_PATH)
 rate_limiter = SlidingWindowRateLimiter()
 in_flight_deduplicator = InFlightDeduplicator()
+
 
 # Run one-time legacy migration from api_keys.json if present (skipping any admin backdoors)
 legacy_keys_file = BASE_DIR / "api_keys.json"
@@ -116,7 +142,25 @@ def health_check():
     }
 
 
+@app.get("/metrics")
+def get_prometheus_metrics():
+    """
+    Prometheus and OpenTelemetry-compatible metrics exposition endpoint.
+    Returns plain text in standard Prometheus 0.0.4 exposition format.
+    """
+    try:
+        update_active_keys_gauge(storage.get_active_keys_count())
+    except Exception:
+        pass
+    text_data = registry.export_prometheus_text()
+    return Response(
+        content=text_data,
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
+
+
 @app.get("/v1/payments/config")
+
 def get_payment_details():
     cfg = load_payment_config()
     return {
@@ -135,6 +179,7 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
     # Rate limiting: max 10 payment verification attempts per minute per IP
     allowed, retry_after = rate_limiter.is_allowed(f"verify_solana:{client_ip}", limit=10, window_seconds=60)
     if not allowed:
+        record_rate_limit("/v1/payments/verify-solana")
         storage.log_audit_event(
             "rate_limit_exceeded",
             f"Payment verification rate limit exceeded (limit: 10/min) [client_ip: {client_ip}]",
@@ -157,6 +202,7 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
             lambda: verifier.verify_payment(sig, req.target_tier),
         )
     except VerificationError as e:
+        record_payment("UNKNOWN", req.target_tier or "tier_starter", "failed")
         storage.log_audit_event(
             "payment_verification_failed",
             f"Verification rejected for sig={sig[:16]}...: {e!s}",
@@ -167,6 +213,7 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
             detail=f"Payment verification failed: {e!s}",
         ) from e
     except RPCError as e:
+        record_payment("UNKNOWN", req.target_tier or "tier_starter", "rpc_error")
         storage.log_audit_event(
             "payment_rpc_error",
             f"RPC failure verifying sig={sig[:16]}...: {e!s}",
@@ -186,6 +233,8 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
         tier=payment.tier,
         credits_to_grant=payment.credits,
     )
+
+    record_payment(payment.asset, payment.tier, redemption_result["status"])
 
     if redemption_result["status"] == "already_redeemed":
         storage.log_audit_event(
@@ -240,6 +289,7 @@ def handle_payment_webhook(
 ):
     client_ip = get_client_ip(request)
     if not x_webhook_secret or x_webhook_secret != WEBHOOK_SECRET:
+        record_webhook("auth_failed")
         storage.log_audit_event(
             "webhook_auth_failed",
             f"Unauthorized webhook attempt with secret prefix={str(x_webhook_secret)[:4]}... [client_ip: {client_ip}]",
@@ -259,6 +309,8 @@ def handle_payment_webhook(
             lambda: verifier.verify_payment(sig, req.target_tier),
         )
     except VerificationError as e:
+        record_webhook("verification_failed")
+        record_payment("UNKNOWN", req.target_tier or "tier_starter", "failed")
         storage.log_audit_event(
             "webhook_verification_failed",
             f"Webhook payment rejected for sig={sig[:16]}...: {e!s}",
@@ -269,6 +321,8 @@ def handle_payment_webhook(
             detail=f"Webhook payment verification failed: {e!s}",
         ) from e
     except RPCError as e:
+        record_webhook("rpc_error")
+        record_payment("UNKNOWN", req.target_tier or "tier_starter", "rpc_error")
         storage.log_audit_event(
             "webhook_rpc_error",
             f"RPC failure in webhook for sig={sig[:16]}...: {e!s}",
@@ -286,6 +340,9 @@ def handle_payment_webhook(
         tier=payment.tier,
         credits_to_grant=payment.credits,
     )
+
+    record_webhook(redemption_result["status"])
+    record_payment(payment.asset, payment.tier, redemption_result["status"])
 
     event_type = "webhook_payment_redeemed" if redemption_result["status"] == "newly_minted" else "webhook_replay_detected"
     storage.log_audit_event(
@@ -354,6 +411,7 @@ def generate_demo_key(request: Request):
 
     allowed, retry_after = rate_limiter.is_allowed(f"demo_key:{client_ip}", limit=5, window_seconds=60)
     if not allowed:
+        record_rate_limit("/v1/keys/generate-demo")
         storage.log_audit_event(
             "rate_limit_exceeded",
             f"Demo key generation rate limit exceeded for IP: {client_ip}",
@@ -388,6 +446,7 @@ def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None
     # General rate limit: 60 requests per minute per IP
     allowed, retry_after = rate_limiter.is_allowed(f"briefing:{client_ip}", limit=60, window_seconds=60)
     if not allowed:
+        record_rate_limit("/v1/briefing/latest")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Too many requests. Please retry in {retry_after} seconds.",

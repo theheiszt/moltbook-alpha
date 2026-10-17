@@ -134,3 +134,23 @@ All notable changes to the Moltbook Alpha commercial API hardening will be docum
 - **Automated Testing:**
   - Added `tests/test_webhook_and_status.py` with 8 deterministic tests covering unauthorized access, wrong secret, malformed signature, successful webhook redemption, idempotency replay, recipient mismatch, RPC timeout fail-closed behavior, and public status inspection.
   - Entire test suite expanded to 67 tests (100% green).
+
+### Stage 12: Prometheus Observability Endpoint & Zero-Dependency Telemetry Metrics
+- **Zero-Dependency Prometheus & OpenTelemetry Exporter (`metrics.py`):**
+  - Designed pure Python standard library `MetricsRegistry` with thread-safe `threading.Lock` concurrency protection.
+  - Formatted strictly according to the Prometheus 0.0.4 text exposition specification (`# HELP`, `# TYPE`, counter, gauge, histogram with cumulative buckets, sum, and count).
+  - Configured standard latency buckets `(0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0)` for on-chain Solana verification profiling.
+  - Strictly prevented metric cardinality explosion: forbidden from tracking raw user signatures, IP addresses, or secret API keys; bounded strictly to low-cardinality enums (`asset`, `tier`, `status`, `provider` domain host, `endpoint`, `status_code`).
+- **Telemetry Instrumentation:**
+  - `moltbook_payments_verified_total`: Counter tracking successful, failed, replayed, and RPC error outcomes by asset and tier.
+  - `moltbook_payment_verification_duration_seconds`: Histogram measuring execution duration of on-chain verification.
+  - `moltbook_rpc_failover_hops_total`: Counter recording provider endpoints and outcome hops (`success`, `timeout`, `rate_limited_429`, `error`).
+  - `moltbook_webhooks_processed_total`: Counter recording push webhook processing states (`auth_failed`, `verification_failed`, `rpc_error`, `newly_minted`, `already_redeemed`).
+  - `moltbook_rate_limit_exceeded_total`: Counter tracking client rate-limit breaches by route.
+  - `moltbook_api_keys_active_total`: Gauge reflecting current active API keys in SQLite via `StorageManager.get_active_keys_count()`.
+  - `moltbook_api_requests_total`: Counter tracking HTTP traffic across endpoints, methods, and status codes via FastAPI middleware.
+- **Observability Route (`GET /metrics` in `api_server.py`):**
+  - Exposed unauthenticated `/metrics` endpoint with content-type `text/plain; version=0.0.4; charset=utf-8` compatible with Prometheus, Grafana Agent, and Datadog OpenTelemetry Collector.
+- **Automated Testing:**
+  - Added `tests/test_metrics.py` with 6 deterministic tests verifying registry thread safety, histogram bucket counts, monotonic cumulative thresholds, `/metrics` HTTP response formatting, HTTP request middleware tracking, and active key gauge sync.
+  - Entire test suite expanded to 74 tests (100% green).

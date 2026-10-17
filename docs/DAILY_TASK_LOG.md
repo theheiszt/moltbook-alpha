@@ -231,3 +231,63 @@ python -m ruff check .
 git diff --check
 ```
 **Results:** `Clean` (0 whitespace errors).
+
+---
+
+## Daily Cycle Run — 2026-10-17 13:15 EDT (`RUN-20261017-1315`)
+
+### 1. Environment & Branch State
+- **Branch:** `feat/commercial-api-hardening`
+- **Head Commit:** `02ab5ba`
+- **Working Tree:** Clean (verified 0 uncommitted edits, 0 duplicate redemptions, 295 audit logs in `data/moltbook.db`).
+- **Initial Tests:** 68/68 green. Ruff 0 errors.
+
+### 2. Audit & Defect Identification
+- **Priority 4 (Reliability) / Priority 5 (Commercial Readiness) Audit:**
+  - *Defect:* The API lacked operational telemetry and latency observability. Operators had no visibility into on-chain verification latency spikes, RPC provider failover events (timeouts, 429 rate-limiting), push webhook processing volume, client rate-limit breaches, or active key counts without manually inspecting SQLite audit logs.
+  - *Defect:* Modern cloud deployments (Kubernetes, Prometheus, Datadog) require standardized text exposition (`/metrics`) to trigger automated alerts when Solana RPC nodes experience degradation or latency anomalies.
+- **Chosen Improvement:** Zero-Dependency Prometheus & OpenTelemetry Observability Exporter (`metrics.py`, `GET /metrics`).
+- **Why Highest Value:** Delivers production-grade observability with zero heavyweight dependencies (pure Python standard library), thread-safe atomic collection, strict label cardinality control (no user keys or signatures leaked), and immediate Prometheus/Grafana scrape compatibility.
+
+### 3. Implementation Details
+1. **Metrics Registry (`metrics.py`):**
+   - Implemented thread-safe `MetricsRegistry` using standard library `threading.Lock`.
+   - Supports counters, gauges, and histograms with cumulative buckets, sum, and count matching Prometheus 0.0.4 text exposition specification.
+   - Built latency histogram buckets `(0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0)` for Solana verification profiling.
+   - Enforced strict label cardinality control (bounded to `asset`, `tier`, `status`, `provider` host, `endpoint`, `status_code`).
+2. **Storage Instrumentation (`storage.py`):**
+   - Added `get_active_keys_count()` to `StorageManager` to query SQLite active keys for gauge reporting.
+3. **Payment Verifier Instrumentation (`payment_verifier.py`):**
+   - Recorded `record_rpc_hop` on each RPC attempt with provider domain and outcome (`success`, `timeout`, `rate_limited_429`, `error`).
+   - Recorded `record_verification_latency` measuring total elapsed execution time per transaction verification.
+4. **API Server Instrumentation (`api_server.py`):**
+   - Added HTTP traffic middleware recording `moltbook_api_requests_total` across endpoints, methods, and status codes.
+   - Added `GET /metrics` route returning `text/plain; version=0.0.4; charset=utf-8`.
+   - Instrumented `record_payment`, `record_webhook`, and `record_rate_limit` across payment, webhook, demo, and briefing routes.
+
+### 4. Verification Results
+```bash
+python -m pytest tests/
+```
+**Results:** `74 passed in 5.38s` (100% green).
+- `tests/test_metrics.py`: 6/6 passed (new)
+- `tests/test_webhook_and_status.py`: 8/8 passed
+- `tests/test_rpc_failover.py`: 7/7 passed
+- `tests/test_moltbook_client.py`: 8/8 passed
+- `tests/test_payments.py`: 13/13 passed
+- `tests/test_audit_and_health.py`: 6/6 passed
+- `tests/test_rate_limiter.py`: 7/7 passed
+- `tests/test_auth.py`: 7/7 passed
+- `tests/test_config.py`: 6/6 passed
+- `tests/test_storage.py`: 4/4 passed
+- `tests/test_health.py`: 2/2 passed
+
+```bash
+python -m ruff check .
+```
+**Results:** `All checks passed!` (0 lint errors).
+
+```bash
+git diff --check
+```
+**Results:** `Clean` (0 whitespace errors).

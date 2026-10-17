@@ -431,3 +431,11 @@ class StorageManager:
                 return row is not None and row[0] == 1
         except Exception as e:
             raise StorageError(f"Database health check failed: {e!s}") from e
+
+    def get_active_keys_count(self) -> int:
+        """Returns the current count of active API keys in SQLite."""
+        with self._lock, self.connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM api_keys WHERE is_active = 1")
+            row = cur.fetchone()
+            return int(row[0]) if row else 0

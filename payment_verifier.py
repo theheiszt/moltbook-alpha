@@ -5,6 +5,7 @@ mint, raw integer amounts, finalization, and failure-closed network handling.
 """
 
 import json
+import time
 import urllib.request
 import urllib.error
 from typing import Dict, Any, Optional, Callable
@@ -16,6 +17,8 @@ from config import (
     USDC_DECIMALS,
     load_payment_config,
 )
+from metrics import record_rpc_hop, record_verification_latency
+
 
 
 class VerificationError(Exception):
@@ -116,8 +119,17 @@ class SolanaPaymentVerifier:
                     raise RPCError(f"RPC error from {endpoint}: {err_msg}")
 
                 self.active_rpc_endpoint = endpoint
+                record_rpc_hop(endpoint, "success")
                 return res
             except Exception as e:
+                err_str = str(e).lower()
+                if "429" in err_str or "rate limit" in err_str:
+                    outcome = "rate_limited_429"
+                elif "timeout" in err_str or "timed out" in err_str:
+                    outcome = "timeout"
+                else:
+                    outcome = "error"
+                record_rpc_hop(endpoint, outcome)
                 errors.append(f"[{endpoint}] {e!s}")
                 continue
 
@@ -183,58 +195,67 @@ class SolanaPaymentVerifier:
         4. Validates integer transfer amount against pricing tiers.
         5. Awards server-determined tier and credits.
         """
-        tx = self.fetch_transaction(signature)
+        t0 = time.perf_counter()
+        asset_label = "UNKNOWN"
+        try:
+            tx = self.fetch_transaction(signature)
 
-        meta = tx.get("meta")
-        if not meta:
-            raise VerificationError("Transaction metadata is missing.")
+            meta = tx.get("meta")
+            if not meta:
+                raise VerificationError("Transaction metadata is missing.")
 
-        if meta.get("err") is not None:
-            raise VerificationError(f"Transaction failed on-chain: {meta.get('err')}")
+            if meta.get("err") is not None:
+                raise VerificationError(f"Transaction failed on-chain: {meta.get('err')}")
 
-        transaction_payload = tx.get("transaction", {})
-        message = transaction_payload.get("message", {})
-        account_keys = message.get("accountKeys", [])
+            transaction_payload = tx.get("transaction", {})
+            message = transaction_payload.get("message", {})
+            account_keys = message.get("accountKeys", [])
 
-        # Normalize account keys (can be list of dicts or list of strings)
-        account_pubkeys = []
-        for ak in account_keys:
-            if isinstance(ak, dict):
-                account_pubkeys.append(ak.get("pubkey", ""))
+            # Normalize account keys (can be list of dicts or list of strings)
+            account_pubkeys = []
+            for ak in account_keys:
+                if isinstance(ak, dict):
+                    account_pubkeys.append(ak.get("pubkey", ""))
+                else:
+                    account_pubkeys.append(str(ak))
+
+            # Check SPL USDC transfer first
+            usdc_amount_received = self._extract_usdc_transfer(meta, account_pubkeys)
+            sol_amount_received = 0
+
+            asset = None
+            amount_raw = 0
+
+            if usdc_amount_received > 0:
+                asset = "USDC"
+                amount_raw = usdc_amount_received
             else:
-                account_pubkeys.append(str(ak))
+                sol_amount_received = self._extract_sol_transfer(meta, account_pubkeys, message)
+                if sol_amount_received > 0:
+                    asset = "SOL"
+                    amount_raw = sol_amount_received
 
-        # Check SPL USDC transfer first
-        usdc_amount_received = self._extract_usdc_transfer(meta, account_pubkeys)
-        sol_amount_received = 0
+            if not asset or amount_raw <= 0:
+                raise VerificationError("No verified transfer to the configured treasury wallet found in transaction.")
 
-        asset = None
-        amount_raw = 0
+            asset_label = asset
+            # Determine tier strictly from verified amount
+            earned_tier, credits_to_grant = self._determine_tier(asset, amount_raw, requested_tier)
 
-        if usdc_amount_received > 0:
-            asset = "USDC"
-            amount_raw = usdc_amount_received
-        else:
-            sol_amount_received = self._extract_sol_transfer(meta, account_pubkeys, message)
-            if sol_amount_received > 0:
-                asset = "SOL"
-                amount_raw = sol_amount_received
+            record_verification_latency(asset_label, time.perf_counter() - t0)
 
-        if not asset or amount_raw <= 0:
-            raise VerificationError("No verified transfer to the configured treasury wallet found in transaction.")
-
-        # Determine tier strictly from verified amount
-        earned_tier, credits_to_grant = self._determine_tier(asset, amount_raw, requested_tier)
-
-        return VerifiedPayment(
-            tx_signature=signature,
-            asset=asset,
-            amount_raw=amount_raw,
-            tier=earned_tier,
-            credits=credits_to_grant,
-            recipient=self.treasury_wallet,
-            rpc_endpoint_used=self.active_rpc_endpoint or self.rpc_url,
-        )
+            return VerifiedPayment(
+                tx_signature=signature,
+                asset=asset,
+                amount_raw=amount_raw,
+                tier=earned_tier,
+                credits=credits_to_grant,
+                recipient=self.treasury_wallet,
+                rpc_endpoint_used=self.active_rpc_endpoint or self.rpc_url,
+            )
+        except Exception:
+            record_verification_latency(asset_label, time.perf_counter() - t0)
+            raise
 
     def _extract_usdc_transfer(self, meta: Dict[str, Any], account_pubkeys: list) -> int:
         """
