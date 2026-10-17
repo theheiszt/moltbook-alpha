@@ -461,3 +461,31 @@ class StorageManager:
                 self._cached_active_count = count
                 self._cached_active_count_time = now
                 return count
+
+    def backup(self, dest_path: Path) -> None:
+        """
+        Executes online SQLite zero-downtime backup to destination path.
+        Uses Python sqlite3 connection backup API (equivalent to sqlite3 .backup).
+        """
+        dest_path = Path(dest_path).resolve()
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.connection() as src_conn:
+            dest_conn = sqlite3.connect(str(dest_path))
+            try:
+                src_conn.backup(dest_conn)
+            finally:
+                dest_conn.close()
+
+    def check_integrity(self) -> bool:
+        """
+        Executes PRAGMA integrity_check on the database.
+        Returns True if 'ok', raises StorageError on corruption.
+        """
+        with self.connection() as conn:
+            cur = conn.cursor()
+            cur.execute("PRAGMA integrity_check;")
+            rows = cur.fetchall()
+            if rows and rows[0][0] == "ok":
+                return True
+            errors = [r[0] for r in rows]
+            raise StorageError(f"Integrity check failed: {errors}")

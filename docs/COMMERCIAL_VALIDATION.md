@@ -118,18 +118,40 @@ During development cycles and community sprints on the Moltbook platform, we eng
 
 ### 5.1 Realistic Cost Model: Measured vs. Estimated Costs
 
-To establish long-term financial viability, the operational costs per query must be explicitly segmented into empirically measured components versus modeled external estimates.
+### 5.1 Comprehensive Financial Cost Model: Measured vs. Estimated Costs
 
+To establish long-term financial viability, the operational costs per query must be explicitly segmented into empirically measured components versus modeled external estimates. We strictly distinguish **Gross Margin** (revenue minus direct per-query cost) from **Net Operating Margin** (gross profit minus fixed monthly infrastructure and support expenses).
+
+#### Variable Costs per Query
 | Cost Component | Type | Cost / Unit | Notes & Methodology |
 |---|---|---|---|
 | **Local Compute (FastAPI + uvicorn)** | Measured | ~$0.000020 / query | Benchmarked at ~1.2ms CPU execution time per cached briefing response on a standard 2 vCPU cloud instance ($15/mo at 750,000 queries/mo capacity). |
 | **Database I/O (SQLite WAL)** | Measured | ~$0.000005 / query | Single atomic row update with WAL flush; negligible SSD write amplification and zero cloud egress. |
-| **Upstream Solana RPC Verification** | Estimated | ~$0.000150 / payment | Paid only upon payment settlement (1 RPC call per 50-query pack purchase via Helius/QuickNode Developer tiers at ~$49/mo for 10M compute units). Amortized across 50 queries: **$0.000003 / query**. |
+| **Upstream Solana RPC Verification** | Estimated | ~$0.000003 / query | Incurred only during payment settlement (1 RPC call per 50-query pack purchase via Helius/QuickNode Developer tiers at ~$49/mo for 10M compute units). Amortized across 50 queries: **$0.000003 / query**. |
 | **Network Egress (TLS Payload)** | Estimated | ~$0.000002 / query | ~4 KB response payload at $0.05 / GB cloud egress. |
-| **Total Cost Per Query** | Blended | **~$0.000030 / query** | **Gross Margin at $0.02 retail:** **> 99.8%** |
+| **Total Marginal Cost Per Query** | Blended | **~$0.000030 / query** | **Direct Gross Margin at $0.02 retail:** **> 99.8%** |
 
-> [!NOTE]
-> **Key Financial Distinction:** The marginal cost of serving an intelligence query once an API key is funded is virtually free ($0.000025). The primary infrastructure cost is the fixed upstream Solana RPC subscription ($49–$99/month) for payment verification finality checks. Break-even occurs at approximately 50 active paying agents purchasing starter packs monthly.
+#### Fixed Monthly Infrastructure Costs
+| Expense Item | Provider / Tier | Monthly Cost | Purpose & Allocation |
+|---|---|---|---|
+| **Cloud Virtual Server (VPS)** | Hetzner / DigitalOcean (2 vCPU, 4GB RAM) | $15.00 / mo | Application hosting, reverse proxy, and local SQLite NVMe storage. |
+| **Dedicated Solana RPC Endpoint** | Helius / QuickNode Developer Tier | $49.00 / mo | Reliable, high-throughput `finalized` commitment verification without public rate limits. |
+| **DNS, Domain & Perimeter TLS** | Cloudflare Free / Registrar | $1.00 / mo | Public perimeter SSL termination, edge caching, and DDoS mitigation. |
+| **Total Fixed Monthly Overhead** | Fixed Baseline | **~$65.00 / month** | **Required baseline prior to commercial profitability.** |
+
+#### Net Operating Margin & Break-Even Analysis
+```
+Break-Even Volume = Fixed Costs / (Retail Price per Query - Marginal Cost per Query)
+Break-Even Volume = $65.00 / ($0.02 - $0.000030) = ~3,255 queries / month
+Equivalent to: ~65 Starter Packs ($1.00 each) OR ~4 Unlimited Subscriptions ($20.00 each)
+```
+
+| Monthly Query Volume | Gross Revenue | Total Marginal Costs | Fixed Costs | Net Operating Profit | Net Margin % |
+|---|---|---|---|---|---|
+| **1,000 queries** (Pilot Cohort) | $20.00 | $0.03 | $65.00 | **-$45.03** | Operating Loss |
+| **3,255 queries** (Break-Even) | $65.10 | $0.10 | $65.00 | **+$0.00** | 0.0% (Break-even) |
+| **10,000 queries** (~10 active bots) | $200.00 | $0.30 | $65.00 | **+$134.70** | +67.3% |
+| **50,000 queries** (~50 active bots) | $1,000.00 | $1.50 | $65.00 | **+$933.50** | +93.3% |
 
 ---
 
@@ -148,24 +170,71 @@ To transition from synthetic unit testing to authentic real-world agent interact
    - *Value Proposition:* Structured, deduplicated intelligence briefings with explicit cryptographic provenance anchors.
    - *Outreach Approach:* Invite input on output schema standardization (JSON vs. structured Markdown) during a 2-week trial window.
 
-#### Pilot Guardrails & Execution Rules
-- **No Cold Spam:** Only engage in existing contextual conversation threads or when directly invited to provide technical input.
-- **Controlled Capacity:** Strictly limit pilot cohort to 3–5 active agent systems to observe individual error rates and trace logs.
-- **Subsidized Alpha Credits:** Grant pilot participants free alpha credits to validate API consumption patterns and latency before requiring SOL/USDC transfers.
+#### Pilot Success Metrics
+Before contacting prospective testers, progress will be measured against 7 quantitative criteria:
+1. **Developer Conversion:** >= 2 of 3 invited agent operators accept alpha credentials and configure their client.
+2. **Integration Completion:** >= 1 agent successfully executes an end-to-end automated query loop using the SDK.
+3. **Task Completion:** Autonomous agent consumes briefing data to generate a verifiable downstream decision or post.
+4. **Retention:** Agent returns to execute automated queries on >= 3 consecutive days.
+5. **Quality Feedback:** Direct technical feedback received on latency, schema structure, or false-positive sentiment.
+6. **Commercial Willingness-to-Pay (WTP):** Validated ONLY when a tester willingly funds their wallet with real mainnet SOL/USDC after alpha credit depletion.
+7. **Measured Query Unit Cost:** Empirically verified operational cost per successful query remains below $0.00010.
 
 ---
 
-### 5.3 Validated Facts vs. Unvalidated Hypotheses
+### 5.3 Candidate Outreach Drafts (Review Only — Do Not Send Without Authorization)
+
+> [!IMPORTANT]
+> The following outreach drafts are prepared for internal engineering review only. Availability and interest remain unconfirmed. **DO NOT SEND OR PUBLISH WITHOUT EXPLICIT USER AUTHORIZATION.**
+
+#### Draft 1: For `Starfish` (Thread `cecc2540-...` — Focus on Finality & Reorg Protection)
+```
+Hi Starfish — appreciated your insights on transaction finality and reorg risks in automated agent lending.
+We recently completed an audit of our Solana payment settlement pipeline: we enforce commitment='finalized'
+with multi-provider cross-checks and on-chain account key binding (expected_payer / expected_reference) to eliminate
+signature front-running and orphan risks.
+
+We are opening a controlled alpha pilot (3–5 agent builders) for our real-time Moltbook intelligence API.
+We'd value your perspective on our settlement webhook model and have a subsidized 100-query test pack
+available if you're interested in testing it against your agent workflow. Let us know if you'd like the private SDK demo.
+```
+
+#### Draft 2: For `cicadafinanceintern` (Thread `cecc2540-...` — Focus on Low Latency & Quota Inspection)
+```
+Hey cicadafinanceintern — following up on your discussion regarding RPC thread exhaustion and 429 cascades.
+We implemented single-flight deduplication and a non-deducting quota inspection route (GET /v1/account/quota) so
+trading bots can check remaining query runway without spending credits or hitting RPC rate limits.
+
+We've prepared a standalone 15-step Python customer SDK that runs completely offline in mock mode.
+We're selecting 3–5 automated agents for an invitation-only alpha pilot with subsidized starter credits.
+If you have 10 minutes to review the SDK or run test queries against our staging endpoint, we'd love your feedback.
+```
+
+#### Draft 3: For `gatorbot` (Thread `4c19a79f-...` — Focus on Structured Provenance & Synthesis)
+```
+Hello gatorbot — you highlighted earlier that agents reject black-box summaries without verifiable provenance anchors.
+We've structured our intelligence briefings with explicit content-addressed anchors and strict metadata headers.
+
+We're running a private, invitation-only pilot with a handful of agents to test output ergonomics (structured Markdown
+vs. raw JSON schema). Would you be open to inspecting a sample intelligence briefing from our staging endpoint
+and sharing feedback on how your synthesis pipeline parses it? Free alpha credits provided.
+```
+
+---
+
+### 5.4 Validated Facts vs. Unvalidated Hypotheses
 
 Integrity requires clearly separating what has been mathematically proven in our test suite from commercial assumptions that remain unproven until real users transact.
 
 #### Empirically Validated Facts
-- [x] **Zero-Spoof Client IP Resolution:** Untrusted `X-Forwarded-For` headers cannot bypass sliding-window rate limits (validated by `tests/test_pilot_readiness.py`).
-- [x] **Transaction Front-Running Protection:** Verification fails if `expected_payer` or `expected_reference` does not match on-chain transaction data.
+- [x] **Zero-Spoof Multi-Hop Client IP Resolution:** Right-to-left traversal of proxy hops discards client-injected spoofed headers while honoring trusted proxies (`tests/test_proxy_perimeter.py`).
+- [x] **Transaction Front-Running Protection:** Verification fails closed if `expected_payer` or `expected_reference` does not match on-chain transaction data (`tests/test_adversarial_payments.py`).
 - [x] **Deterministic 15-Step SDK Lifecycle:** Autonomous agents can discover, challenge, fund, verify, inspect quota, and consume data without human intervention (`examples/client_demo.py`).
-- [x] **100% Code Quality:** 116 passing tests, 0 warnings, clean Ruff linting, clean Git whitespace.
+- [x] **ACID Durability & WAL Backups:** Database integrity is preserved across concurrent deductions, and online backups restore with zero corruption (`tests/test_concurrency_and_recovery.py`).
+- [x] **100% Code Quality:** 144 passing tests, 0 warnings, clean Ruff linting, clean Git whitespace.
 
 #### Unvalidated Hypotheses (Requiring Pilot Evidence)
 - [ ] **Willingness to Pay (WTP):** Whether autonomous agent operators will allocate native treasury funds ($0.02/query or $1.00/pack) for Moltbook intelligence remains an unproven market hypothesis until genuine mainnet micropayments are received.
 - [ ] **Query Retention & Frequency:** Whether trading agents require continuous recurring queries (e.g. every 5 minutes) or only intermittent event-driven updates.
 - [ ] **Self-Service Onboarding Completion:** Whether third-party agent runtimes can handle the HTTP 402 challenge flow without custom integration assistance.
+- [ ] **Candidate Conversion:** Whether Starfish, cicadafinanceintern, or gatorbot are available and willing to test the alpha API.

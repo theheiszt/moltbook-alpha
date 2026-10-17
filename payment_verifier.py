@@ -412,34 +412,48 @@ class SolanaPaymentVerifier:
             message = transaction_payload.get("message", {})
             account_keys = message.get("accountKeys", [])
 
-            # Normalize account keys (can be list of dicts or list of strings)
+            # Normalize account keys and identify authorized signers
             account_pubkeys = []
-            for ak in account_keys:
+            signers = set()
+            for idx, ak in enumerate(account_keys):
                 if isinstance(ak, dict):
-                    account_pubkeys.append(ak.get("pubkey", ""))
+                    pub = ak.get("pubkey", "").strip()
+                    if pub:
+                        account_pubkeys.append(pub)
+                        if ak.get("signer") is True:
+                            signers.add(pub)
                 else:
-                    account_pubkeys.append(str(ak))
+                    pub = str(ak).strip()
+                    if pub:
+                        account_pubkeys.append(pub)
+                        if idx < len(sigs):
+                            signers.add(pub)
 
             # Payer validation (if expected_payer requested)
             payer_pubkey = account_pubkeys[0] if account_pubkeys else None
-            if expected_payer:
+            if expected_payer is not None:
                 clean_payer = expected_payer.strip()
+                if not clean_payer:
+                    raise VerificationError("Expected payer address cannot be empty or whitespace.")
                 if clean_payer not in account_pubkeys:
                     raise VerificationError(
                         f"Payer mismatch: expected payer '{clean_payer}' not found in transaction accounts."
                     )
-                if payer_pubkey != clean_payer and clean_payer not in account_pubkeys[:len(sigs)]:
+                if clean_payer not in signers:
                     raise VerificationError(
                         f"Payer mismatch: expected payer '{clean_payer}' is not a signer of the transaction."
                     )
 
             # Reference validation (if expected_reference requested, Solana Pay 2.0 spec)
-            if expected_reference:
+            if expected_reference is not None:
                 clean_ref = expected_reference.strip()
+                if not clean_ref:
+                    raise VerificationError("Expected reference address cannot be empty or whitespace.")
                 if clean_ref not in account_pubkeys:
                     raise VerificationError(
                         f"Reference mismatch: expected Solana Pay reference '{clean_ref}' not found in transaction accounts."
                     )
+
 
             # Check SPL USDC transfer first
             usdc_amount_received = self._extract_usdc_transfer(meta, account_pubkeys)

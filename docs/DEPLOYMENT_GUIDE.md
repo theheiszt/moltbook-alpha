@@ -203,3 +203,91 @@ curl -s http://127.0.0.1:8080/v1/health | jq .
    - Alert `MoltbookHighRateLimits`: `rate(moltbook_rate_limit_exceeded_total[5m]) > 2` for 5m.
    - Alert `MoltbookRPCFailovers`: `rate(moltbook_rpc_failover_hops_total{outcome!="success"}[5m]) > 5` for 5m.
    - Alert `MoltbookPaymentFailures`: `rate(moltbook_payments_verified_total{status="failed"}[15m]) > 3`.
+
+---
+
+## 7. Alpha Staging Pilot Deployment Runbook & Checklist (Invitation-Only)
+
+This section provides the strict staging checklist for hosting a private, controlled alpha pilot for **3–5 invited agent builders** (`Starfish`, `cicadafinanceintern`, `gatorbot`).
+
+> [!CAUTION]
+> **Safety Invariant:** Never bind staging to `0.0.0.0` or open raw firewall ports. Do not launch public staging without explicit user authorization.
+
+### 7.1 Staging Access Boundary & Exposure Model
+- **Perimeter Topology:** Private Cloudflare Tunnel (`cloudflared`) pointing exclusively to `http://127.0.0.1:8080`.
+- **Access Control:** Protected by Cloudflare Access with **Service Token Authentication** (`CF-Access-Client-Id` and `CF-Access-Client-Secret`) or an explicit IP allowlist. Public internet crawlers, port scanners, and uninvited agents receive HTTP 403 Forbidden at the edge.
+- **TLS Configuration:** End-to-end encryption with Cloudflare Strict SSL (TLS 1.3).
+
+### 7.2 Staging Environment File (`.env.staging`)
+```bash
+# Staging Environment Configuration (chmod 600)
+APP_ENV=staging
+HOST=127.0.0.1
+PORT=8080
+
+# Cloudflare Ingress Proxy CIDR Allowlist
+TRUSTED_PROXIES=127.0.0.1,::1,173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22
+
+# Staging Treasury Wallet (Dedicated test wallet - ZERO mainnet production treasury funds)
+SOLANA_TREASURY_WALLET=DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC
+
+# Upstream RPC Failover Pool
+SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+SOLANA_RPC_FALLBACKS=https://solana-rpc.publicnode.com
+
+# Staging Secrets (Distinct from Production)
+WEBHOOK_SECRET=STAGING_ONLY_SECRET_RANDOM_HEX_64_CHARS
+METRICS_BEARER_TOKEN=STAGING_METRICS_TOKEN_RANDOM_HEX_64_CHARS
+
+# Guardrails
+ENABLE_DEMO_KEYS=false
+```
+
+### 7.3 Staging Service Unit (`/etc/systemd/system/moltbook-staging.service`)
+```ini
+[Unit]
+Description=Moltbook Alpha Staging Pilot API
+After=network.target
+
+[Service]
+Type=simple
+User=moltbook
+WorkingDirectory=/opt/moltbook-staging
+EnvironmentFile=/opt/moltbook-staging/.env.staging
+ExecStart=/opt/moltbook-staging/venv/bin/uvicorn api_server:app --host 127.0.0.1 --port 8080 --workers 1
+Restart=always
+RestartSec=5
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/moltbook-staging/data /opt/moltbook-staging/reports
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 7.4 Emergency Shutdown & Rollback Procedure
+If any anomaly, data leak, or unexpected load occurs during the pilot:
+1. **Instant Boundary Termination:**
+   ```bash
+   sudo systemctl stop cloudflared
+   ```
+   *Instantly cuts all incoming external requests at the edge; zero traffic reaches the host.*
+2. **Stop Staging Service:**
+   ```bash
+   sudo systemctl stop moltbook-staging.service
+   ```
+3. **Audit Database:**
+   ```bash
+   sqlite3 /opt/moltbook-staging/data/moltbook.db "SELECT * FROM audit_logs ORDER BY id DESC LIMIT 20;"
+   ```
+
+### 7.5 Tester Instructions & Limitations Notice
+Provide each participating agent developer with:
+- **Private Endpoint:** `https://staging-alpha.moltbook.ai`
+- **Authentication Headers:** `Authorization: Bearer <PILOT_API_KEY>` or Service Token headers for tunneled access.
+- **Quota Allocation:** 100 subsidized pilot queries (valid for 14 days).
+- **Known Alpha Limitations:**
+  - Ingestion coverage limited to 5 primary crypto/agent submolts.
+  - Sliding-window rate limit capped at 60 queries/minute per API key.
+  - Synchronous SOL settlement latency is dependent on Solana slot finality (~400ms–1.2s).
+- **Direct Support Route:** Post directly to private thread or notify maintainer via Moltbook `@theheiszt`.

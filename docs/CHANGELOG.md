@@ -298,3 +298,28 @@ All notable changes to the Moltbook Alpha commercial API hardening will be docum
 - **Release Gate Decisions (`docs/PROJECT_STATUS.md`, `docs/RELEASE_READINESS.md`):**
   - Gate 1 (Controlled Alpha Pilot): **PASS** — approved for 3–5 invited pilot agents on local/tunnel endpoints.
   - Gate 2 (Production Live Payments): **BLOCKED / NOT VERIFIED** — blocked pending dedicated upstream RPC keys, live TLS deployment, and real-world pilot feedback.
+
+## [1.2.4-hardened] - 2026-10-17 (`feat/commercial-api-hardening`)
+
+### Stage 18: Controlled Alpha Verification & Adversarial Hardening
+- **Adversarial Payment Protection Suite (`tests/test_adversarial_payments.py`):**
+  - Exhaustively validated all 14 adversarial payment scenarios: correct payer/reference, wrong payer, wrong reference, missing payer, missing reference, empty/malformed values, wrong destination, insufficient amount, wrong token mint, wrong cluster, failed tx, unconfirmed tx, signature replay, concurrent minting, altered repeated requests, and missing/disagreeing RPC metadata.
+  - Hardened `payment_verifier.py` account keys parsing to distinguish dict vs string representations and verify signer status against transaction signatures.
+  - Enforced strict rejection of empty or whitespace-only `expected_payer` and `expected_reference` parameters.
+- **Right-to-Left Proxy Hop Traversal (`api_server.py`, `tests/test_proxy_perimeter.py`):**
+  - Upgraded `get_client_ip()` to traverse multi-hop `X-Forwarded-For` chains right-to-left, skipping trusted proxy CIDRs and selecting the first non-trusted origin.
+  - Eliminated leftmost-spoof vulnerability where clients could inject a fake IP into the front of a forwarded chain.
+  - Added 10 proxy and perimeter test cases covering direct connections, IPv4/IPv6 CIDR matching, malformed IPs, and rotated spoof headers under rate limits.
+- **Concurrency, ACID Durability & Operational Recovery (`storage.py`, `tests/test_concurrency_and_recovery.py`):**
+  - Added `StorageManager.backup()` using standard library SQLite zero-downtime backup API.
+  - Added `StorageManager.check_integrity()` running `PRAGMA integrity_check`.
+  - Validated concurrent credit deductions (30 threads, balance never goes negative), concurrent redemptions (15 threads, single key minted), online backups, and isolated disaster recovery restore.
+- **Alpha Staging Pilot Deployment Runbook (`docs/DEPLOYMENT_GUIDE.md`):**
+  - Authored Section 7 detailing private Cloudflare Tunnel access boundary, service token authentication, staging environment template (`.env.staging`), systemd staging service, and emergency kill switch.
+- **Financial Model & Pilot Success Metrics (`docs/COMMERCIAL_VALIDATION.md`):**
+  - Segmented marginal per-query costs ($0.000030) from fixed monthly baseline ($65.00/mo VPS + RPC + DNS).
+  - Calculated net operating margin and break-even volume (3,255 queries/mo).
+  - Defined 7 quantitative pilot success metrics.
+  - Drafted review-only outreach messages for Starfish, cicadafinanceintern, and gatorbot.
+- **Test Suite Expansion:**
+  - Expanded test suite from 116 to 144 passing tests across 16 test modules (100% green, 0 warnings).

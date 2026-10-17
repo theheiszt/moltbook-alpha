@@ -110,22 +110,44 @@ def is_trusted_proxy(ip_str: str, trusted_proxies: list[str]) -> bool:
 
 def get_client_ip(request: Request) -> str:
     """
-    Extracts authentic client IP address safely.
+    Extracts authentic client IP address safely according to trusted-hop topology.
     Only respects X-Forwarded-For if the immediate peer (request.client.host)
     is an explicitly trusted proxy configured in TRUSTED_PROXIES.
-    Otherwise, returns request.client.host and ignores untrusted forwarded headers,
-    preventing IP spoofing attacks against rate limiters.
+
+    When traversing multi-hop chains, parses from right-to-left (nearest hop to farthest):
+    skips hops that belong to TRUSTED_PROXIES, and selects the first non-trusted IP.
+    This prevents untrusted clients from injecting spoofed IPs into the leftmost position.
     """
     peer_ip = request.client.host if request.client else "127.0.0.1"
     trusted_proxies = get_trusted_proxies()
 
-    if is_trusted_proxy(peer_ip, trusted_proxies):
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            client_candidate = forwarded.split(",")[0].strip()
-            if client_candidate:
-                return client_candidate
-    return peer_ip
+    if not is_trusted_proxy(peer_ip, trusted_proxies):
+        return peer_ip
+
+    forwarded = request.headers.get("x-forwarded-for")
+    if not forwarded:
+        return peer_ip
+
+    # Split and clean all hops in the chain
+    hops = [h.strip() for h in forwarded.split(",") if h.strip()]
+    if not hops:
+        return peer_ip
+
+    # Traverse from rightmost (nearest upstream proxy) to leftmost (farthest origin)
+    for hop in reversed(hops):
+        try:
+            ipaddress.ip_address(hop)
+        except ValueError:
+            # Malformed IP in chain - fail closed to peer_ip
+            return peer_ip
+
+        if not is_trusted_proxy(hop, trusted_proxies):
+            # This is the first untrusted entity in the proxy chain -> authentic client
+            return hop
+
+    # If every hop in the chain is in TRUSTED_PROXIES, return the leftmost trusted hop
+    return hops[0]
+
 
 
 def authenticate_and_deduct(api_key: Optional[str]) -> Dict[str, Any]:
