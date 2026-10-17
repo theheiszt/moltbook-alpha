@@ -197,3 +197,34 @@ All notable changes to the Moltbook Alpha commercial API hardening will be docum
   - Expanded test suite from 80 to 91 deterministic tests (100% green, 0 warnings).
   - Added 6 new metrics validation tests in `tests/test_metrics.py` (empty registry, escaping, zero values, 16-thread concurrent scrape race safety, cardinality clamping, storage TTL caching, bearer token authentication).
   - Added 5 new payment integrity tests in `tests/test_payments.py` (integrity invariants, fake SPL 9-decimal rejection, corrupt metadata rejection, concurrent in-flight deduplication, transport retry vs payment metrics separation).
+
+### Stage 15: Payment Finality Audit, Multi-Provider Consensus & Customer Onboarding
+- **Solana Payment Finality & Settlement Hardening (`payment_verifier.py`):**
+  - Upgraded `VerifiedPayment` to track evidence-based settlement fields: `slot`, `block_time`, `confirmation_status`, `provider_identity`, `commitment="finalized"`, `cluster="mainnet-beta"`, and `verified_at_utc`.
+  - Added cluster boundary validation in `_validate_endpoint_cluster`: strictly forbids devnet/testnet RPC endpoints when the settlement policy demands `mainnet-beta`.
+  - Added transaction signature matching check against on-chain transaction payload signatures (`transaction.signatures`).
+  - Enforced strict on-chain execution error checks (`meta.err` and `meta.status.Err`).
+  - Added evidence-based finality check: requires `confirmationStatus == "finalized"` and `commitment == "finalized"`, failing closed on `confirmed` or `processed` states.
+  - Added slot and block time validation: requires `slot >= min_slot` and `blockTime > 0`.
+  - Enforced transaction freshness window: transactions older than 86,400s (24 hours) fail closed.
+  - Added multi-provider consensus verification (`cross_check_provider_agreement`): queries secondary RPC nodes to verify transaction status agreement, failing closed on execution errors or status disagreements.
+  - Unified `RPCError` and `VerificationError` handling across custom and HTTP RPC callers, ensuring transport network failures fail closed with HTTP 502 (retryable) while settlement failures return HTTP 400 (non-retryable).
+- **Security & Metrics Authorization Hardening (`api_server.py`):**
+  - Hardened `GET /metrics` authorization check with `secrets.compare_digest` to eliminate timing side-channel attacks.
+  - Validated malformed authorization headers (`Basic`, empty, missing bearer prefix, invalid tokens) return 401 with `WWW-Authenticate: Bearer`.
+- **Customer Documentation & Onboarding (`docs/CUSTOMER_ONBOARDING.md`, `README.md`):**
+  - Created `docs/CUSTOMER_ONBOARDING.md` detailing end-to-end integration walkthrough, complete pricing tiers table ($1/50, $5/300, $20/unlimited), Solana settlement parameters, curl examples, quota limits, HTTP status semantics, safe retry strategies, key administration, and commercial release checklist.
+  - Updated `README.md` with commercial API section, pricing tiers table, curl examples, and links to onboarding documentation.
+- **Automated Testing Suite:**
+  - Expanded test suite from 91 to 101 tests (100% green, 0 warnings).
+  - Added 10 new tests across `tests/test_payments.py` and `tests/test_metrics.py`:
+    - `test_confirmed_but_not_finalized_rejected`
+    - `test_missing_commitment_evidence_rejected`
+    - `test_provider_inconsistent_status_rejected`
+    - `test_wrong_cluster_rejected`
+    - `test_signature_mismatch_rejected`
+    - `test_ambiguous_rpc_timeout_followed_by_successful_retry`
+    - `test_process_restart_preserves_idempotency`
+    - `test_database_failure_during_redemption_fails_closed`
+    - `test_provider_disagreement_after_finalized_evidence_fails_closed`
+    - `test_metrics_endpoint_public_when_token_unset` and malformed header coverage

@@ -28,6 +28,7 @@ def build_synthetic_solana_tx(
     recipient=TREASURY,
     mint=CANONICAL_USDC_MINT,
     decimals=6,
+    signature=SAMPLE_SIGNATURE,
 ):
     """Generates synthetic Solana JSON-parsed transaction response."""
     meta = {
@@ -91,7 +92,7 @@ def build_synthetic_solana_tx(
         "blockTime": 1700000000,
         "meta": meta,
         "transaction": {
-            "signatures": [SAMPLE_SIGNATURE],
+            "signatures": [signature],
             "message": {
                 "accountKeys": account_keys,
                 "instructions": instructions,
@@ -225,10 +226,10 @@ def test_rpc_failure_fails_closed():
 
 def test_api_verify_endpoint_idempotency_and_replay(monkeypatch):
     import secrets
-    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000)
     b58_chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
     suffix = "".join(secrets.choice(b58_chars) for _ in range(8))
     test_sig = SAMPLE_SIGNATURE[:80] + suffix  # Exactly 88 valid base58 chars
+    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000, signature=test_sig)
 
     monkeypatch.setattr(
         SolanaPaymentVerifier,
@@ -359,3 +360,232 @@ def test_transport_retries_vs_payment_metrics_accounting(monkeypatch):
     assert 'moltbook_rpc_failover_hops_total{outcome="success",provider="backup-ok.solana.com"} 1' in text
     # Latency histogram recorded exactly 1 observation
     assert 'moltbook_payment_verification_duration_seconds_count{asset="USDC"} 1' in text
+
+
+def test_confirmed_but_not_finalized_rejected():
+    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000)
+    tx["confirmationStatus"] = "confirmed"
+
+    verifier = SolanaPaymentVerifier(rpc_caller=lambda m, p: {"result": tx})
+    import pytest
+    with pytest.raises(VerificationError) as exc:
+        verifier.verify_payment(SAMPLE_SIGNATURE)
+    assert "confirmationStatus is 'confirmed', expected 'finalized'" in str(exc.value)
+
+    # Test commitment field
+    del tx["confirmationStatus"]
+    tx["commitment"] = "confirmed"
+    with pytest.raises(VerificationError) as exc2:
+        verifier.verify_payment(SAMPLE_SIGNATURE)
+    assert "commitment is 'confirmed', expected 'finalized'" in str(exc2.value)
+
+
+def test_missing_commitment_evidence_rejected():
+    import pytest
+    # Missing slot
+    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000)
+    tx["slot"] = None
+    verifier = SolanaPaymentVerifier(rpc_caller=lambda m, p: {"result": tx})
+    with pytest.raises(VerificationError) as exc:
+        verifier.verify_payment(SAMPLE_SIGNATURE)
+    assert "invalid slot" in str(exc.value)
+
+    # Slot <= 0
+    tx["slot"] = 0
+    with pytest.raises(VerificationError) as exc2:
+        verifier.verify_payment(SAMPLE_SIGNATURE)
+    assert "invalid slot" in str(exc2.value)
+
+    # Missing blockTime
+    tx["slot"] = 12345678
+    tx["blockTime"] = None
+    with pytest.raises(VerificationError) as exc3:
+        verifier.verify_payment(SAMPLE_SIGNATURE)
+    assert "invalid blockTime" in str(exc3.value)
+
+
+def test_provider_inconsistent_status_rejected():
+    import pytest
+    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000)
+    # meta.err is None, but meta.status has Err object
+    tx["meta"]["status"] = {"Err": {"InstructionError": [0, "Custom"]}}
+    verifier = SolanaPaymentVerifier(rpc_caller=lambda m, p: {"result": tx})
+    with pytest.raises(VerificationError) as exc:
+        verifier.verify_payment(SAMPLE_SIGNATURE)
+    assert "Transaction failed on-chain" in str(exc.value)
+
+    # confirmationStatus is 'processed'
+    tx["meta"]["status"] = {"Ok": None}
+    tx["confirmationStatus"] = "processed"
+    with pytest.raises(VerificationError) as exc2:
+        verifier.verify_payment(SAMPLE_SIGNATURE)
+    assert "confirmationStatus is 'processed', expected 'finalized'" in str(exc2.value)
+
+
+def test_wrong_cluster_rejected():
+    import pytest
+    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000)
+    tx["cluster"] = "devnet"
+
+    verifier = SolanaPaymentVerifier(rpc_caller=lambda m, p: {"result": tx})
+    with pytest.raises(VerificationError) as exc:
+        verifier.verify_payment(SAMPLE_SIGNATURE)
+    assert "Cluster mismatch" in str(exc.value)
+
+    # Endpoint configured for devnet when expecting mainnet-beta
+    verifier_devnet = SolanaPaymentVerifier(rpc_endpoints=["https://api.devnet.solana.com"])
+    with pytest.raises(VerificationError) as exc2:
+        verifier_devnet.verify_payment(SAMPLE_SIGNATURE)
+    assert "configured for devnet/testnet" in str(exc2.value)
+
+
+def test_signature_mismatch_rejected():
+    import pytest
+    unrelated_sig = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin11111111111111111111111111111111111111111111"
+    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000, signature=unrelated_sig)
+
+    verifier = SolanaPaymentVerifier(rpc_caller=lambda m, p: {"result": tx})
+    with pytest.raises(VerificationError) as exc:
+        verifier.verify_payment(SAMPLE_SIGNATURE)
+    assert "signature mismatch" in str(exc.value)
+
+
+def test_ambiguous_rpc_timeout_followed_by_successful_retry(monkeypatch):
+    import secrets
+    from api_server import app, storage
+
+    b58_chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+    sig = SAMPLE_SIGNATURE[:80] + "".join(secrets.choice(b58_chars) for _ in range(8))
+    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000, signature=sig)
+
+    # 1. First attempt times out
+    call_attempts = 0
+
+    def mock_fetch(self, signature_arg):
+        nonlocal call_attempts
+        call_attempts += 1
+        if call_attempts == 1:
+            raise RPCError("504 Gateway Timeout: upstream RPC timed out")
+        return tx
+
+    monkeypatch.setattr(SolanaPaymentVerifier, "fetch_transaction", mock_fetch)
+
+    client = TestClient(app)
+    res1 = client.post("/v1/payments/verify-solana", json={"transaction_signature": sig})
+    assert res1.status_code == 502
+    assert "Solana RPC communication error" in res1.json()["detail"]
+
+    # Verify 0 rows in storage
+    assert storage.get_payment_redemption(sig) is None
+
+    # 2. Second attempt succeeds and mints key
+    res2 = client.post("/v1/payments/verify-solana", json={"transaction_signature": sig})
+    assert res2.status_code == 200
+    assert res2.json()["success"] is True
+    assert "molt_sol_" in res2.json()["api_key"]
+    assert res2.json()["credits"] == 50
+
+    # Verify storage now contains redemption
+    record = storage.get_payment_redemption(sig)
+    assert record is not None
+    assert record["tx_signature"] == sig
+
+
+def test_process_restart_preserves_idempotency(tmp_path):
+    from storage import StorageManager
+
+    db_path = tmp_path / "restart_test.db"
+    sig = SAMPLE_SIGNATURE
+
+    # Process 1
+    storage_proc1 = StorageManager(db_path)
+    res1 = storage_proc1.redeem_payment(sig, "USDC", 1_000_000, "tier_starter", 50)
+    assert res1["status"] == "newly_minted"
+    assert res1["credits"] == 50
+    assert res1["api_key"] is not None
+    prefix1 = res1["key_prefix"]
+
+    # Simulate process termination and restart (new StorageManager instance, fresh memory)
+    storage_proc2 = StorageManager(db_path)
+    res2 = storage_proc2.redeem_payment(sig, "USDC", 1_000_000, "tier_starter", 50)
+    assert res2["status"] == "already_redeemed"
+    assert res2["key_prefix"] == prefix1
+    assert res2["credits"] == 50
+    assert "api_key" not in res2 or res2.get("api_key") is None
+
+    # Verify only 1 key exists in database
+    assert storage_proc2.get_active_keys_count() == 1
+
+
+def test_database_failure_during_redemption_fails_closed(tmp_path):
+    import sqlite3
+    import pytest
+    from storage import StorageManager
+
+    db_path = tmp_path / "db_fail.db"
+    storage = StorageManager(db_path)
+
+    # Force SQLite connection to read-only or lock by holding exclusive lock
+    conn_blocker = sqlite3.connect(str(db_path))
+    conn_blocker.execute("PRAGMA locking_mode = EXCLUSIVE;")
+    conn_blocker.execute("BEGIN EXCLUSIVE;")
+
+    # Attempt to redeem payment while DB is locked
+    with pytest.raises(sqlite3.OperationalError):
+        storage.redeem_payment(SAMPLE_SIGNATURE, "USDC", 1_000_000, "tier_starter", 50)
+
+    conn_blocker.rollback()
+    conn_blocker.close()
+
+    # Verify no orphan keys were inserted
+    assert storage.get_active_keys_count(max_age_seconds=0) == 0
+
+
+def test_provider_disagreement_after_finalized_evidence_fails_closed():
+    import pytest
+
+    tx_valid = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000)
+    tx_error = build_synthetic_solana_tx(
+        asset="USDC",
+        amount_raw=1_000_000,
+        err={"InstructionError": [0, "Custom"]},
+    )
+
+    endpoints = ["https://rpc-node-a.com", "https://rpc-node-b.com"]
+
+    def mock_disagree_caller(endpoint, method, params):
+        if "rpc-node-a" in endpoint:
+            return {"result": tx_valid}
+        # Provider B disagrees with an on-chain execution error
+        return {"result": tx_error}
+
+    verifier = SolanaPaymentVerifier(
+        rpc_endpoints=endpoints,
+        rpc_caller=mock_disagree_caller,
+        require_consensus=True,
+    )
+
+    with pytest.raises(VerificationError) as exc:
+        verifier.verify_payment(SAMPLE_SIGNATURE)
+    assert "Provider disagreement" in str(exc.value)
+    assert "reports execution error" in str(exc.value)
+
+    # Test disagreement on confirmation status (Node B reports confirmed instead of finalized)
+    tx_unconfirmed = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000)
+    tx_unconfirmed["confirmationStatus"] = "confirmed"
+
+    def mock_unconfirmed_caller(endpoint, method, params):
+        if "rpc-node-a" in endpoint:
+            return {"result": tx_valid}
+        return {"result": tx_unconfirmed}
+
+    verifier2 = SolanaPaymentVerifier(
+        rpc_endpoints=endpoints,
+        rpc_caller=mock_unconfirmed_caller,
+        require_consensus=True,
+    )
+
+    with pytest.raises(VerificationError) as exc2:
+        verifier2.verify_payment(SAMPLE_SIGNATURE)
+    assert "Provider disagreement" in str(exc2.value)
+    assert "not finalized" in str(exc2.value)

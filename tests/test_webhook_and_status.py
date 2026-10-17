@@ -22,7 +22,7 @@ def make_random_sig() -> str:
     return SAMPLE_BASE58_SIG[:80] + suffix
 
 
-def build_synthetic_tx(err=None, asset="USDC", amount_raw=1_000_000, recipient=TREASURY):
+def build_synthetic_tx(err=None, asset="USDC", amount_raw=1_000_000, recipient=TREASURY, signature=SAMPLE_BASE58_SIG):
     meta = {
         "err": err,
         "fee": 5000,
@@ -53,7 +53,7 @@ def build_synthetic_tx(err=None, asset="USDC", amount_raw=1_000_000, recipient=T
         "slot": 250000000,
         "meta": meta,
         "transaction": {
-            "signatures": [SAMPLE_BASE58_SIG],
+            "signatures": [signature],
             "message": {"accountKeys": account_keys, "instructions": []},
         },
     }
@@ -90,8 +90,8 @@ def test_webhook_malformed_signature():
 
 
 def test_webhook_successful_redemption_and_status_inspection(monkeypatch):
-    tx = build_synthetic_tx(asset="USDC", amount_raw=1_000_000)
     sig = make_random_sig()
+    tx = build_synthetic_tx(asset="USDC", amount_raw=1_000_000, signature=sig)
 
     monkeypatch.setattr(SolanaPaymentVerifier, "fetch_transaction", MagicMock(return_value=tx))
 
@@ -129,8 +129,8 @@ def test_webhook_successful_redemption_and_status_inspection(monkeypatch):
 
 
 def test_webhook_idempotency_replay(monkeypatch):
-    tx = build_synthetic_tx(asset="USDC", amount_raw=1_000_000)
     sig = make_random_sig()
+    tx = build_synthetic_tx(asset="USDC", amount_raw=1_000_000, signature=sig)
 
     monkeypatch.setattr(SolanaPaymentVerifier, "fetch_transaction", MagicMock(return_value=tx))
 
@@ -160,8 +160,8 @@ def test_webhook_idempotency_replay(monkeypatch):
 
 
 def test_webhook_verification_failure_wrong_recipient(monkeypatch):
-    tx = build_synthetic_tx(asset="USDC", amount_raw=1_000_000, recipient=OTHER_WALLET)
     sig = make_random_sig()
+    tx = build_synthetic_tx(asset="USDC", amount_raw=1_000_000, recipient=OTHER_WALLET, signature=sig)
 
     monkeypatch.setattr(SolanaPaymentVerifier, "fetch_transaction", MagicMock(return_value=tx))
 

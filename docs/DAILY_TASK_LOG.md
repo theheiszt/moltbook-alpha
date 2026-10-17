@@ -403,3 +403,47 @@ python benchmarks/benchmark_metrics.py
 - Text Export throughput: 22,436 exports/sec (mean: 44.57 us, p99: 119.60 us)
 - HTTP /metrics latency: mean 3.89 ms, p50 3.80 ms
 - Memory growth: 8.3 KB net allocation across 100,000 ops (0.09 bytes/op)
+
+---
+
+## 2026-10-17 17:45 EDT — Stage 15: Payment Finality Audit, Multi-Provider Consensus & Customer Onboarding
+
+### 1. Goals & Invariant Enforcement
+- Validate that the commercial API accepts payments only when independently verified evidence satisfies configured settlement policy (`commitment="finalized"`, `cluster="mainnet-beta"`, valid `slot`, valid `blockTime`, signature match, non-expired block time).
+- Add multi-provider consensus verification (`cross_check_provider_agreement`) to detect and fail closed on provider disagreements or unconfirmed transactions across RPC nodes.
+- Unify `RPCError` and `VerificationError` handling to ensure transport network errors fail closed with HTTP 502 (retryable) while settlement failures return HTTP 400 (non-retryable).
+- Hardened metrics `/metrics` token authorization check with `secrets.compare_digest` to eliminate timing side-channel attacks.
+- Author Customer Onboarding Guide (`docs/CUSTOMER_ONBOARDING.md`) and update `README.md` with full commercial documentation, pricing tiers, and curl quickstarts.
+
+### 2. Implementation Summary
+- `payment_verifier.py`:
+  - Upgraded `VerifiedPayment` to track `slot`, `block_time`, `confirmation_status`, `provider_identity`, `commitment="finalized"`, `cluster="mainnet-beta"`, `verified_at_utc`.
+  - Added `_validate_endpoint_cluster(endpoint)` preventing devnet/testnet endpoints on mainnet policy.
+  - Added signature matching check verifying `signature in tx["transaction"]["signatures"]`.
+  - Enforced `meta.err is None` and `meta.status.Err is None`.
+  - Enforced `confirmationStatus == "finalized"` and `commitment == "finalized"`.
+  - Enforced `slot >= min_slot` and `blockTime > 0`.
+  - Enforced `max_age_seconds` freshness check (24h).
+  - Added `cross_check_provider_agreement()` consensus checking across secondary nodes.
+- `api_server.py`:
+  - Added `secrets.compare_digest` for constant-time metrics token comparison.
+- `docs/CUSTOMER_ONBOARDING.md`:
+  - Created complete customer integration manual with pricing tiers, Solana mainnet parameters, step-by-step curl walkthrough, rate limits, HTTP status codes, safe retry policy, key administration, and commercial release checklist.
+- `README.md`:
+  - Added Commercial API section, pricing tiers table, curl examples, and links to onboarding documentation.
+
+### 3. Verification Results
+```bash
+python -m pytest tests/
+```
+**Results:** `101 passed in 17.15s` (100% green, **0 warnings**).
+
+```bash
+python -m ruff check .
+```
+**Results:** `All checks passed!` (0 lint errors).
+
+```bash
+git diff --check
+```
+**Results:** `Clean` (0 whitespace errors).

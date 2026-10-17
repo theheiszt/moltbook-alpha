@@ -15,11 +15,14 @@ An autonomous multi-agent intelligence and decentralized monetization pipeline d
    * Filters signal-dense discussions (order-queue depletion, partial fill resistance, 3PL IRT psychometrics, heartbeat latency derivatives).
    * Generates timestamped markdown executive summaries.
 
-2. **HTTP 402 Monetized API Gateway (`api_server.py`):**
+2. **HTTP 402 Monetized Commercial API (`api_server.py`):**
    * Built on **FastAPI + Uvicorn**.
    * Serves real-time distilled briefings to other autonomous agents and human developers.
-   * Returns **`402 Payment Required`** with on-chain settlement details when unauthenticated.
-   * On-chain **Solana RPC transaction verification** (`POST /v1/payments/verify-solana`) for automated API key minting via SOL/USDC.
+   * Trustless **Solana Mainnet settlement** (native SOL or canonical SPL USDC).
+   * Strict `finalized` commitment verification with multi-provider RPC failover and consensus cross-checking.
+   * Automated key minting with ACID transactional SQLite storage, zero backdoors, and sliding window rate limiting.
+   * Zero-dependency Prometheus `/metrics` exposition with telemetry cardinality guards.
+   * Full documentation: [Customer Onboarding Guide](docs/CUSTOMER_ONBOARDING.md).
 
 3. **Substack / Newsletter Draft Engine (`newsletter_generator.py`):**
    * Automatically compiles scraped alpha into publish-ready editions of *"The Agent Underground: What 140,000+ AI Agents Are Actually Building and Trading"*.
@@ -27,6 +30,22 @@ An autonomous multi-agent intelligence and decentralized monetization pipeline d
 4. **Autonomous Token Infrastructure (`token_manager.py`):**
    * Integrates with the **Clawnch** agent launchpad on **Robinhood Chain** (Chain ID: `4663`).
    * Manages EIP-712 cryptographic launch tickets, zero-fee Bags deployments, and automated fee collections.
+
+---
+
+## 💰 Commercial API & Pricing Tiers
+
+Access is metered via cryptographic API keys minted upon verified on-chain settlement:
+
+| Tier | USD Price | Credits | USDC Amount | SOL Amount | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Starter** | **$1.00** | 50 queries | 1.00 USDC (`1_000_000`) | ~0.005 SOL (`5_000_000` lamports) | Pay-as-you-go trial |
+| **Pro** | **$5.00** | 300 queries | 5.00 USDC (`5_000_000`) | ~0.025 SOL (`25_000_000` lamports) | High-frequency bots |
+| **Unlimited** | **$20.00** | Unlimited | 20.00 USDC (`20_000_000`) | ~0.100 SOL (`100_000_000` lamports) | Permanent access |
+
+* **Treasury Address:** `DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC`
+* **Canonical USDC Mint:** `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`
+* Detailed integration instructions: see **[`docs/CUSTOMER_ONBOARDING.md`](docs/CUSTOMER_ONBOARDING.md)**.
 
 ---
 
@@ -48,7 +67,31 @@ python -m pytest
 python -m ruff check .
 ```
 
-### 3. Provision and Manage Keys via Administrative CLI
+### 3. Start the Commercial API Server
+```bash
+python api_server.py
+```
+
+### 4. Client Integration Example (Curl)
+```bash
+# 1. Fetch current pricing and treasury wallet
+curl -s http://127.0.0.1:8080/v1/payments/config
+
+# 2. Verify on-chain payment & mint API key
+curl -X POST http://127.0.0.1:8080/v1/payments/verify-solana \
+  -H "Content-Type: application/json" \
+  -d '{"transaction_signature": "<SOLANA_TX_SIGNATURE>", "target_tier": "tier_starter"}'
+
+# 3. Access latest distilled intelligence briefing
+curl -s http://127.0.0.1:8080/v1/briefing/latest \
+  -H "x-api-key: <YOUR_MINTED_API_KEY>"
+
+# 4. Scrape Prometheus telemetry (when METRICS_BEARER_TOKEN is configured)
+curl -s http://127.0.0.1:8080/metrics \
+  -H "Authorization: Bearer <METRICS_BEARER_TOKEN>"
+```
+
+### 5. Provision and Manage Keys via Administrative CLI
 Admin credentials and key management operations run explicitly out-of-band:
 ```bash
 # Provision an administrator key
@@ -61,7 +104,7 @@ python cli.py revoke-key --prefix molt_test_
 python cli.py view-audit-logs --limit 20
 ```
 
-### 4. Configure Credentials
+### 6. Configure Credentials
 Save your Moltbook API key at `~/.config/moltbook/credentials.json`:
 ```json
 {
@@ -70,14 +113,9 @@ Save your Moltbook API key at `~/.config/moltbook/credentials.json`:
 }
 ```
 
-### 5. Run the Collector
+### 7. Run the Collector
 ```bash
 python intel_collector.py
-```
-
-### 6. Start the Commercial API Server
-```bash
-python api_server.py
 ```
 
 ---

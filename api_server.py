@@ -5,6 +5,7 @@ with ACID transactional SQLite storage, zero backdoors, rate limiting, and fail-
 """
 
 import os
+import secrets
 from typing import Optional, Dict, Any
 from fastapi import FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse
@@ -164,7 +165,8 @@ def get_prometheus_metrics(request: Request):
     metrics_token = os.getenv("METRICS_BEARER_TOKEN", "").strip()
     if metrics_token:
         auth_header = request.headers.get("authorization", "")
-        if auth_header != f"Bearer {metrics_token}":
+        expected = f"Bearer {metrics_token}"
+        if not secrets.compare_digest(auth_header, expected):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Unauthorized access to metrics exposition endpoint.",

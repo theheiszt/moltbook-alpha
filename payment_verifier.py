@@ -18,7 +18,7 @@ from config import (
     USDC_DECIMALS,
     load_payment_config,
 )
-from metrics import record_rpc_hop, record_verification_latency
+from metrics import record_rpc_hop, record_verification_latency, sanitize_provider_host
 
 
 
@@ -60,6 +60,10 @@ class VerifiedPayment:
         commitment: str = "finalized",
         verified_at_utc: Optional[str] = None,
         cluster: str = "mainnet-beta",
+        slot: Optional[int] = None,
+        block_time: Optional[int] = None,
+        confirmation_status: Optional[str] = "finalized",
+        provider_identity: Optional[str] = None,
     ):
         self.tx_signature = tx_signature
         self.asset = asset
@@ -71,6 +75,10 @@ class VerifiedPayment:
         self.commitment = commitment
         self.verified_at_utc = verified_at_utc or datetime.now(timezone.utc).isoformat()
         self.cluster = cluster
+        self.slot = slot
+        self.block_time = block_time
+        self.confirmation_status = confirmation_status
+        self.provider_identity = provider_identity
 
 
 class SolanaPaymentVerifier:
@@ -81,11 +89,19 @@ class SolanaPaymentVerifier:
         rpc_endpoints: Optional[list[str]] = None,
         rates: Optional[Dict[str, Dict[str, Any]]] = None,
         rpc_caller: Optional[Callable[..., Dict[str, Any]]] = None,
+        cluster: str = "mainnet-beta",
+        min_slot: int = 1,
+        max_age_seconds: Optional[int] = None,
+        require_consensus: bool = False,
     ):
         cfg = load_payment_config()
         self.treasury_wallet = (treasury_wallet or cfg["solana_treasury_wallet"]).strip()
         self.rates = rates or cfg["rates"]
         self._custom_rpc_caller = rpc_caller
+        self.cluster = cluster
+        self.min_slot = min_slot
+        self.max_age_seconds = max_age_seconds
+        self.require_consensus = require_consensus
 
         # Build ordered list of failover RPC endpoints
         if rpc_endpoints:
@@ -98,6 +114,39 @@ class SolanaPaymentVerifier:
         self.rpc_url = self.rpc_endpoints[0] if self.rpc_endpoints else "https://api.mainnet-beta.solana.com"
         self.active_rpc_endpoint: Optional[str] = None
 
+    def _validate_endpoint_cluster(self, endpoint: str):
+        ep_lower = endpoint.lower()
+        if self.cluster == "mainnet-beta":
+            if "devnet" in ep_lower or "testnet" in ep_lower:
+                raise VerificationError(
+                    f"Cluster mismatch: RPC endpoint '{endpoint}' is configured for devnet/testnet, but settlement requires mainnet-beta."
+                )
+
+    def _call_endpoint(self, endpoint: str, method: str, params: list) -> Dict[str, Any]:
+        try:
+            if self._custom_rpc_caller:
+                import inspect
+                sig = inspect.signature(self._custom_rpc_caller)
+                if len(sig.parameters) >= 3:
+                    res = self._custom_rpc_caller(endpoint, method, params)
+                else:
+                    res = self._custom_rpc_caller(method, params)
+            else:
+                res = self._send_http_rpc(endpoint, method, params)
+        except RPCError:
+            raise
+        except Exception as e:
+            raise RPCError(f"RPC query error from {endpoint}: {e!s}") from e
+
+        if not isinstance(res, dict):
+            raise RPCError(f"RPC returned non-dict response: {type(res)}")
+
+        if "error" in res:
+            err_msg = res["error"].get("message", str(res["error"]))
+            raise RPCError(f"RPC error from {endpoint}: {err_msg}")
+
+        return res
+
     def _call_rpc(self, method: str, params: list) -> Dict[str, Any]:
         """
         Executes RPC call with automatic failover across configured endpoints.
@@ -108,23 +157,7 @@ class SolanaPaymentVerifier:
 
         for endpoint in self.rpc_endpoints:
             try:
-                if self._custom_rpc_caller:
-                    import inspect
-                    sig = inspect.signature(self._custom_rpc_caller)
-                    if len(sig.parameters) >= 3:
-                        res = self._custom_rpc_caller(endpoint, method, params)
-                    else:
-                        res = self._custom_rpc_caller(method, params)
-                else:
-                    res = self._send_http_rpc(endpoint, method, params)
-
-                if not isinstance(res, dict):
-                    raise RPCError(f"RPC returned non-dict response: {type(res)}")
-
-                if "error" in res:
-                    err_msg = res["error"].get("message", str(res["error"]))
-                    raise RPCError(f"RPC error from {endpoint}: {err_msg}")
-
+                res = self._call_endpoint(endpoint, method, params)
                 self.active_rpc_endpoint = endpoint
                 record_rpc_hop(endpoint, "success")
                 return res
@@ -174,24 +207,99 @@ class SolanaPaymentVerifier:
     def fetch_transaction(self, signature: str) -> Dict[str, Any]:
         """
         Fetches transaction with commitment='finalized' and jsonParsed encoding.
-        Fails closed if transaction is not finalized or not found.
+        Fails closed if transaction is not finalized or not found across failover pool.
+        Accurately distinguishes transport failures (RPCError) from missing transactions (VerificationError).
         """
-        resp = self._call_rpc(
-            "getTransaction",
-            [
-                signature,
-                {
-                    "encoding": "jsonParsed",
-                    "commitment": "finalized",
-                    "maxSupportedTransactionVersion": 0,
-                },
-            ],
-        )
+        errors = []
+        all_rpc_errors = True
 
-        tx = resp.get("result")
-        if not tx:
-            raise VerificationError("Transaction not found or not yet finalized on Solana mainnet.")
-        return tx
+        for endpoint in self.rpc_endpoints:
+            try:
+                self._validate_endpoint_cluster(endpoint)
+                res = self._call_endpoint(
+                    endpoint,
+                    "getTransaction",
+                    [
+                        signature,
+                        {
+                            "encoding": "jsonParsed",
+                            "commitment": "finalized",
+                            "maxSupportedTransactionVersion": 0,
+                        },
+                    ],
+                )
+                all_rpc_errors = False
+                tx = res.get("result")
+                if not tx:
+                    errors.append(f"[{endpoint}] Transaction not found or not yet finalized")
+                    record_rpc_hop(endpoint, "error")
+                    continue
+
+                self.active_rpc_endpoint = endpoint
+                record_rpc_hop(endpoint, "success")
+                return tx
+            except RPCError as e:
+                errors.append(f"[{endpoint}] {e!s}")
+                err_str = str(e).lower()
+                outcome = "rate_limited_429" if "429" in err_str else ("timeout" if "timeout" in err_str else "error")
+                record_rpc_hop(endpoint, outcome)
+                continue
+            except VerificationError:
+                raise
+
+        if all_rpc_errors and errors:
+            raise RPCError(f"All {len(self.rpc_endpoints)} Solana RPC endpoint(s) failed: {'; '.join(errors)}")
+        raise VerificationError("Transaction not found or not yet finalized on Solana mainnet.")
+
+    def cross_check_provider_agreement(self, signature: str, primary_tx: Dict[str, Any]) -> bool:
+        """
+        Cross-checks transaction status across all secondary providers in pool.
+        Fails closed if any secondary provider returns a conflicting state
+        (e.g. execution error, unconfirmed status, or transaction mismatch).
+        """
+        if len(self.rpc_endpoints) <= 1:
+            return True
+
+        primary_slot = primary_tx.get("slot")
+        for endpoint in self.rpc_endpoints[1:]:
+            try:
+                res = self._call_endpoint(
+                    endpoint,
+                    "getTransaction",
+                    [
+                        signature,
+                        {
+                            "encoding": "jsonParsed",
+                            "commitment": "finalized",
+                            "maxSupportedTransactionVersion": 0,
+                        },
+                    ],
+                )
+                sec_tx = res.get("result")
+                if not sec_tx:
+                    continue
+
+                sec_meta = sec_tx.get("meta") or {}
+                if sec_meta.get("err") is not None:
+                    raise VerificationError(
+                        f"Provider disagreement: endpoint '{endpoint}' reports execution error: {sec_meta.get('err')}"
+                    )
+
+                sec_conf = sec_tx.get("confirmationStatus") or sec_meta.get("confirmationStatus")
+                if sec_conf and str(sec_conf).lower() != "finalized":
+                    raise VerificationError(
+                        f"Provider disagreement: endpoint '{endpoint}' reports confirmationStatus='{sec_conf}' (not finalized)"
+                    )
+
+                sec_slot = sec_tx.get("slot")
+                if sec_slot and primary_slot and sec_slot != primary_slot:
+                    raise VerificationError(
+                        f"Provider disagreement: slot mismatch between providers ({primary_slot} vs {sec_slot})"
+                    )
+            except RPCError:
+                continue
+
+        return True
 
     def verify_payment(self, signature: str, requested_tier: Optional[str] = None) -> VerifiedPayment:
         """
@@ -207,14 +315,75 @@ class SolanaPaymentVerifier:
         try:
             tx = self.fetch_transaction(signature)
 
+            # 1. Structural & Metadata Validation
             meta = tx.get("meta")
             if not meta:
                 raise VerificationError("Transaction metadata is missing.")
 
+            # 2. Execution Success Validation
             if meta.get("err") is not None:
                 raise VerificationError(f"Transaction failed on-chain: {meta.get('err')}")
 
-            transaction_payload = tx.get("transaction", {})
+            if isinstance(meta.get("status"), dict) and meta["status"].get("Err") is not None:
+                raise VerificationError(f"Transaction failed on-chain: {meta['status'].get('Err')}")
+
+            # 3. Transaction Identity & Signature Matching
+            transaction_payload = tx.get("transaction")
+            if not isinstance(transaction_payload, dict):
+                raise VerificationError("Transaction payload is malformed or missing.")
+
+            sigs = transaction_payload.get("signatures", [])
+            if sigs:
+                if signature not in sigs:
+                    raise VerificationError(
+                        f"Transaction signature mismatch: expected '{signature}', found {sigs}"
+                    )
+
+            # 4. Cluster Verification
+            tx_cluster = tx.get("cluster")
+            if tx_cluster and tx_cluster != self.cluster:
+                raise VerificationError(
+                    f"Cluster mismatch: transaction cluster '{tx_cluster}' does not match expected '{self.cluster}'."
+                )
+
+            # 5. Commitment & Finality Evidence Verification
+            conf_status = tx.get("confirmationStatus") or meta.get("confirmationStatus")
+            if conf_status and str(conf_status).lower() != "finalized":
+                raise VerificationError(
+                    f"Transaction commitment insufficient: confirmationStatus is '{conf_status}', expected 'finalized'."
+                )
+
+            tx_commitment = tx.get("commitment") or meta.get("commitment")
+            if tx_commitment and str(tx_commitment).lower() != "finalized":
+                raise VerificationError(
+                    f"Transaction commitment insufficient: commitment is '{tx_commitment}', expected 'finalized'."
+                )
+
+            slot = tx.get("slot")
+            if not isinstance(slot, int) or slot < self.min_slot:
+                raise VerificationError(
+                    f"Transaction finality evidence missing: invalid slot '{slot}' (must be >= {self.min_slot})."
+                )
+
+            block_time = tx.get("blockTime")
+            if not isinstance(block_time, int) or block_time <= 0:
+                raise VerificationError(
+                    f"Transaction finality evidence missing: invalid blockTime timestamp '{block_time}'."
+                )
+
+            if self.max_age_seconds:
+                now_ts = int(time.time())
+                age = now_ts - block_time
+                if age > self.max_age_seconds:
+                    raise VerificationError(
+                        f"Transaction expired: transaction is {age}s old (max allowed: {self.max_age_seconds}s)."
+                    )
+
+            # 6. Provider Disagreement Check (if consensus required)
+            if self.require_consensus:
+                self.cross_check_provider_agreement(signature, tx)
+
+            # 7. Extract Transfers
             message = transaction_payload.get("message", {})
             account_keys = message.get("accountKeys", [])
 
@@ -246,10 +415,12 @@ class SolanaPaymentVerifier:
                 raise VerificationError("No verified transfer to the configured treasury wallet found in transaction.")
 
             asset_label = asset
-            # Determine tier strictly from verified amount
+            # 8. Determine tier strictly from verified amount
             earned_tier, credits_to_grant = self._determine_tier(asset, amount_raw, requested_tier)
 
             record_verification_latency(asset_label, time.perf_counter() - t0)
+
+            provider_host = sanitize_provider_host(self.active_rpc_endpoint or self.rpc_url)
 
             return VerifiedPayment(
                 tx_signature=signature,
@@ -261,11 +432,16 @@ class SolanaPaymentVerifier:
                 rpc_endpoint_used=self.active_rpc_endpoint or self.rpc_url,
                 commitment="finalized",
                 verified_at_utc=datetime.now(timezone.utc).isoformat(),
-                cluster="mainnet-beta",
+                cluster=self.cluster,
+                slot=slot,
+                block_time=block_time,
+                confirmation_status="finalized",
+                provider_identity=provider_host,
             )
         except Exception:
             record_verification_latency(asset_label, time.perf_counter() - t0)
             raise
+
 
     def _extract_usdc_transfer(self, meta: Dict[str, Any], account_pubkeys: list) -> int:
         """

@@ -296,8 +296,31 @@ def test_metrics_endpoint_bearer_token_protection(monkeypatch):
     resp_wrong_auth = client.get("/metrics", headers={"Authorization": "Bearer wrong_token"})
     assert resp_wrong_auth.status_code == 401
 
-    # 3. With correct auth header -> 200 OK with Prometheus exposition
+    # 3. With malformed auth schemes and values -> 401 Unauthorized
+    malformed_headers = [
+        {"Authorization": "Basic dXNlcjpwYXNz"},
+        {"Authorization": "Bearer "},
+        {"Authorization": "Token prod_super_secret_metrics_token"},
+        {"Authorization": ""},
+        {"Authorization": "Bearer prod_super_secret_metrics_token_extra"},
+        {"Authorization": "bearer prod_super_secret_metrics_token"},
+    ]
+    for h in malformed_headers:
+        resp = client.get("/metrics", headers=h)
+        assert resp.status_code == 401, f"Expected 401 for header {h}, got {resp.status_code}"
+        assert resp.headers.get("WWW-Authenticate") == "Bearer"
+
+    # 4. With correct auth header -> 200 OK with Prometheus exposition
     resp_valid = client.get("/metrics", headers={"Authorization": "Bearer prod_super_secret_metrics_token"})
     assert resp_valid.status_code == 200
     assert "# HELP" in resp_valid.text
 
+
+def test_metrics_endpoint_public_when_token_unset(monkeypatch):
+    # When METRICS_BEARER_TOKEN is unset or empty, endpoint serves metrics without auth
+    monkeypatch.delenv("METRICS_BEARER_TOKEN", raising=False)
+
+    client = TestClient(app)
+    resp = client.get("/metrics")
+    assert resp.status_code == 200
+    assert "# HELP" in resp.text
