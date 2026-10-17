@@ -190,4 +190,5 @@ sqlite3 data/moltbook.db ".backup data/moltbook_backup_$(date +%Y%m%d).db"
 1. **PostgreSQL Adapter:** Implement an optional async SQLAlchemy / asyncpg storage backend for multi-host deployments.
 2. **Dedicated RPC & Webhook Integration:** Integrate Helius / Shyft webhooks for push-based payment confirmations alongside polling verification.
 3. **Clawnch EVM Hardening:** Add unit tests with synthetic EVM RPC fixtures for `token_manager.py` and automated Robinhood Chain launch ticket execution.
-4. **Rate Limiting Middleware:** Add per-IP token-bucket rate limiting on `/v1/payments/verify-solana` to mitigate RPC denial-of-service attempts.
+4. **[COMPLETED in v1.2.1-hardened] Rate Limiting & Audit Middleware:** Per-IP sliding-window rate limiting on `/v1/payments/verify-solana`, in-flight RPC deduplication, security audit logging, and administrative key revocation shipped and verified with 49 tests passing.
+
