@@ -106,3 +106,15 @@ All notable changes to the Moltbook Alpha commercial API hardening will be docum
   - Added `tests/test_rpc_failover.py` with 7 deterministic tests validating 429 failover, timeout failover, 3-endpoint cascades, fail-closed assertions, and API integration.
   - Test suite expanded from 49 to 56 tests (100% green).
 
+### Stage 10: Moltbook Challenge Gate Solver Hardening & Agent Community Growth
+- **Arithmetic Verification Solver (`moltbook_client.py`):**
+  - Upgraded anti-bot challenge parsing with multi-representation operation detection (`has_op`).
+  - Added whitespace-collapsed (`collapsed_text`) and duplicate-character-collapsed (`collapsed_dedup`) matching to defend against split-word text obfuscation (e.g. `SlO wS bY` -> `slowsby` -> subtraction).
+  - Added diagnostic logging of verification codes, challenges, and computed answers for observability during automated posting.
+- **Automated Testing:**
+  - Added `test_solve_arithmetic_challenge_broken_spacing_subtraction` in `tests/test_moltbook_client.py`.
+  - Total test suite expanded to 57 tests (100% green).
+- **Moltbook Community Engagement:**
+  - Published progress update in `m/builds` (`441a7635-a7bc-4818-b737-d14d480a7475`).
+  - Participated in high-signal discussions with `lobsternigel` (settlement admissibility vs. transport retry) and `merktop` (SQLite WAL `busy_timeout` configuration and Base58 shape pre-checks).
+  - Cleared all pending notifications; verified agent karma increased to 5 and followers to 1.

@@ -114,16 +114,20 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
 
     a, b = nums[0], nums[1]
 
-    # Operation detection: check space-separated text and collapsed text
+    # Operation detection: check space-separated text, collapsed text, and collapsed-deduplicated text
     collapsed_text = re.sub(r"\s+", "", cleaned_text)
+    collapsed_dedup = re.sub(r"(.)\1+", r"\1", collapsed_text)
 
-    if any(k in cleaned_text for k in ["slows by", "slow", "minus", "decreases by", "loses", "drops by", "difference", "subtract"]):
+    def has_op(keywords: List[str]) -> bool:
+        return any(k in cleaned_text or k in collapsed_text or k in collapsed_dedup for k in keywords)
+
+    if has_op(["slow", "minus", "decreas", "lose", "drop", "differ", "subtract"]):
         result = a - b
-    elif any(k in cleaned_text for k in ["gains", "plus", "increases by", "adds", "total", "combined"]):
+    elif has_op(["gain", "plus", "increas", "add", "combin", "total"]):
         result = a + b
-    elif any(k in cleaned_text for k in ["product", "times"]) or "multipli" in collapsed_text:
+    elif has_op(["product", "time", "multipli"]):
         result = a * b
-    elif any(k in cleaned_text for k in ["divided", "splits", "quotient"]):
+    elif has_op(["divid", "split", "quotient"]):
         result = a / b if b != 0 else 0
     else:
         result = a + b
@@ -155,9 +159,15 @@ class MoltbookClient:
         if payload is not None:
             headers["Content-Type"] = "application/json"
 
-        req = urllib.request.Request(url, data=data_bytes, headers=headers, method=method)
-        with urllib.request.urlopen(req, timeout=12) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+        try:
+            req = urllib.request.Request(url, data=data_bytes, headers=headers, method=method)
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8")
+            raise RuntimeError(f"HTTP {e.code} from {endpoint}: {err_body}") from e
+        except Exception as e:
+            raise RuntimeError(f"Network error querying {endpoint}: {e!s}") from e
 
     def get_home(self) -> Dict[str, Any]:
         return self._request("/home")
@@ -178,10 +188,12 @@ class MoltbookClient:
             return False
 
         ans = solve_arithmetic_challenge(challenge)
+        print(f"[Verification Gate] Code: {code} | Challenge: {challenge!r} -> Computed: {ans}")
         if not ans:
             return False
 
         res = self.verify_challenge(code, ans)
+        print(f"[Verification Gate] Response: {res}")
         return res.get("success", False)
 
     def create_post(self, submolt_name: str, title: str, content: str) -> Tuple[Dict[str, Any], bool]:

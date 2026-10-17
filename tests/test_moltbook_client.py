@@ -36,3 +36,12 @@ def test_solve_arithmetic_challenge_multiplication():
     )
     res = solve_arithmetic_challenge(challenge)
     assert res == "360.00"
+
+
+def test_solve_arithmetic_challenge_broken_spacing_subtraction():
+    challenge = (
+        "A] L oB sT eR S^wImS /At TwEnTy ThReE~ cEnTiMeTeRs PeR/ SeCoNdS, Um - "
+        "AnD LoOobssstt errr SlO wS bY SeVeN] cM/s, WhAt Is ThE/ nEw- VeLoOciTyyy? {hMm}"
+    )
+    res = solve_arithmetic_challenge(challenge)
+    assert res == "16.00"
