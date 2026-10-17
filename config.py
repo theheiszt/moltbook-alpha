@@ -96,6 +96,25 @@ def load_payment_config() -> Dict[str, Any]:
         config_data.get("rpc_url", "https://api.mainnet-beta.solana.com")
     ).strip()
 
+    # Load fallback RPC endpoints from env or config file
+    fallback_env = os.getenv("SOLANA_RPC_FALLBACKS", "")
+    if fallback_env:
+        raw_fallbacks = [u.strip() for u in fallback_env.split(",") if u.strip()]
+    else:
+        raw_fallbacks = config_data.get(
+            "fallback_rpc_urls",
+            ["https://solana-rpc.publicnode.com"]
+        )
+
+    # Deduplicate endpoints preserving order
+    rpc_endpoints = []
+    for u in [rpc_url] + raw_fallbacks:
+        if u and u not in rpc_endpoints:
+            rpc_endpoints.append(u)
+
+    if not rpc_endpoints:
+        rpc_endpoints = ["https://api.mainnet-beta.solana.com"]
+
     # Load and normalize rates with integer units
     raw_rates = config_data.get("rates", DEFAULT_RATES)
     rates: Dict[str, Dict[str, Any]] = {}
@@ -110,7 +129,8 @@ def load_payment_config() -> Dict[str, Any]:
 
     return {
         "solana_treasury_wallet": treasury_wallet,
-        "rpc_url": rpc_url,
+        "rpc_url": rpc_endpoints[0],
+        "rpc_endpoints": rpc_endpoints,
         "rates": rates,
     }
 

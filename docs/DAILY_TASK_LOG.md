@@ -88,3 +88,87 @@ git diff --check
 1. **Dedicated RPC Failover:** Public Solana RPC remains subject to regional latency. Phase 2 should support multiple fallback RPC endpoints in `config.py`.
 2. **IP Spoofing Consideration:** When deployed behind reverse proxies, ensure `trusted_proxies` configuration is applied to prevent forged `X-Forwarded-For` headers.
 3. **Next Run Priority:** Implement multi-RPC provider failover (primary Helius/QuickNode with fallback to public RPC) and webhooks integration for push-based payment settlement.
+
+---
+
+## Run Identifier: 2026-10-17-RUN-02
+- **Date:** 2026-10-17
+- **Branch:** `feat/commercial-api-hardening`
+- **Base Commit:** `b31a7d0`
+- **Environment:** Windows 11 / Python 3.14.7 (Dev), Ubuntu Linux (CI/Prod Target)
+
+---
+
+### 1. Daily Audit & Defect Assessment
+
+| Vulnerability / Defect | Severity | Impact | Status |
+|---|---|---|---|
+| **Single-Point-of-Failure RPC Dependency** | **High** | The payment verification pipeline depended on a single hardcoded Solana RPC endpoint (`https://api.mainnet-beta.solana.com`). Transient outages, regional rate limits (429), or network timeouts caused all legitimate payment validations to fail with HTTP 502 Bad Gateway. | **Resolved** |
+| **Missing Multi-Provider Pool** | **Medium** | Operators had no mechanism to configure secondary or tertiary RPC providers (e.g. QuickNode, Triton, Helius, publicnode) via environment or config. | **Resolved** |
+| **Unattributed Payment Confirmations** | **Low** | Audit logs recorded successful redemptions but lacked telemetry identifying which RPC endpoint actually verified the on-chain transfer. | **Resolved** |
+
+---
+
+### 2. Chosen Improvement & Rationale
+
+**Selected Improvement:** Multi-Provider Solana RPC Automated Failover with Deterministic Verification Tests.
+
+**Rationale:**
+1. Public and private RPC endpoints regularly encounter transient network timeouts, throttling, and maintenance windows. A payment gateway that drops transactions during an RPC hiccup fails paying customers.
+2. Automated failover cascades across an ordered pool of RPC providers, ensuring high availability without weakening any server-authoritative recipient, mint, or amount checks.
+3. Completely verifiable via synthetic deterministic test fixtures that simulate 429 rate limits, timeouts, and multi-endpoint cascades.
+
+---
+
+### 3. Implementation Details
+
+1. **`config.py` & `payment_config.json`:**
+   - Added support for `SOLANA_RPC_FALLBACKS` environment variable (comma-separated URLs).
+   - Added `fallback_rpc_urls` to `payment_config.json`.
+   - Normalizes, deduplicates, and provides `rpc_endpoints: list[str]` with canonical publicnode fallback.
+2. **`payment_verifier.py`:**
+   - Extended `SolanaPaymentVerifier` with `rpc_endpoints: list[str]` pool support and `active_rpc_endpoint` tracking.
+   - Enhanced `_call_rpc()` to iterate through configured endpoints, seamlessly failing over on HTTP 429, timeouts, or network resets.
+   - Fail-closed security preserved: if all pool endpoints fail, raises `RPCError` detailing all attempted endpoints. Zero credits issued.
+   - Updated `VerifiedPayment` to report `rpc_endpoint_used`.
+3. **`api_server.py`:**
+   - Enriched `storage.log_audit_event("payment_redeemed_success")` with `[rpc: <endpoint>]` telemetry.
+4. **`tests/test_rpc_failover.py`:**
+   - Added 7 deterministic tests covering 429 failover, timeout failover, 3-endpoint cascades, fail-closed handling, strict recipient validation preservation, and API endpoint integration.
+
+---
+
+### 4. Verification & Test Results
+
+```bash
+python -m pytest -v
+```
+**Results:** `56 passed in 4.15s` (100% green).
+- `tests/test_rpc_failover.py`: 7/7 passed
+- `tests/test_audit_and_health.py`: 6/6 passed
+- `tests/test_rate_limiter.py`: 7/7 passed
+- `tests/test_moltbook_client.py`: 4/4 passed
+- `tests/test_health.py`: 2/2 passed
+- `tests/test_payments.py`: 13/13 passed
+- `tests/test_auth.py`: 7/7 passed
+- `tests/test_storage.py`: 4/4 passed
+- `tests/test_config.py`: 6/6 passed
+
+```bash
+python -m ruff check .
+```
+**Results:** `All checks passed!` (0 lint errors, 0 warnings).
+
+```bash
+git diff --check
+```
+**Results:** `Clean` (0 whitespace errors).
+
+---
+
+### 5. Outstanding Risks & Next Steps
+
+1. **Webhook Settlement:** Currently verification is polling-driven on client request. Supporting push-based webhooks (e.g. Shyft / Helius webhooks) will enable zero-latency asynchronous key delivery.
+2. **PostgreSQL Adapter:** In high-volume multi-host cloud deployments, migrating `storage.py` from SQLite to PostgreSQL ensures horizontally scalable multi-server synchronization.
+3. **Next Run Priority:** Implement push-based webhook signature listener and signature queue worker with signature pre-validation.
+

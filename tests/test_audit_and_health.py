@@ -85,10 +85,12 @@ def test_cli_view_audit_logs(capsys):
 
 
 def test_api_logs_audit_events_for_payments():
+    import random
+    b58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
     client = TestClient(app)
     rate_limiter.reset()
 
-    test_sig = "9zzzzz" * 15  # valid base58 length 90
+    test_sig = "".join(random.choices(b58, k=88))
     payload = {"transaction_signature": test_sig, "target_tier": "tier_starter"}
 
     with patch("api_server.SolanaPaymentVerifier.verify_payment") as mock_verify:

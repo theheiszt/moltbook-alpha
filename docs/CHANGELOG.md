@@ -90,7 +90,19 @@ All notable changes to the Moltbook Alpha commercial API hardening will be docum
 - **Deep Health Check:**
   - Enhanced `GET /v1/health` to execute a real database connectivity and read/write check via `storage.check_health()`.
   - Fails closed with HTTP 503 `Service Unavailable` if the database is locked or corrupted.
-- **Verification:**
-  - Added 14 new automated tests across `tests/test_rate_limiter.py`, `tests/test_audit_and_health.py`, and updated `tests/test_health.py`.
-  - Test suite expanded from 31 to 45 passing tests (100% green, 0 lint errors).
+## [1.2.2-hardened] - 2026-10-17 (`feat/commercial-api-hardening`)
+
+### Stage 9: Multi-Provider Solana RPC Failover & Network Resilience
+- **Automated RPC Failover (`payment_verifier.py`):**
+  - Added multi-RPC endpoint pool support (`rpc_endpoints: list[str]`).
+  - Seamlessly fails over to secondary and tertiary providers on HTTP 429 (rate limiting), HTTP 502/503/504, connection timeouts, or socket resets.
+  - Added `active_rpc_endpoint` tracking and recorded the confirming RPC provider in `VerifiedPayment` and security audit logs.
+  - Preserved strict fail-closed security: if all configured providers fail, zero credits are issued and detailed diagnostics are raised.
+- **Failover Configuration (`config.py` & `payment_config.json`):**
+  - Added `SOLANA_RPC_FALLBACKS` environment variable support (comma-separated URLs).
+  - Added `fallback_rpc_urls` to `payment_config.json`.
+  - Configured canonical publicnode fallback alongside Solana mainnet-beta.
+- **Deterministic Testing:**
+  - Added `tests/test_rpc_failover.py` with 7 deterministic tests validating 429 failover, timeout failover, 3-endpoint cascades, fail-closed assertions, and API integration.
+  - Test suite expanded from 49 to 56 tests (100% green).
 

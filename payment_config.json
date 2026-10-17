@@ -1,6 +1,9 @@
 {
   "solana_treasury_wallet": "DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC",
   "rpc_url": "https://api.mainnet-beta.solana.com",
+  "fallback_rpc_urls": [
+    "https://solana-rpc.publicnode.com"
+  ],
   "rates": {
     "tier_starter": {
       "usd": 1.0,

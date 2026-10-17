@@ -52,6 +52,7 @@ class VerifiedPayment:
         tier: str,
         credits: int,
         recipient: str,
+        rpc_endpoint_used: Optional[str] = None,
     ):
         self.tx_signature = tx_signature
         self.asset = asset
@@ -59,6 +60,7 @@ class VerifiedPayment:
         self.tier = tier
         self.credits = credits
         self.recipient = recipient
+        self.rpc_endpoint_used = rpc_endpoint_used
 
 
 class SolanaPaymentVerifier:
@@ -66,19 +68,64 @@ class SolanaPaymentVerifier:
         self,
         treasury_wallet: Optional[str] = None,
         rpc_url: Optional[str] = None,
+        rpc_endpoints: Optional[list[str]] = None,
         rates: Optional[Dict[str, Dict[str, Any]]] = None,
-        rpc_caller: Optional[Callable[[str, list], Dict[str, Any]]] = None,
+        rpc_caller: Optional[Callable[..., Dict[str, Any]]] = None,
     ):
         cfg = load_payment_config()
         self.treasury_wallet = (treasury_wallet or cfg["solana_treasury_wallet"]).strip()
-        self.rpc_url = (rpc_url or cfg["rpc_url"]).strip()
         self.rates = rates or cfg["rates"]
         self._custom_rpc_caller = rpc_caller
 
-    def _call_rpc(self, method: str, params: list) -> Dict[str, Any]:
-        if self._custom_rpc_caller:
-            return self._custom_rpc_caller(method, params)
+        # Build ordered list of failover RPC endpoints
+        if rpc_endpoints:
+            self.rpc_endpoints = [e.strip() for e in rpc_endpoints if e and e.strip()]
+        elif rpc_url:
+            self.rpc_endpoints = [rpc_url.strip()]
+        else:
+            self.rpc_endpoints = list(cfg.get("rpc_endpoints", [cfg.get("rpc_url")]))
 
+        self.rpc_url = self.rpc_endpoints[0] if self.rpc_endpoints else "https://api.mainnet-beta.solana.com"
+        self.active_rpc_endpoint: Optional[str] = None
+
+    def _call_rpc(self, method: str, params: list) -> Dict[str, Any]:
+        """
+        Executes RPC call with automatic failover across configured endpoints.
+        Tries primary RPC first; on timeout, rate limit (429), or error, seamlessly
+        fails over to secondary/tertiary endpoints in the pool.
+        """
+        errors: list[str] = []
+
+        for endpoint in self.rpc_endpoints:
+            try:
+                if self._custom_rpc_caller:
+                    import inspect
+                    sig = inspect.signature(self._custom_rpc_caller)
+                    if len(sig.parameters) >= 3:
+                        res = self._custom_rpc_caller(endpoint, method, params)
+                    else:
+                        res = self._custom_rpc_caller(method, params)
+                else:
+                    res = self._send_http_rpc(endpoint, method, params)
+
+                if not isinstance(res, dict):
+                    raise RPCError(f"RPC returned non-dict response: {type(res)}")
+
+                if "error" in res:
+                    err_msg = res["error"].get("message", str(res["error"]))
+                    raise RPCError(f"RPC error from {endpoint}: {err_msg}")
+
+                self.active_rpc_endpoint = endpoint
+                return res
+            except Exception as e:
+                errors.append(f"[{endpoint}] {e!s}")
+                continue
+
+        raise RPCError(
+            f"All {len(self.rpc_endpoints)} Solana RPC endpoint(s) failed: {'; '.join(errors)}"
+        )
+
+    def _send_http_rpc(self, endpoint: str, method: str, params: list) -> Dict[str, Any]:
         payload = json.dumps({
             "jsonrpc": "2.0",
             "id": 1,
@@ -87,7 +134,7 @@ class SolanaPaymentVerifier:
         }).encode("utf-8")
 
         req = urllib.request.Request(
-            self.rpc_url,
+            endpoint,
             data=payload,
             headers={
                 "Content-Type": "application/json",
@@ -97,16 +144,13 @@ class SolanaPaymentVerifier:
 
         try:
             with urllib.request.urlopen(req, timeout=12) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                if "error" in data:
-                    raise RPCError(f"RPC returned error: {data['error'].get('message', 'unknown')}")
-                return data
+                return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
-            raise RPCError(f"RPC HTTP error: {e.code}") from e
+            raise RPCError(f"HTTP error {e.code}") from e
         except urllib.error.URLError as e:
-            raise RPCError(f"RPC connection error: {e.reason}") from e
+            raise RPCError(f"Connection error: {e.reason}") from e
         except Exception as e:
-            raise RPCError(f"RPC query failed: {e!s}") from e
+            raise RPCError(f"RPC query error: {e!s}") from e
 
     def fetch_transaction(self, signature: str) -> Dict[str, Any]:
         """
@@ -189,6 +233,7 @@ class SolanaPaymentVerifier:
             tier=earned_tier,
             credits=credits_to_grant,
             recipient=self.treasury_wallet,
+            rpc_endpoint_used=self.active_rpc_endpoint or self.rpc_url,
         )
 
     def _extract_usdc_transfer(self, meta: Dict[str, Any], account_pubkeys: list) -> int:

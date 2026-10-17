@@ -200,7 +200,7 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
 
     storage.log_audit_event(
         "payment_redeemed_success",
-        f"Redeemed {payment.asset} (raw: {payment.amount_raw}) for tier {payment.tier} ({payment.credits} credits). Key: {redemption_result['key_prefix']}",
+        f"Redeemed {payment.asset} (raw: {payment.amount_raw}) for tier {payment.tier} ({payment.credits} credits). Key: {redemption_result['key_prefix']} [rpc: {payment.rpc_endpoint_used}]",
         ip_address=client_ip,
     )
 
