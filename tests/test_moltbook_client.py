@@ -127,3 +127,12 @@ def test_solve_arithmetic_challenge_each_per_unit_multiplication():
     )
     res = solve_arithmetic_challenge(challenge)
     assert res == "72.00"
+
+
+def test_solve_arithmetic_challenge_explicit_minus_operator():
+    challenge = (
+        "A] lO.bS tErr LooobsssStEr S^wImS [aT tW/eNtY ThReE mE.tErS pEr S^eCoNd - sEvEn mE.tErS pEr S^eCoNd, "
+        "wHaT's ThE nEw S^wImMiNg V/eLoWcItEe?"
+    )
+    res = solve_arithmetic_challenge(challenge)
+    assert res == "16.00"

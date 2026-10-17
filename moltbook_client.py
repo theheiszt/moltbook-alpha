@@ -107,10 +107,12 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
     compound vs. distinct sequential number phrases, and operation keywords.
     """
     spaced_text = challenge_text
-    for op in ["*", "×", "÷", "+"]:
-        spaced_text = spaced_text.replace(op, f" {op} ")
+    spaced_text = re.sub(r"(?<=\s)[-−–](?=\s)", " - ", spaced_text)
+    spaced_text = re.sub(r"(\d)\s*[-−–]\s*(\d)", r"\1 - \2", spaced_text)
+    for op in ["*", "×", "÷", "+", " - "]:
+        spaced_text = spaced_text.replace(op, f" {op.strip()} ")
 
-    cleaned_text = re.sub(r"[^a-zA-Z0-9\s*×÷+]", " ", spaced_text).lower()
+    cleaned_text = re.sub(r"[^a-zA-Z0-9\s*×÷+\-−–]", " ", spaced_text).lower()
     raw_tokens = [t.strip() for t in cleaned_text.split() if t.strip()]
     merged = merge_fragments(raw_tokens)
     tokens: List[str] = []
@@ -139,7 +141,14 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
                     nums.append(val)
                 current_num_words = []
             explicit_ops.append("+")
-        elif t == "÷":
+        elif t in ["-", "minus", "−", "–"]:
+            if current_num_words:
+                val = parse_number_words(current_num_words)
+                if val is not None:
+                    nums.append(val)
+                current_num_words = []
+            explicit_ops.append("-")
+        elif t in ["/", "÷"]:
             if current_num_words:
                 val = parse_number_words(current_num_words)
                 if val is not None:
@@ -187,6 +196,8 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
         result = a * b
     elif "/" in explicit_ops:
         result = a / b if b != 0 else 0
+    elif "-" in explicit_ops:
+        result = a - b
     elif "+" in explicit_ops:
         result = a + b
     elif has_op(["reduc", "slow", "minus", "decreas", "lose", "drop", "differ", "subtract", "less"]):
