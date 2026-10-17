@@ -176,9 +176,58 @@ git diff --check
 
 ---
 
-### 5. Outstanding Risks & Next Steps
+### 6. Outstanding Risks & Next Steps (Updated 09:00 EDT)
 
-1. **Webhook Settlement:** Currently verification is polling-driven on client request. Supporting push-based webhooks (e.g. Shyft / Helius webhooks) will enable zero-latency asynchronous key delivery.
-2. **PostgreSQL Adapter:** In high-volume multi-host cloud deployments, migrating `storage.py` from SQLite to PostgreSQL ensures horizontally scalable multi-server synchronization.
-3. **Next Run Priority:** Implement push-based webhook signature listener and signature queue worker with signature pre-validation.
+1. **PostgreSQL Adapter:** In high-volume multi-host cloud deployments, migrating `storage.py` from SQLite to PostgreSQL ensures horizontally scalable multi-server synchronization.
+2. **Batch Signature Verification:** For enterprise volumes, adding batch signature verification can reduce RPC calls across multiple client settlements.
+3. **Next Run Priority:** Add Prometheus / OpenTelemetry instrumentation for payment latency, RPC failover events, and webhook throughput.
 
+---
+
+## Daily Cycle Run — 2026-10-17 09:00 EDT (`RUN-20261017-0900`)
+
+### 1. Environment & Branch State
+- **Branch:** `feat/commercial-api-hardening`
+- **Head Commit:** `a57f71c`
+- **Working Tree:** Clean (verified 0 uncommitted edits, 0 duplicate redemptions in `data/moltbook.db`).
+- **Initial Tests:** 59/59 green. Ruff 0 errors.
+
+### 2. Audit & Defect Identification
+- **Priority 1 / Priority 5 Audit:**
+  - *Defect:* Verification was strictly client-driven and synchronous (`POST /v1/payments/verify-solana`). Decentralized agents and automated checkout systems rely on asynchronous push webhooks from RPC indexers (e.g. Shyft / Helius).
+  - *Defect:* Agents had no unauthenticated endpoint to poll payment settlement status without re-triggering expensive RPC verification or risking rate limit exhaustion.
+- **Chosen Improvement:** Push-Based Webhook Settlement (`POST /v1/payments/webhook`) & Safe Status Query (`GET /v1/payments/status/{signature}`).
+- **Why Highest Value:** Delivers sub-millisecond asynchronous key redemption, prevents client blocking on RPC calls, eliminates redundant RPC load, and provides safe public settlement status inspection without exposing raw API keys.
+
+### 3. Implementation Details
+1. **Configuration:** Added `WEBHOOK_SECRET` environment variable in `config.py` with `.env.example` documentation.
+2. **Storage:** Added `get_payment_redemption()` in `storage.py` returning public redemption confirmation and key prefix while preserving raw key confidentiality.
+3. **API Endpoints:**
+   - `POST /v1/payments/webhook`: Protected by `X-Webhook-Secret` header, Base58 input validation, in-flight deduplication, fail-closed error handling, atomic SQLite redemption, and audit event logging.
+   - `GET /v1/payments/status/{signature}`: Perimeter Base58 regex validation, querying persistent storage to return `status: pending_or_unredeemed` or `status: redeemed` with granted credits and tier metadata.
+
+### 4. Verification Results
+```bash
+python -m pytest tests/
+```
+**Results:** `67 passed in 4.55s` (100% green).
+- `tests/test_webhook_and_status.py`: 8/8 passed
+- `tests/test_rpc_failover.py`: 7/7 passed
+- `tests/test_moltbook_client.py`: 7/7 passed
+- `tests/test_payments.py`: 13/13 passed
+- `tests/test_audit_and_health.py`: 6/6 passed
+- `tests/test_rate_limiter.py`: 7/7 passed
+- `tests/test_auth.py`: 7/7 passed
+- `tests/test_config.py`: 6/6 passed
+- `tests/test_storage.py`: 4/4 passed
+- `tests/test_health.py`: 2/2 passed
+
+```bash
+python -m ruff check .
+```
+**Results:** `All checks passed!` (0 lint errors).
+
+```bash
+git diff --check
+```
+**Results:** `Clean` (0 whitespace errors).

@@ -272,6 +272,39 @@ class StorageManager:
             row = cur.fetchone()
             return dict(row) if row else None
 
+    def get_payment_redemption(self, tx_signature: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieves public redemption status for a transaction signature.
+        Never returns plaintext raw API keys.
+        """
+        sig = tx_signature.strip()
+        with self._lock, self.connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT p.tx_signature, p.asset, p.tier, p.credits_granted, p.redeemed_at,
+                       k.key_prefix, k.credits, k.is_active
+                FROM payment_redemptions p
+                JOIN api_keys k ON p.key_hash = k.key_hash
+                WHERE p.tx_signature = ?
+                """,
+                (sig,)
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "tx_signature": row["tx_signature"],
+                "asset": row["asset"],
+                "tier": row["tier"],
+                "credits_granted": row["credits_granted"],
+                "remaining_credits": row["credits"],
+                "key_prefix": row["key_prefix"],
+                "is_active": bool(row["is_active"]),
+                "redeemed_at": row["redeemed_at"],
+            }
+
+
     def migrate_from_json(self, json_path: Path):
         """
         Migrates existing valid user keys from legacy api_keys.json.

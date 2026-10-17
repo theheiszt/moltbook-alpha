@@ -7,6 +7,7 @@ with ACID transactional SQLite storage, zero backdoors, rate limiting, and fail-
 from typing import Optional, Dict, Any
 from fastapi import FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel, field_validator
 import uvicorn
 
 from config import (
@@ -14,6 +15,8 @@ from config import (
     REPORTS_DIR,
     INDEX_HTML_PATH,
     BASE_DIR,
+    BASE58_PATTERN,
+    WEBHOOK_SECRET,
     load_payment_config,
     is_demo_keys_enabled,
 )
@@ -211,6 +214,126 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
         "key_prefix": redemption_result["key_prefix"],
         "credits": redemption_result["credits"],
         "tier": redemption_result["tier"],
+    }
+
+
+class WebhookPayload(BaseModel):
+    transaction_signature: str
+    target_tier: Optional[str] = "tier_starter"
+
+    @field_validator("transaction_signature")
+    @classmethod
+    def validate_signature(cls, v: str) -> str:
+        s = v.strip()
+        if not (80 <= len(s) <= 90):
+            raise ValueError("Solana transaction signature must be between 80 and 90 characters.")
+        if not BASE58_PATTERN.match(s):
+            raise ValueError("Solana transaction signature must be valid base58.")
+        return s
+
+
+@app.post("/v1/payments/webhook")
+def handle_payment_webhook(
+    req: WebhookPayload,
+    request: Request,
+    x_webhook_secret: Optional[str] = Header(None, alias="X-Webhook-Secret"),
+):
+    client_ip = get_client_ip(request)
+    if not x_webhook_secret or x_webhook_secret != WEBHOOK_SECRET:
+        storage.log_audit_event(
+            "webhook_auth_failed",
+            f"Unauthorized webhook attempt with secret prefix={str(x_webhook_secret)[:4]}... [client_ip: {client_ip}]",
+            ip_address=client_ip,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing X-Webhook-Secret header.",
+        )
+
+    sig = req.transaction_signature.strip()
+    verifier = SolanaPaymentVerifier()
+
+    try:
+        payment = in_flight_deduplicator.execute(
+            sig,
+            lambda: verifier.verify_payment(sig, req.target_tier),
+        )
+    except VerificationError as e:
+        storage.log_audit_event(
+            "webhook_verification_failed",
+            f"Webhook payment rejected for sig={sig[:16]}...: {e!s}",
+            ip_address="webhook",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Webhook payment verification failed: {e!s}",
+        ) from e
+    except RPCError as e:
+        storage.log_audit_event(
+            "webhook_rpc_error",
+            f"RPC failure in webhook for sig={sig[:16]}...: {e!s}",
+            ip_address="webhook",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Solana RPC communication error: {e!s}",
+        ) from e
+
+    redemption_result = storage.redeem_payment(
+        tx_signature=payment.tx_signature,
+        asset=payment.asset,
+        amount_raw=payment.amount_raw,
+        tier=payment.tier,
+        credits_to_grant=payment.credits,
+    )
+
+    event_type = "webhook_payment_redeemed" if redemption_result["status"] == "newly_minted" else "webhook_replay_detected"
+    storage.log_audit_event(
+        event_type,
+        f"Webhook redemption {redemption_result['status']} for sig={sig[:16]}... [tier: {payment.tier}, credits: {payment.credits}]",
+        ip_address="webhook",
+    )
+
+    return {
+        "success": True,
+        "status": redemption_result["status"],
+        "tier": redemption_result["tier"],
+        "credits": redemption_result["credits"],
+        "key_prefix": redemption_result["key_prefix"],
+        "api_key": redemption_result.get("api_key"),
+        "message": redemption_result["message"],
+    }
+
+
+@app.get("/v1/payments/status/{signature}")
+def get_payment_status(signature: str):
+    sig = signature.strip()
+    if not (80 <= len(sig) <= 90) or not BASE58_PATTERN.match(sig):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Solana transaction signature must be valid Base58 between 80 and 90 characters.",
+        )
+
+    redemption = storage.get_payment_redemption(sig)
+    if not redemption:
+        return {
+            "success": True,
+            "status": "pending_or_unredeemed",
+            "tx_signature": sig,
+            "message": "Transaction has not been redeemed yet.",
+        }
+
+    return {
+        "success": True,
+        "status": "redeemed",
+        "tx_signature": redemption["tx_signature"],
+        "asset": redemption["asset"],
+        "tier": redemption["tier"],
+        "credits_granted": redemption["credits_granted"],
+        "remaining_credits": redemption["remaining_credits"],
+        "key_prefix": redemption["key_prefix"],
+        "is_active": redemption["is_active"],
+        "redeemed_at": redemption["redeemed_at"],
     }
 
 

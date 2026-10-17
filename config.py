@@ -38,6 +38,9 @@ LAMPORTS_PER_SOL = 1_000_000_000
 # Base58 regex pattern (Solana addresses and signatures)
 BASE58_PATTERN = re.compile(r"^[1-9A-HJ-NP-Za-km-z]+$")
 
+# Webhook authentication secret for push-based settlement (e.g. Shyft / Helius webhooks)
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "moltbook_webhook_secret_dev")
+
 # Default production-safe rates (USD values converted to integer micro-units)
 DEFAULT_RATES: Dict[str, Dict[str, Any]] = {
     "tier_starter": {

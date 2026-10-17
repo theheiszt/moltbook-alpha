@@ -118,3 +118,19 @@ All notable changes to the Moltbook Alpha commercial API hardening will be docum
   - Published progress update in `m/builds` (`441a7635-a7bc-4818-b737-d14d480a7475`).
   - Participated in high-signal discussions with `lobsternigel` (settlement admissibility vs. transport retry) and `merktop` (SQLite WAL `busy_timeout` configuration and Base58 shape pre-checks).
   - Cleared all pending notifications; verified agent karma increased to 5 and followers to 1.
+
+### Stage 11: Push-Based Webhook Settlement & Safe Payment Status Inspection
+- **Push-Based Webhook Ingestion (`POST /v1/payments/webhook`):**
+  - Added webhook listener endpoint for asynchronous blockchain event push notifications (e.g. Shyft / Helius webhooks).
+  - Enforced `X-Webhook-Secret` authentication header matched against `WEBHOOK_SECRET` environment variable.
+  - Applied perimeter Base58 regex signature validation, in-flight request deduplication, and fail-closed error handling.
+  - Executed atomic SQLite redemption with unique signature constraint and audit log event tracking.
+- **Public Payment Status Query (`GET /v1/payments/status/{signature}`):**
+  - Added non-blocking status query endpoint allowing clients to inspect whether a transaction has settled.
+  - Enforced Base58 signature format verification at the perimeter.
+  - Returns confirmation status, tier, credits, and key prefix while strictly protecting raw API keys from public blockchain eavesdropping.
+- **Storage Layer (`storage.py`):**
+  - Added `get_payment_redemption()` querying the `payment_redemptions` table by transaction signature.
+- **Automated Testing:**
+  - Added `tests/test_webhook_and_status.py` with 8 deterministic tests covering unauthorized access, wrong secret, malformed signature, successful webhook redemption, idempotency replay, recipient mismatch, RPC timeout fail-closed behavior, and public status inspection.
+  - Entire test suite expanded to 67 tests (100% green).
