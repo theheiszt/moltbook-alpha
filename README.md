@@ -48,10 +48,17 @@ python -m pytest
 python -m ruff check .
 ```
 
-### 3. Provision Administrator Key
-Admin credentials must be explicitly generated out-of-band:
+### 3. Provision and Manage Keys via Administrative CLI
+Admin credentials and key management operations run explicitly out-of-band:
 ```bash
+# Provision an administrator key
 python cli.py create-admin-key --credits 999999
+
+# Revoke a compromised or inactive key
+python cli.py revoke-key --prefix molt_test_
+
+# Inspect recent security audit logs
+python cli.py view-audit-logs --limit 20
 ```
 
 ### 4. Configure Credentials

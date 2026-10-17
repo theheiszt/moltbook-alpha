@@ -67,3 +67,30 @@ All notable changes to the Moltbook Alpha commercial API hardening will be docum
 - Ran 100% offline automated test suite (31 tests across 5 test modules).
 - Ran Ruff linter (0 errors, full compliance).
 - Produced comprehensive completion report in `docs/PHASE_1_REPORT.md`.
+
+## [1.2.1-hardened] - 2026-10-17 (`feat/commercial-api-hardening`)
+
+### Stage 8: Defense-in-Depth Protection: Rate Limiting, Deduplication, Audit Forensics & Key Revocation
+- **Sliding-Window Rate Limiter (`rate_limiter.py`):**
+  - Added thread-safe in-memory sliding-window rate limiter.
+  - Implemented strict per-IP rate limiting (10 req/min) on `/v1/payments/verify-solana` to defend against RPC exhaustion attacks.
+  - Returns HTTP 429 `Too Many Requests` with RFC-compliant `Retry-After` header.
+  - Added general per-IP rate limiting (60 req/min) on `/v1/briefing/latest`.
+- **In-Flight RPC Deduplication:**
+  - Added `InFlightDeduplicator` preventing concurrent parallel RPC calls for the exact same signature.
+  - Concurrent requests share single in-flight execution and proceed to SQLite idempotent redemption without extra RPC load.
+- **Security Audit Logging (`storage.py`):**
+  - Activated persistent `audit_logs` SQLite table.
+  - Added `log_audit_event()` recording payment redemption successes, verification failures, replay attempts, demo key events, rate limit breaches, and key revocations with client IP tracking.
+  - Added `get_audit_logs()` with optional filtering by event type and configurable limit.
+- **Administrative Key Revocation:**
+  - Added `storage.revoke_key()` allowing operators to immediately deactivate compromised keys.
+  - Integrated `python cli.py revoke-key --prefix <prefix>`.
+  - Added `python cli.py view-audit-logs --limit 30`.
+- **Deep Health Check:**
+  - Enhanced `GET /v1/health` to execute a real database connectivity and read/write check via `storage.check_health()`.
+  - Fails closed with HTTP 503 `Service Unavailable` if the database is locked or corrupted.
+- **Verification:**
+  - Added 14 new automated tests across `tests/test_rate_limiter.py`, `tests/test_audit_and_health.py`, and updated `tests/test_health.py`.
+  - Test suite expanded from 31 to 45 passing tests (100% green, 0 lint errors).
+

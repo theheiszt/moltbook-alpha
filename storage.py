@@ -306,3 +306,95 @@ class StorageManager:
                         """,
                         (k_hash, k_prefix, tier, credits, now_iso)
                     )
+
+    def log_audit_event(
+        self,
+        event_type: str,
+        detail: str,
+        ip_address: Optional[str] = None
+    ) -> int:
+        """Records an event in the audit_logs table for security forensics."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        entry_detail = detail
+        if ip_address:
+            entry_detail = f"{detail} [client_ip: {ip_address}]"
+
+        with self._lock, self.connection() as conn:
+            with conn:
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    INSERT INTO audit_logs (event_type, detail, created_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (event_type, entry_detail, now_iso)
+                )
+                return cur.lastrowid
+
+    def get_audit_logs(
+        self,
+        limit: int = 50,
+        event_type: Optional[str] = None
+    ) -> list[Dict[str, Any]]:
+        """Retrieves recent audit log events."""
+        with self._lock, self.connection() as conn:
+            cur = conn.cursor()
+            if event_type:
+                cur.execute(
+                    """
+                    SELECT id, event_type, detail, created_at
+                    FROM audit_logs
+                    WHERE event_type = ?
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (event_type, limit)
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT id, event_type, detail, created_at
+                    FROM audit_logs
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (limit,)
+                )
+            return [dict(r) for r in cur.fetchall()]
+
+    def revoke_key(self, key_prefix_or_hash: str) -> bool:
+        """
+        Deactivates an API key by prefix match or exact hash.
+        Returns True if a key was revoked, False otherwise.
+        """
+        target = key_prefix_or_hash.strip()
+        with self._lock, self.connection() as conn:
+            with conn:
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    UPDATE api_keys
+                    SET is_active = 0
+                    WHERE key_hash = ? OR key_prefix LIKE ?
+                    """,
+                    (target, f"{target}%")
+                )
+                revoked = cur.rowcount > 0
+
+        if revoked:
+            self.log_audit_event("key_revocation", f"Revoked API key matching target: {target}")
+        return revoked
+
+    def check_health(self) -> bool:
+        """
+        Verifies SQLite connectivity and write capability.
+        Returns True if operational, raises StorageError or returns False on failure.
+        """
+        try:
+            with self._lock, self.connection() as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT 1")
+                row = cur.fetchone()
+                return row is not None and row[0] == 1
+        except Exception as e:
+            raise StorageError(f"Database health check failed: {e!s}") from e

@@ -1,11 +1,11 @@
 """
 Moltbook Alpha API Server with Hardened Solana / USDC Payment Verification.
 Verifies on-chain transactions on Solana mainnet and automatically mints API keys
-with ACID transactional SQLite storage, zero backdoors, and fail-closed security.
+with ACID transactional SQLite storage, zero backdoors, rate limiting, and fail-closed security.
 """
 
 from typing import Optional, Dict, Any
-from fastapi import FastAPI, Header, HTTPException, status
+from fastapi import FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse
 import uvicorn
 
@@ -24,20 +24,31 @@ from payment_verifier import (
     VerificationError,
     RPCError,
 )
+from rate_limiter import SlidingWindowRateLimiter, InFlightDeduplicator
 
 app = FastAPI(
     title="Moltbook Alpha Intelligence API",
     description="Agentic Market Intelligence & Quant Insights with Solana Verification",
-    version="1.1.0",
+    version="1.2.0",
 )
 
-# Initialize storage and verify payment config at startup
+# Initialize storage, rate limiter, and deduplicator
 storage = StorageManager(DB_PATH)
+rate_limiter = SlidingWindowRateLimiter()
+in_flight_deduplicator = InFlightDeduplicator()
 
 # Run one-time legacy migration from api_keys.json if present (skipping any admin backdoors)
 legacy_keys_file = BASE_DIR / "api_keys.json"
 if legacy_keys_file.exists():
     storage.migrate_from_json(legacy_keys_file)
+
+
+def get_client_ip(request: Request) -> str:
+    """Extracts client IP address safely, respecting reverse-proxy X-Forwarded-For."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "127.0.0.1"
 
 
 def authenticate_and_deduct(api_key: Optional[str]) -> Dict[str, Any]:
@@ -87,7 +98,19 @@ def index():
 
 @app.get("/v1/health")
 def health_check():
-    return {"status": "ok", "service": "moltbook-alpha-api"}
+    try:
+        db_healthy = storage.check_health()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Database health check failed: {e!s}",
+        ) from e
+
+    return {
+        "status": "ok",
+        "service": "moltbook-alpha-api",
+        "database": "healthy" if db_healthy else "degraded",
+    }
 
 
 @app.get("/v1/payments/config")
@@ -103,18 +126,49 @@ def get_payment_details():
 
 
 @app.post("/v1/payments/verify-solana")
-def verify_solana_payment(req: VerifyPaymentInput):
+def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: Response):
+    client_ip = get_client_ip(request)
+
+    # Rate limiting: max 10 payment verification attempts per minute per IP
+    allowed, retry_after = rate_limiter.is_allowed(f"verify_solana:{client_ip}", limit=10, window_seconds=60)
+    if not allowed:
+        storage.log_audit_event(
+            "rate_limit_exceeded",
+            f"Payment verification rate limit exceeded (limit: 10/min) [client_ip: {client_ip}]",
+            ip_address=client_ip,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many payment verification requests. Please retry in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     sig = req.transaction_signature.strip()
     verifier = SolanaPaymentVerifier()
 
     try:
-        payment = verifier.verify_payment(sig, req.target_tier)
+        # In-flight deduplication: concurrent requests for the exact same signature
+        # share the single ongoing verification rather than firing redundant RPC queries
+        payment = in_flight_deduplicator.execute(
+            sig,
+            lambda: verifier.verify_payment(sig, req.target_tier),
+        )
     except VerificationError as e:
+        storage.log_audit_event(
+            "payment_verification_failed",
+            f"Verification rejected for sig={sig[:16]}...: {e!s}",
+            ip_address=client_ip,
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Payment verification failed: {e!s}",
         ) from e
     except RPCError as e:
+        storage.log_audit_event(
+            "payment_rpc_error",
+            f"RPC failure verifying sig={sig[:16]}...: {e!s}",
+            ip_address=client_ip,
+        )
         # Network, timeout, or node failures fail closed with 502/503
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -131,6 +185,11 @@ def verify_solana_payment(req: VerifyPaymentInput):
     )
 
     if redemption_result["status"] == "already_redeemed":
+        storage.log_audit_event(
+            "payment_replay_attempt",
+            f"Replay detected for sig={sig[:16]}..., returning existing key {redemption_result['key_prefix']}",
+            ip_address=client_ip,
+        )
         return {
             "success": True,
             "message": "Key previously redeemed for this transaction signature.",
@@ -138,6 +197,12 @@ def verify_solana_payment(req: VerifyPaymentInput):
             "tier": redemption_result["tier"],
             "credits": redemption_result["credits"],
         }
+
+    storage.log_audit_event(
+        "payment_redeemed_success",
+        f"Redeemed {payment.asset} (raw: {payment.amount_raw}) for tier {payment.tier} ({payment.credits} credits). Key: {redemption_result['key_prefix']}",
+        ip_address=client_ip,
+    )
 
     return {
         "success": True,
@@ -150,14 +215,40 @@ def verify_solana_payment(req: VerifyPaymentInput):
 
 
 @app.post("/v1/keys/generate-demo")
-def generate_demo_key():
+def generate_demo_key(request: Request):
+    client_ip = get_client_ip(request)
+
     if not is_demo_keys_enabled():
+        storage.log_audit_event(
+            "demo_key_denied",
+            "Attempted demo key generation while feature is disabled in production",
+            ip_address=client_ip,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Demo key issuance is disabled. Provide payment or contact administrator.",
         )
 
+    allowed, retry_after = rate_limiter.is_allowed(f"demo_key:{client_ip}", limit=5, window_seconds=60)
+    if not allowed:
+        storage.log_audit_event(
+            "rate_limit_exceeded",
+            f"Demo key generation rate limit exceeded for IP: {client_ip}",
+            ip_address=client_ip,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many demo key requests. Please retry in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     raw_token, record = storage.create_api_key(tier="trial", credits=5, prefix_tag="molt_demo")
+    storage.log_audit_event(
+        "demo_key_issued",
+        f"Issued demo key {record['key_prefix']} with 5 trial credits",
+        ip_address=client_ip,
+    )
+
     return {
         "success": True,
         "api_key": raw_token,
@@ -168,7 +259,18 @@ def generate_demo_key():
 
 
 @app.get("/v1/briefing/latest")
-def get_latest_briefing(x_api_key: Optional[str] = Header(None)):
+def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None)):
+    client_ip = get_client_ip(request)
+
+    # General rate limit: 60 requests per minute per IP
+    allowed, retry_after = rate_limiter.is_allowed(f"briefing:{client_ip}", limit=60, window_seconds=60)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many requests. Please retry in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     user_info = authenticate_and_deduct(x_api_key)
     latest_path = REPORTS_DIR / "latest_briefing.md"
     if not latest_path.exists():
