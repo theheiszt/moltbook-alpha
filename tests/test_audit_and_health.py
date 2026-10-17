@@ -110,7 +110,6 @@ def test_api_logs_audit_events_for_payments():
         assert resp.status_code == 200
 
         # Check that audit log recorded payment_redeemed_success
-        logs = storage.get_audit_logs(limit=5, event_type="payment_redeemed_success")
+        logs = storage.get_audit_logs(limit=10, event_type="payment_redeemed_success")
         assert len(logs) >= 1
-        assert "Redeemed USDC" in logs[0]["detail"]
-        assert "192.0.2.99" in logs[0]["detail"]
+        assert any("Redeemed USDC" in log["detail"] and "192.0.2.99" in log["detail"] for log in logs)

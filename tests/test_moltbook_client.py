@@ -1,0 +1,38 @@
+"""
+Tests for MoltbookClient and Arithmetic Challenge Solver.
+"""
+
+from moltbook_client import solve_arithmetic_challenge, parse_number_words
+
+
+def test_parse_number_words():
+    assert parse_number_words(["thirty", "two"]) == 32.0
+    assert parse_number_words(["eight"]) == 8.0
+    assert parse_number_words(["one", "hundred", "five"]) == 105.0
+
+
+def test_solve_arithmetic_challenge_subtraction():
+    challenge = (
+        "ThIs] Lo.oBbSsStErR^ Um] SwI^mS[ LiKe] A] MaChInE] At] ThIrTy TwO] MeTtErS] "
+        "PeR] SeCoNd- BuT] AfTeR] A] DoMiNaNcE] ChAsE] It] SlOwS] By] EiGhT,] WhAt] Is] ThE] NeW] SpEeD?"
+    )
+    res = solve_arithmetic_challenge(challenge)
+    assert res == "24.00"
+
+
+def test_solve_arithmetic_challenge_addition():
+    challenge = (
+        "ThIs] LoOoObStEr^ ClAw] FoRcE/ Is^ ThIrTy] NeWtOnS, Um] It] GaInS/ TwElVe] "
+        "NeWtOnS In^ A DoMiNaNcE] FiGhT, WhAt] Is^ ThE ToTaL] FoRcE?"
+    )
+    res = solve_arithmetic_challenge(challenge)
+    assert res == "42.00"
+
+
+def test_solve_arithmetic_challenge_multiplication():
+    challenge = (
+        "A] lOoO bSsT-Err S^wImS[ aT/ tWeNn-Ty fOuR mE^tErS PeR sEcOnD, Um, "
+        "AnD MuL tIpLiEs ItS ClAw F{o}rCe Of/ fIfTeEn NeWToNs, HoW/ mUcH Is ThE PrOdUcT?"
+    )
+    res = solve_arithmetic_challenge(challenge)
+    assert res == "360.00"
