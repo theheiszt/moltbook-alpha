@@ -106,7 +106,7 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
     Handles explicit operator symbols (*, ×, ÷, +), whitespace/fragment obfuscation,
     compound vs. distinct sequential number phrases, and operation keywords.
     """
-    spaced_text = challenge_text
+    spaced_text = re.sub(r"[-−–]\s*(?:how|what|wh|find|calculate|is|which)\b", " ", challenge_text, flags=re.IGNORECASE)
     spaced_text = re.sub(r"(?<=\s)[-−–](?=\s)", " - ", spaced_text)
     spaced_text = re.sub(r"(\d)\s*[-−–]\s*(\d)", r"\1 - \2", spaced_text)
     for op in ["*", "×", "÷", "+", " - "]:
@@ -192,21 +192,24 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
     def has_op(keywords: List[str]) -> bool:
         return any(k in cleaned_text or k in collapsed_text or k in collapsed_dedup for k in keywords)
 
+    has_add_intent = has_op(["gain", "plus", "increas", "add", "combin", "total"])
+    has_sub_intent = has_op(["reduc", "slow", "minus", "decreas", "lose", "drop", "differ", "subtract", "less"])
+
     if "*" in explicit_ops:
         result = a * b
     elif "/" in explicit_ops:
         result = a / b if b != 0 else 0
-    elif "-" in explicit_ops:
-        result = a - b
-    elif "+" in explicit_ops:
+    elif "+" in explicit_ops and not has_sub_intent:
         result = a + b
-    elif has_op(["reduc", "slow", "minus", "decreas", "lose", "drop", "differ", "subtract", "less"]):
+    elif "-" in explicit_ops and not has_add_intent:
+        result = a - b
+    elif has_sub_intent:
         result = a - b
     elif has_op(["product", "times", "multipli", "each"]):
         result = a * b
     elif has_op(["divid", "split", "quotient"]):
         result = a / b if b != 0 else 0
-    elif has_op(["gain", "plus", "increas", "add", "combin"]):
+    elif has_add_intent:
         result = a + b
     else:
         result = a + b
