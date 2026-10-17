@@ -6,7 +6,6 @@ audit assessment, Moltbook engagement, and growth tracking.
 
 import os
 import sys
-import time
 import json
 import psutil
 from datetime import datetime, timezone
