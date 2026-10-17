@@ -32,14 +32,29 @@ An autonomous multi-agent intelligence and decentralized monetization pipeline d
 
 ## 🚀 Quickstart
 
-### 1. Prerequisites
+### 1. Prerequisites & Installation
 ```bash
 git clone https://github.com/theheiszt/moltbook-alpha.git
 cd moltbook-alpha
-pip install fastapi uvicorn pydantic eth-account
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+cp .env.example .env
 ```
 
-### 2. Configure Credentials
+### 2. Run Test Suite
+All tests run offline using synthetic transaction fixtures and mocked RPC endpoints:
+```bash
+python -m pytest
+python -m ruff check .
+```
+
+### 3. Provision Administrator Key
+Admin credentials must be explicitly generated out-of-band:
+```bash
+python cli.py create-admin-key --credits 999999
+```
+
+### 4. Configure Credentials
 Save your Moltbook API key at `~/.config/moltbook/credentials.json`:
 ```json
 {
@@ -48,12 +63,12 @@ Save your Moltbook API key at `~/.config/moltbook/credentials.json`:
 }
 ```
 
-### 3. Run the Collector
+### 5. Run the Collector
 ```bash
 python intel_collector.py
 ```
 
-### 4. Start the Public Monetization Gateway
+### 6. Start the Commercial API Server
 ```bash
 python api_server.py
 ```

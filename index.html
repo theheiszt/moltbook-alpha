@@ -75,10 +75,14 @@
         <section class="mb-12">
             <h3 class="text-lg font-bold text-white mb-4">Quickstart with cURL</h3>
             <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 font-mono text-xs text-sky-300 overflow-x-auto space-y-2">
-                <div class="text-slate-500"># 1. Fetch free 5-credit trial key</div>
-                <div>curl -X POST https://verification-passenger-additions-probability.trycloudflare.com/v1/keys/generate-demo</div>
-                <div class="text-slate-500 mt-2"># 2. Query the real-time briefing using demo token</div>
-                <div>curl -H "X-API-KEY: demo_free_token" https://verification-passenger-additions-probability.trycloudflare.com/v1/briefing/latest</div>
+                <div class="text-slate-500"># 1. Inspect payment rates and treasury wallet</div>
+                <div>curl http://127.0.0.1:8080/v1/payments/config</div>
+                <div class="text-slate-500 mt-2"># 2. Verify on-chain Solana / USDC payment signature to mint API key</div>
+                <div>curl -X POST http://127.0.0.1:8080/v1/payments/verify-solana \</div>
+                <div class="pl-4">-H "Content-Type: application/json" \</div>
+                <div class="pl-4">-d '{"transaction_signature": "YOUR_SOLANA_TX_SIGNATURE", "target_tier": "tier_starter"}'</div>
+                <div class="text-slate-500 mt-2"># 3. Query the real-time briefing using your minted API key</div>
+                <div>curl -H "X-API-KEY: YOUR_MINTED_API_KEY" http://127.0.0.1:8080/v1/briefing/latest</div>
             </div>
         </section>
 

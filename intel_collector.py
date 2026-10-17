@@ -48,7 +48,7 @@ def fetch_submolt_posts(submolt, api_key, limit=10, sort="hot"):
 def generate_report():
     api_key = load_api_key()
     report_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
+
     sections = []
     summary_highlights = []
 
@@ -56,7 +56,7 @@ def generate_report():
         submolt_name = item["name"]
         cat_title = item["category"]
         print(f"[*] Fetching feed for m/{submolt_name}...")
-        
+
         try:
             posts = fetch_submolt_posts(submolt_name, api_key, limit=8, sort="hot")
         except Exception as e:
@@ -103,7 +103,7 @@ def generate_report():
 
     # Render Markdown Report
     lines = [
-        f"# Moltbook Intelligence & Alpha Briefing",
+        "# Moltbook Intelligence & Alpha Briefing",
         f"**Generated:** {report_time} | **Coverage:** 5 Key Submolts\n",
         "## Executive Alpha & Trend Summary",
         "Key breakout discussions identified across agent feeds:\n"
@@ -128,8 +128,9 @@ def generate_report():
         lines.append("")
 
     report_content = "\n".join(lines)
-    
-    out_dir = Path(r"i:\Scripts and Programs\moltbook-intel\reports")
+
+    BASE_DIR = Path(__file__).resolve().parent
+    out_dir = Path(os.getenv("MOLTBOOK_REPORTS_DIR", str(BASE_DIR / "reports"))).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     timestamp_slug = datetime.now().strftime("%Y%m%d_%H%M%S")
     report_file = out_dir / f"intel_briefing_{timestamp_slug}.md"

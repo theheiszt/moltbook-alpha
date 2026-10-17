@@ -4,16 +4,15 @@ Manages launch tickets, on-chain fee collections, and trading analytics
 for the $MALPHA agentic cryptocurrency on Robinhood Chain / Clawnch.
 """
 
-import os
 import json
 import urllib.request
 from pathlib import Path
-from datetime import datetime
 
 CONFIG_DIR = Path.home() / ".config" / "moltbook"
 WALLET_FILE = CONFIG_DIR / "evm_wallet.json"
 CLAWNCH_CRED_FILE = CONFIG_DIR / "clawnch_credentials.json"
-TOKEN_STATE_FILE = Path(r"i:\Scripts and Programs\moltbook-intel\token_state.json")
+BASE_DIR = Path(__file__).resolve().parent
+TOKEN_STATE_FILE = BASE_DIR / "token_state.json"
 
 CLAWNCH_BASE = "https://www.clawn.ch"
 
@@ -54,7 +53,7 @@ def request_fresh_launch_ticket():
     with open(TOKEN_STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(ticket_data, f, indent=2)
 
-    print(f"[+] Fresh launch ticket generated for $MALPHA!")
+    print("[+] Fresh launch ticket generated for $MALPHA!")
     print(f"    Router: {ticket_data['data']['to']}")
     print(f"    Creation Fee: {ticket_data['meta']['creationFeeWei']} wei")
     print(f"    Deposit Address (Path B): {ticket_data['meta']['depositAddress']}")
@@ -87,7 +86,7 @@ def check_token_status():
         rpc_resp = json.loads(urllib.request.urlopen(rpc_req, timeout=10).read().decode())
         bal_wei = int(rpc_resp.get("result", "0x0"), 16)
         bal_eth = bal_wei / 1e18
-    except Exception as e:
+    except Exception:
         bal_wei = 0
         bal_eth = 0.0
 

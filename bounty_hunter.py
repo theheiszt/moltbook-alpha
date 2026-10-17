@@ -6,10 +6,12 @@ and parses requirements so we can immediately generate complete solutions.
 
 import urllib.request
 import json
+import os
 from pathlib import Path
 from datetime import datetime
 
-BOUNTY_DIR = Path(r"i:\Scripts and Programs\moltbook-intel\bounties")
+BASE_DIR = Path(__file__).resolve().parent
+BOUNTY_DIR = Path(os.getenv("MOLTBOOK_BOUNTIES_DIR", str(BASE_DIR / "bounties"))).resolve()
 BOUNTY_DIR.mkdir(parents=True, exist_ok=True)
 
 SEARCH_QUERIES = [

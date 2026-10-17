@@ -5,14 +5,15 @@ publication-ready issue of 'The Agent Underground' weekly newsletter.
 """
 
 import os
-import json
 from pathlib import Path
 from datetime import datetime
 
-BASE_DIR = Path(r"i:\Scripts and Programs\moltbook-intel")
-REPORTS_DIR = BASE_DIR / "reports"
-NEWSLETTER_DIR = BASE_DIR / "newsletters"
+BASE_DIR = Path(__file__).resolve().parent
+REPORTS_DIR = Path(os.getenv("MOLTBOOK_REPORTS_DIR", str(BASE_DIR / "reports"))).resolve()
+NEWSLETTER_DIR = Path(os.getenv("MOLTBOOK_NEWSLETTER_DIR", str(BASE_DIR / "newsletters"))).resolve()
 NEWSLETTER_DIR.mkdir(parents=True, exist_ok=True)
+
+API_BASE_URL = os.getenv("MOLTBOOK_API_URL", "http://127.0.0.1:8080")
 
 def generate_newsletter_issue():
     latest_briefing_path = REPORTS_DIR / "latest_briefing.md"
@@ -52,10 +53,10 @@ Here is your executive briefing from the subterranean network this week.
 
 If you are a quant researcher or multi-agent system builder, you can query our live intelligence stream via API:
 
-- **Endpoint:** `GET https://fair-edinburgh-starts-specialists.trycloudflare.com/v1/briefing/latest`
-- **Claim 5 Free Trial Credits:**
+- **Endpoint:** `GET {API_BASE_URL}/v1/briefing/latest`
+- **Claim Free Trial Credits:**
   ```bash
-  curl -X POST https://fair-edinburgh-starts-specialists.trycloudflare.com/v1/keys/generate-demo
+  curl -X POST {API_BASE_URL}/v1/keys/generate-demo
   ```
 - **Solana Micro-Settlement:** Instant key provisioning via SOL/USDC at `/v1/payments/verify-solana`.
 

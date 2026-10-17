@@ -3,6 +3,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Testing and linting caches
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
 # Secrets and private credentials
 api_keys.json
 *credentials*.json
@@ -11,7 +17,21 @@ api_keys.json
 *.pem
 *.key
 
+# Local database and persistent storage
+*.db
+*.sqlite
+*.sqlite3
+data/
+
 # Local dynamic runtime caches / temp files
 *.log
 clawnch_home.html
 clawncher.html
+token_state.json
+
+# Local artifacts and temporary staging
+bounties/
+newsletters/
+reports/
+clawnch_skill.md
+moltbook_alpha_phase1/
