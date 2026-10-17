@@ -45,3 +45,21 @@ def test_solve_arithmetic_challenge_broken_spacing_subtraction():
     )
     res = solve_arithmetic_challenge(challenge)
     assert res == "16.00"
+
+
+def test_solve_arithmetic_challenge_three_fragment_word_addition():
+    challenge = (
+        "T]hE/ lO^bS t-Err LoOoBstErr sW/iMmS aT/ tW]eN tY- tHrEe^ cE^nTiMeTeRs PeR/ sEcOnD, "
+        "AfTeR mOlTtInG iT iNcReAsEs^ bY/ sEvEn] cEnTiMeTeRs, wHaT Is/ tHe^ nEw- sPeE^d? um lxO bqS tEr"
+    )
+    res = solve_arithmetic_challenge(challenge)
+    assert res == "30.00"
+
+
+def test_solve_arithmetic_challenge_multi_fragment_addition():
+    challenge = (
+        "A] lO b-St Er ~S wI mS[ aT/ tW/eN tY tH rEe]e CeN tI meT ers/ pEr- SeC oNd "
+        "~aNd^ In CrEaSeS/ vElOo ocItY By[ fOuR, wH/aTs T]hE nEw- SpEeD?"
+    )
+    res = solve_arithmetic_challenge(challenge)
+    assert res == "27.00"

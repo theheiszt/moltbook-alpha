@@ -64,18 +64,23 @@ def parse_number_words(words: List[str]) -> Optional[float]:
 
 
 def merge_fragments(toks: List[str]) -> List[str]:
-    """Merges adjacent hyphenated or broken token fragments (e.g. 'twenn' + 'ty' -> 'twenty')."""
+    """Merges adjacent hyphenated or broken token fragments (e.g. 'tw' + 'en' + 'ty' -> 'twenty')."""
     merged: List[str] = []
     i = 0
     while i < len(toks):
-        if i + 1 < len(toks):
-            pair = re.sub(r"(.)\1+", r"\1", toks[i] + toks[i + 1])
-            if pair in WORD_TO_NUMBER:
-                merged.append(pair)
-                i += 2
-                continue
-        merged.append(toks[i])
-        i += 1
+        matched = False
+        for k in (4, 3, 2):
+            if i + k <= len(toks):
+                combined = "".join(toks[i:i + k])
+                clean_combined = normalize_word(combined)
+                if clean_combined in WORD_TO_NUMBER:
+                    merged.append(clean_combined)
+                    i += k
+                    matched = True
+                    break
+        if not matched:
+            merged.append(toks[i])
+            i += 1
     return merged
 
 
