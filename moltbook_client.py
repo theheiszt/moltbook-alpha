@@ -90,9 +90,13 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
     Normalizes punctuation, identifies numbers and operations, and formats to 2 decimal places.
     """
     cleaned_text = re.sub(r"[^a-zA-Z0-9\s]", " ", challenge_text).lower()
-    cleaned_text = re.sub(r"\s+", " ", cleaned_text)
     raw_tokens = [t.strip() for t in cleaned_text.split() if t.strip()]
-    tokens = merge_fragments(raw_tokens)
+    merged = merge_fragments(raw_tokens)
+    tokens: List[str] = []
+    for t in merged:
+        if not tokens or t != tokens[-1]:
+            tokens.append(t)
+
 
     # Extract number phrases
     nums: List[float] = []

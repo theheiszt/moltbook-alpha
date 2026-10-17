@@ -63,3 +63,12 @@ def test_solve_arithmetic_challenge_multi_fragment_addition():
     )
     res = solve_arithmetic_challenge(challenge)
     assert res == "27.00"
+
+
+def test_solve_arithmetic_challenge_stutter_repetition_addition():
+    challenge = (
+        "A] lOoObS tEeR ]cLaW- eXerTs^ foR tY foRtY ]nEeWtOoNs umm, "
+        "aNd/ tHe OtHeR ]anTeNnA eXerTs^ tWeNtY fIvE~ nOoToNs, wHaT| iS{ tHe }tOtAl- fOrCe<?"
+    )
+    res = solve_arithmetic_challenge(challenge)
+    assert res == "65.00"
