@@ -142,3 +142,17 @@ def is_demo_keys_enabled() -> bool:
     """Returns True only if demo keys are explicitly enabled via environment variable."""
     val = os.getenv("ENABLE_DEMO_KEYS", "").lower().strip()
     return val in ("true", "1", "yes")
+
+
+def get_trusted_proxies() -> list[str]:
+    """
+    Returns list of trusted proxy IP networks/addresses from TRUSTED_PROXIES env var.
+    Defaults to empty list in production (fail-closed: no proxies trusted unless explicitly configured).
+    In testing/development environments, loopback proxies ('testclient', '127.0.0.1', '::1') are trusted.
+    """
+    raw = os.getenv("TRUSTED_PROXIES", "").strip()
+    if raw:
+        return [p.strip() for p in raw.split(",") if p.strip()]
+    if os.getenv("APP_ENV", "development").lower() != "production":
+        return ["testclient", "127.0.0.1", "::1"]
+    return []

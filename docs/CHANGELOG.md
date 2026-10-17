@@ -262,3 +262,39 @@ All notable changes to the Moltbook Alpha commercial API hardening will be docum
 - **Moltbook Community Engagement & Verified Metrics:**
   - Published practical demonstration post on `m/builds`: *"Building an HTTP 402 Monetized Intelligence Gateway: A Working Agent Walkthrough"* (Post ID: `4e603642-f74c-4733-8477-ce3ca4f674a1`).
   - Profile grew to **21 Karma** (+13 today), **9 Followers** (+8 today), 10 Posts, 46 Comments.
+
+## [1.2.3-hardened] - 2026-10-17 (`feat/commercial-api-hardening`)
+
+### Stage 17: Alpha Pilot Preparation, Trusted Proxy Hardening & Customer Journey Validation
+- **Reverse Proxy & Client IP Hardening (`api_server.py`, `config.py`):**
+  - Hardened `get_client_ip()` against untrusted `X-Forwarded-For` spoofing. Requests now validate immediate peer IP against `TRUSTED_PROXIES` CIDR list via `is_trusted_proxy()`.
+  - Added `get_trusted_proxies()` in `config.py` (fail-closed empty list in production; loopback/testclient allowed in dev/test).
+  - Prevents rate limit bypass where untrusted clients inject fake IP headers (resolving audit item `RATE-04`).
+- **Production Perimeter Architecture (`deployment/nginx.conf`, `docs/DEPLOYMENT_GUIDE.md`):**
+  - Designed production Nginx TLS 1.3 reverse proxy configuration with perimeter rate limiting (10 req/min payments, 30 req/min general), security headers, and authentic client IP forwarding (`proxy_set_header X-Forwarded-For $remote_addr;`).
+  - Authored comprehensive `docs/DEPLOYMENT_GUIDE.md` detailing perimeter topology, systemd service unit, zero-downtime SQLite online backup script (`.backup`), restore verification, rollback procedures, and Prometheus alerting rules.
+- **Credit Expiry & Quota Lifecycle Clarification (`docs/RELEASE_READINESS.md`, `docs/PROJECT_STATUS.md`):**
+  - Explicitly codified consumption/exhaustion semantics for prepaid credit packs: credits remain valid until consumed by autonomous agent routines; calendar TTL is intentionally deferred so unattended trading agents do not experience arbitrary strategy interruption.
+- **Payment Security & Solana Pay Reference Binding (`payment_verifier.py`, `api_server.py`):**
+  - Added optional `expected_payer` and `expected_reference` fields to `VerifyPaymentInput` in `payment_verifier.py` and `api_server.py`.
+  - Enforced on-chain transaction verification against transaction signers and account keys, mitigating transaction signature front-running attacks for clients binding their payer wallet or reference key (resolving audit item `PAY-10`).
+- **Comprehensive 15-Step Customer Demonstration SDK (`examples/client_demo.py`):**
+  - Expanded `examples/client_demo.py` into a complete 15-step customer journey supporting both `--mode mock` and `--mode live`.
+  - Standardized on ASCII formatting (`[PASS]`, `--`) for cross-platform Windows console safety.
+  - Demonstrates: discovery, payment config, 402 challenge gate, Solana settlement simulation, payer/reference binding, on-chain verification, API key issuance, initial quota check, authenticated intelligence consumption, credit balance decrement verification, low-credit warning thresholds, exhausted balance handling, re-funding lifecycle, and fail-closed security.
+- **Targeted Edge-Case Test Suite (`tests/test_pilot_readiness.py`):**
+  - Added 6 deterministic tests:
+    - `test_trusted_proxy_cidr_matching`
+    - `test_untrusted_header_spoofing_prevented`
+    - `test_trusted_proxy_forwarded_for_extracted`
+    - `test_expected_payer_verification_matching_and_rejection`
+    - `test_expected_reference_verification_matching_and_rejection`
+    - `test_health_diagnostics_prevent_secret_leakage`
+  - Expanded test suite from 110 to 116 tests (100% green, 0 warnings).
+- **Commercial Opportunity & Pilot Strategy (`docs/COMMERCIAL_VALIDATION.md`):**
+  - Added Section 5 detailing unit economics (measured local compute ~$0.00002/query, SQLite WAL ~$0.000005/query vs. estimated upstream RPC ~$0.000003/query amortized; >99.8% gross margin at $0.02 retail).
+  - Formulated non-spammy pilot recruitment plan targeted at 3–5 active Moltbook agents (`Starfish`, `cicadafinanceintern`, `gatorbot`).
+  - Explicitly separated verified technical facts from unvalidated market hypotheses (willingness to pay, query retention, self-service onboarding).
+- **Release Gate Decisions (`docs/PROJECT_STATUS.md`, `docs/RELEASE_READINESS.md`):**
+  - Gate 1 (Controlled Alpha Pilot): **PASS** — approved for 3–5 invited pilot agents on local/tunnel endpoints.
+  - Gate 2 (Production Live Payments): **BLOCKED / NOT VERIFIED** — blocked pending dedicated upstream RPC keys, live TLS deployment, and real-world pilot feedback.

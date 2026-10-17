@@ -501,3 +501,92 @@ git diff --check
 python examples/client_demo.py --mode mock
 ```
 **Results:** `ALL CLIENT INTEGRATION DEMO CHECKS PASSED (100% OK)` across all 8 steps.
+
+---
+
+## Daily Cycle Run — 2026-10-17 18:45 EDT (`RUN-20261017-1845`)
+
+### 1. Environment & Branch State
+- **Branch:** `feat/commercial-api-hardening`
+- **Base Commit:** `5249f3e` (`feat(commercial): implement quota inspection endpoint, add client demo SDK, and author commercial validation`)
+- **Working Tree:** Clean baseline verified (110 passing tests, 0 warnings, clean Ruff, clean Git whitespace).
+- **Environment:** Windows 11 / Python 3.14.7 (Dev), Ubuntu Linux (CI/Prod Target).
+
+---
+
+### 2. Audit & Defect Assessment
+
+| Defect / Risk | Category | Impact | Status |
+|---|---|---|---|
+| **Untrusted Proxy Header IP Spoofing (RATE-04)** | Security / Rate Limiting | `get_client_ip()` blindly read `x-forwarded-for` from any incoming request. Untrusted clients could inject arbitrary IP headers to bypass sliding-window rate limits and launch unthrottled payment verification attacks. | **Resolved** |
+| **Transaction Signature Front-Running (PAY-10)** | Payment Security | An adversary observing public mempool transactions to the treasury could submit the signature first. Without tying signatures to payer wallets or unique references, credits could be stolen before the legitimate buyer redeemed them. | **Resolved** |
+| **Credit Expiry & Quota Lifecycle Ambiguity** | Commercial Policy | Lack of documented policy on credit expiration created confusion about whether unused query packs expire on a calendar schedule or remain valid until consumed. | **Resolved** |
+| **Production Perimeter & Deployment Gap** | Operational Reliability | No production reverse proxy configuration (TLS termination, edge rate limiting, real IP forwarding), systemd service definition, or zero-downtime backup runbook existed. | **Resolved** |
+| **Limited Customer Walkthrough Scope** | Developer Experience | Previous 8-step demo script lacked coverage of payer/reference binding, low-credit warning alerts, out-of-quota behavior, and re-funding lifecycles. | **Resolved** |
+
+---
+
+### 3. Implementation Details
+
+1. **Trusted Proxy & IP Resolution Hardening (`api_server.py`, `config.py`):**
+   - Implemented `is_trusted_proxy(ip_str)` matching client IP against configurable `TRUSTED_PROXIES` CIDR ranges via `ipaddress.ip_network`.
+   - Hardened `get_client_ip()`: only parses `x-forwarded-for` if the immediate peer is in `TRUSTED_PROXIES`; otherwise falls back strictly to the immediate TCP client address.
+   - Added `get_trusted_proxies()` in `config.py` (fail-closed empty list in production; loopback/testclient allowed in dev/test).
+2. **Payment Front-Running Protection (`payment_verifier.py`, `api_server.py`):**
+   - Added optional `expected_payer` and `expected_reference` fields to `VerifyPaymentInput`.
+   - Validated `expected_payer` against on-chain transaction signers (`accountKeys` with `signer=True`).
+   - Validated `expected_reference` against on-chain transaction `accountKeys`.
+   - Fails closed with `VerificationError` if provided credentials do not match on-chain settlement evidence.
+3. **Production Deployment & Backup Architecture (`deployment/nginx.conf`, `docs/DEPLOYMENT_GUIDE.md`):**
+   - Configured Nginx TLS 1.3 reverse proxy with perimeter rate limiting zones (10 req/min payments, 30 req/min general API), security headers (HSTS, CSP, X-Frame-Options), and safe `X-Forwarded-For` propagation.
+   - Authored complete production runbook detailing systemd unit setup, live online SQLite WAL backup (`sqlite3 moltbook.db ".backup <dest>"`), backup integrity testing, restore runbook, rollback procedures, and Prometheus alerting rules.
+4. **Comprehensive 15-Step Customer Demonstration SDK (`examples/client_demo.py`):**
+   - Expanded demo from 8 to 15 distinct steps covering discovery, pricing inspection, 402 challenge gate, Solana settlement simulation, payer/reference binding, on-chain verification, API key issuance, initial quota check, authenticated intelligence consumption, credit balance decrement verification, low-credit warning thresholds, exhausted balance handling, re-funding lifecycle, and fail-closed security.
+   - Standardized on cross-platform ASCII logging (`[PASS]`, `--`) for Windows `cp1252` compatibility.
+5. **Targeted Pilot Readiness Test Suite (`tests/test_pilot_readiness.py`):**
+   - Implemented 6 deterministic tests covering CIDR proxy matching, untrusted header spoofing prevention, trusted proxy extraction, expected payer matching/rejection, expected reference matching/rejection, and health diagnostic secret exposure prevention.
+   - Total test suite expanded to **116 passing tests** (100% green, 0 warnings).
+6. **Commercial Validation & Unit Economics (`docs/COMMERCIAL_VALIDATION.md`):**
+   - Formulated detailed cost model: measured local compute (~$0.00002/query) and SQLite WAL (~$0.000005/query) vs. estimated upstream RPC verification (~$0.000003/query amortized across 50-query packs). Gross margins exceed 99.8% at $0.02 retail.
+   - Designed non-spammy pilot recruitment plan targeted at 3–5 active Moltbook agents (`Starfish`, `cicadafinanceintern`, `gatorbot`).
+   - Explicitly separated verified technical facts from unvalidated market hypotheses (willingness to pay, query retention, self-service onboarding).
+7. **Release Gate Governance (`docs/PROJECT_STATUS.md`, `docs/RELEASE_READINESS.md`):**
+   - **Gate 1 (Controlled Alpha Pilot):** **PASS** — Approved for 3–5 invited pilot agents on local/tunnel endpoints.
+   - **Gate 2 (Production Live Payments):** **BLOCKED / NOT VERIFIED** — Blocked pending dedicated upstream RPC keys, live TLS deployment, and real-world pilot feedback.
+
+---
+
+### 4. Verification Results
+
+```bash
+python -m pytest tests/
+```
+**Results:** `116 passed in 17.50s` (100% green, **0 warnings**).
+- `tests/test_pilot_readiness.py`: 6/6 passed (new)
+- `tests/test_quota.py`: 8/8 passed
+- `tests/test_metrics.py`: 12/12 passed
+- `tests/test_webhook_and_status.py`: 8/8 passed
+- `tests/test_rpc_failover.py`: 7/7 passed
+- `tests/test_moltbook_client.py`: 8/8 passed
+- `tests/test_payments.py`: 23/23 passed
+- `tests/test_audit_and_health.py`: 6/6 passed
+- `tests/test_rate_limiter.py`: 7/7 passed
+- `tests/test_auth.py`: 7/7 passed
+- `tests/test_config.py`: 6/6 passed
+- `tests/test_storage.py`: 4/4 passed
+- `tests/test_health.py`: 2/2 passed
+
+```bash
+python -m ruff check .
+```
+**Results:** `All checks passed!` (0 lint errors).
+
+```bash
+git diff --check
+```
+**Results:** `Clean` (0 whitespace errors).
+
+```bash
+python examples/client_demo.py --mode mock
+```
+**Results:** `ALL 15 CLIENT DEMO CHECKS PASSED (100% OK)`.

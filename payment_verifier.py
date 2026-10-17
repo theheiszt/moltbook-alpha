@@ -35,6 +35,8 @@ class RPCError(Exception):
 class VerifyPaymentInput(BaseModel):
     transaction_signature: str
     target_tier: Optional[str] = "tier_starter"
+    expected_payer: Optional[str] = None
+    expected_reference: Optional[str] = None
 
     @field_validator("transaction_signature")
     @classmethod
@@ -44,6 +46,18 @@ class VerifyPaymentInput(BaseModel):
             raise ValueError("Solana transaction signature must be between 80 and 90 characters.")
         if not BASE58_PATTERN.match(s):
             raise ValueError("Solana transaction signature must be valid base58.")
+        return s
+
+    @field_validator("expected_payer", "expected_reference")
+    @classmethod
+    def validate_base58_optional(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        s = v.strip()
+        if not s:
+            return None
+        if not (32 <= len(s) <= 44) or not BASE58_PATTERN.match(s):
+            raise ValueError("Solana address or reference must be valid base58 between 32 and 44 characters.")
         return s
 
 
@@ -64,6 +78,8 @@ class VerifiedPayment:
         block_time: Optional[int] = None,
         confirmation_status: Optional[str] = "finalized",
         provider_identity: Optional[str] = None,
+        payer: Optional[str] = None,
+        reference: Optional[str] = None,
     ):
         self.tx_signature = tx_signature
         self.asset = asset
@@ -79,6 +95,8 @@ class VerifiedPayment:
         self.block_time = block_time
         self.confirmation_status = confirmation_status
         self.provider_identity = provider_identity
+        self.payer = payer
+        self.reference = reference
 
 
 class SolanaPaymentVerifier:
@@ -301,14 +319,21 @@ class SolanaPaymentVerifier:
 
         return True
 
-    def verify_payment(self, signature: str, requested_tier: Optional[str] = None) -> VerifiedPayment:
+    def verify_payment(
+        self,
+        signature: str,
+        requested_tier: Optional[str] = None,
+        expected_payer: Optional[str] = None,
+        expected_reference: Optional[str] = None,
+    ) -> VerifiedPayment:
         """
         Server-authoritative verification:
         1. Confirms transaction succeeded without error.
         2. Proves transfer to configured treasury wallet.
         3. Validates native SOL or canonical SPL USDC mint and decimals.
         4. Validates integer transfer amount against pricing tiers.
-        5. Awards server-determined tier and credits.
+        5. Validates optional expected_payer and expected_reference (Solana Pay spec).
+        6. Awards server-determined tier and credits.
         """
         t0 = time.perf_counter()
         asset_label = "UNKNOWN"
@@ -383,7 +408,7 @@ class SolanaPaymentVerifier:
             if self.require_consensus:
                 self.cross_check_provider_agreement(signature, tx)
 
-            # 7. Extract Transfers
+            # 7. Extract Transfers & Validate Accounts
             message = transaction_payload.get("message", {})
             account_keys = message.get("accountKeys", [])
 
@@ -394,6 +419,27 @@ class SolanaPaymentVerifier:
                     account_pubkeys.append(ak.get("pubkey", ""))
                 else:
                     account_pubkeys.append(str(ak))
+
+            # Payer validation (if expected_payer requested)
+            payer_pubkey = account_pubkeys[0] if account_pubkeys else None
+            if expected_payer:
+                clean_payer = expected_payer.strip()
+                if clean_payer not in account_pubkeys:
+                    raise VerificationError(
+                        f"Payer mismatch: expected payer '{clean_payer}' not found in transaction accounts."
+                    )
+                if payer_pubkey != clean_payer and clean_payer not in account_pubkeys[:len(sigs)]:
+                    raise VerificationError(
+                        f"Payer mismatch: expected payer '{clean_payer}' is not a signer of the transaction."
+                    )
+
+            # Reference validation (if expected_reference requested, Solana Pay 2.0 spec)
+            if expected_reference:
+                clean_ref = expected_reference.strip()
+                if clean_ref not in account_pubkeys:
+                    raise VerificationError(
+                        f"Reference mismatch: expected Solana Pay reference '{clean_ref}' not found in transaction accounts."
+                    )
 
             # Check SPL USDC transfer first
             usdc_amount_received = self._extract_usdc_transfer(meta, account_pubkeys)
@@ -437,6 +483,8 @@ class SolanaPaymentVerifier:
                 block_time=block_time,
                 confirmation_status="finalized",
                 provider_identity=provider_host,
+                payer=payer_pubkey,
+                reference=expected_reference,
             )
         except Exception:
             record_verification_latency(asset_label, time.perf_counter() - t0)

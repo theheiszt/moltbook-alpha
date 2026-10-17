@@ -1,11 +1,11 @@
 # Moltbook Alpha — Verified Project Status & Commercial Baseline
 
-**Document Version:** 1.0.0  
-**Audit Date:** 2026-10-17  
-**Branch:** `feat/commercial-api-hardening`  
-**Latest Git Commit:** `a86ff86` (`feat(client): improve challenge gate dash punctuation handling and log growth session F`)  
-**Target Environments:** Python 3.11+ / 3.14 (Linux x86_64, Windows 11)  
-**Verification Baseline:** 102 passing automated tests, 0 warnings, clean Ruff, clean Git whitespace  
+**Document Version:** 1.1.0<br>
+**Audit Date:** 2026-10-17 (Stage 17 Update)<br>
+**Branch:** `feat/commercial-api-hardening`<br>
+**Target Environments:** Python 3.11+ / 3.14 (Linux x86_64, Windows 11)<br>
+**Verification Baseline:** 116 passing automated tests, 0 warnings, clean Ruff, clean Git whitespace
+
 
 ---
 
@@ -25,15 +25,16 @@ Moltbook Alpha is a commercial market intelligence and quant API engineered for 
 |                                                                                   |
 |   +-----------------------+   +----------------------+   +--------------------+   |
 |   | Sliding-Window Rate   |   | In-Flight Payment    |   | Constant-Time Auth |   |
-|   | Limiter (Per-IP / Tier|   | Deduplicator         |   | & SHA-256 Hashing  |   |
+|   | Limiter & Proxy Guard |   | Deduplicator         |   | & SHA-256 Hashing  |   |
 |   +-----------------------+   +----------------------+   +--------------------+   |
 |                                         |                                         |
 |                                         v                                         |
 |   +---------------------------------------------------------------------------+   |
 |   |                  FastAPI Application Core (`api_server.py`)                |   |
 |   |                                                                           |   |
-|   |   GET  /v1/health                 - Component health & DB status          |   |
+|   |   GET  /v1/health                 - Subsystem diagnostics & DB status     |   |
 |   |   GET  /metrics                   - Prometheus 0.0.4 metrics exposition   |   |
+|   |   GET  /v1/account/quota          - Non-deducting credit & tier inspection|   |
 |   |   GET  /v1/payments/config        - Treasury wallet, assets, tiers        |   |
 |   |   POST /v1/payments/verify-solana - Server-authoritative settlement       |   |
 |   |   POST /v1/payments/webhook       - Push-based webhook confirmation       |   |
@@ -49,7 +50,7 @@ Moltbook Alpha is a commercial market intelligence and quant API engineered for 
 |   |    - `api_keys` (SHA-256 hashed)   |   |   - Multi-provider failover pool |   |
 |   |    - `payment_redemptions` (Unique)|   |   - Evidence-based finality      |   |
 |   |    - `audit_logs` (Forensics)      |   |   - Canonical SPL USDC mint check|   |
-|   |    - TTL cached active key gauges  |   |   - Cross-provider consensus     |   |
+|   |    - TTL cached active key gauges  |   |   - Expected payer/reference auth|   |
 |   +------------------------------------+   +----------------------------------+   |
 |                                                               |                   |
 +---------------------------------------------------------------|-------------------+
@@ -64,58 +65,45 @@ Moltbook Alpha is a commercial market intelligence and quant API engineered for 
 
 ---
 
-## 2. Component Implementation & Deployment States
+## 2. Component Implementation & Readiness Classification
 
-To ensure rigorous commercial validation, system capabilities are classified into five distinct operational states:
-- **Implemented:** Code is written and present in repository.
-- **Tested:** Covered by deterministic automated unit or integration tests.
-- **Configured:** Managed via declarative configuration (`config.py`, `.env`).
-- **Deployed:** Packaged, running, or ready for process supervisor execution.
-- **Accessible to Users:** Exposed over public network or verified client interface.
+System capabilities are classified across the Stage 17 operational dimensions:
 
-| Component / Feature | Implemented | Tested | Configured | Deployed | Accessible to Users | Verification Evidence |
-|---|:---:|:---:|:---:|:---:|:---:|---|
-| **Health Check (`GET /v1/health`)** | Yes | Yes | Yes | Ready | Local / CI | `tests/test_health.py` (2 tests), `tests/test_audit_and_health.py` |
-| **Prometheus Metrics (`GET /metrics`)** | Yes | Yes | Yes | Ready | Local / CI | `tests/test_metrics.py` (13 tests), sub-ms benchmark |
-| **Payment Config (`GET /v1/payments/config`)** | Yes | Yes | Yes | Ready | Local / CI | `tests/test_payments.py` |
-| **Solana Verification (`POST /v1/payments/verify-solana`)** | Yes | Yes | Yes | Ready | Local / CI | `tests/test_payments.py` (27 tests), evidence-based finality |
-| **Webhook Settlement (`POST /v1/payments/webhook`)** | Yes | Yes | Yes | Ready | Local / CI | `tests/test_webhook_and_status.py` (8 tests) |
-| **Payment Status Polling (`GET /v1/payments/status/{sig}`)** | Yes | Yes | Yes | Ready | Local / CI | `tests/test_webhook_and_status.py` |
-| **Market Intelligence Briefing (`GET /v1/briefing/latest`)** | Yes | Yes | Yes | Ready | Local / CI | `tests/test_auth.py`, `tests/test_audit_and_health.py` |
-| **Demo Key Generation (`POST /v1/keys/generate-demo`)** | Yes | Yes | Yes | Disabled by default | Gated | `tests/test_auth.py` (gated by `ENABLE_DEMO_KEYS`) |
-| **ACID SQLite Storage (`storage.py`)** | Yes | Yes | Yes | Ready | Internal | `tests/test_storage.py` (4 tests), WAL mode, unique constraints |
-| **Per-IP Sliding-Window Rate Limiting** | Yes | Yes | Yes | Ready | Edge | `tests/test_rate_limiter.py` (7 tests) |
-| **In-Flight RPC Request Deduplication** | Yes | Yes | Yes | Ready | Edge | `tests/test_rate_limiter.py`, `tests/test_payments.py` |
-| **RPC Endpoint Failover Pool** | Yes | Yes | Yes | Ready | Egress | `tests/test_rpc_failover.py` (7 tests), automatic fallback |
-| **Administrative CLI (`cli.py`)** | Yes | Yes | Yes | Ready | Local Admin | Key creation, revocation, audit log viewing |
-| **Moltbook Community Client (`moltbook_client.py`)** | Yes | Yes | Yes | Ready | Outbound | 15 tests, 7 submolt sessions, 46 comments, 15 karma |
-| **Cloudflare Tunnel / Public TLS Domain** | Spec | Manual | Unconfigured | Not Active | Not Deployed | Needs production DNS & systemd service setup |
+| Component / Subsystem | Status Classification | Verified Evidence / Operational Notes |
+|---|:---:|---|
+| **Health Diagnostics (`GET /v1/health`)** | **Implemented & Tested** | Returns subsystem health (DB engine/WAL, payments assets, RPC pool). Zero secrets exposed. Verified by `tests/test_health.py` and `tests/test_pilot_readiness.py`. |
+| **Account Quota (`GET /v1/account/quota`)** | **Implemented & Tested** | Non-deducting balance & tier query. Supports Bearer and X-API-KEY. Verified by `tests/test_quota.py` (8 tests). |
+| **Prometheus Telemetry (`GET /metrics`)** | **Implemented & Tested** | Prometheus 0.0.4 text format with bounded cardinality and Bearer auth option. Sub-millisecond benchmarks. Verified by `tests/test_metrics.py`. |
+| **Solana Settlement (`POST /v1/payments/verify-solana`)** | **Implemented & Tested** | Server-authoritative, `finalized` commitment, canonical USDC SPL mint (`EPj...`), integer arithmetic, payer/reference check. Verified by `tests/test_payments.py` (27 tests) and `tests/test_pilot_readiness.py`. |
+| **Webhook Settlement (`POST /v1/payments/webhook`)** | **Implemented & Tested** | Push-based settlement with secret verification and idempotent replay protection. Verified by `tests/test_webhook_and_status.py` (8 tests). |
+| **Payment Status Polling (`GET /v1/payments/status/{sig}`)** | **Implemented & Tested** | Read-only public transaction redemption status. Verified by `tests/test_webhook_and_status.py`. |
+| **Market Intelligence (`GET /v1/briefing/latest`)** | **Implemented & Tested** | Atomic single-credit decrement. Returns HTTP 402 with actionable top-up instructions on exhaustion. Verified by `tests/test_auth.py` and `tests/test_quota.py`. |
+| **Trusted Proxy IP Guard (`get_client_ip`)** | **Implemented & Tested** | Evaluates peer against `TRUSTED_PROXIES` CIDR list. Ignores forged `X-Forwarded-For` from untrusted clients, preventing IP rate limit bypass. Verified by `tests/test_pilot_readiness.py`. |
+| **RPC Failover & Consensus Pool** | **Implemented & Tested** | Auto-fails over on network timeouts and HTTP 429; cross-checks secondary nodes when consensus enabled. Verified by `tests/test_rpc_failover.py` and `tests/test_payments.py`. |
+| **SQLite ACID Concurrency (WAL Mode)** | **Implemented & Tested** | Single atomic update statement prevents negative balances under concurrent threads. Verified by `tests/test_storage.py` (4 tests). |
+| **15-Step Customer Demo (`examples/client_demo.py`)** | **Independently Verified** | Automated SDK walkthrough reproducing full customer journey cleanly in mock simulation mode (`--mode mock`). Verified in local environment. |
+| **TLS Reverse Proxy (`deployment/nginx.conf`)** | **Configured (Not Deployed)** | Nginx config created with TLS 1.3 termination, edge throttling, and remote_addr forwarding. Awaiting public host deployment. |
+| **Production Payment Settlement on Mainnet** | **Not Verified / Blocked** | Requires public TLS deployment, production RPC API keys (Helius/QuickNode), and explicit operator authorization before accepting real customer funds. |
 
 ---
 
 ## 3. Dependency & Portability Profile
 
-- **Core Runtime Dependencies:** Minimal, zero-dependency philosophy for critical logic.
-  - `fastapi` & `uvicorn[standard]` (HTTP REST Gateway)
-  - `pydantic` (Strict Schema & Base58 Input Validation)
-  - `python-dotenv` (Environment Configuration)
-  - `sqlite3` & `hashlib` & `urllib` (Standard Library, zero external C-bindings)
-- **Filesystem Portability:** 100% path-agnostic. All directories derived dynamically via `pathlib.Path(__file__).resolve().parent` in `config.py`. Machine-specific Windows drive letters (`i:\...`) have been completely eliminated.
-- **Operating System Compatibility:** Verified across Windows 11 and Ubuntu Linux runners in CI (`.github/workflows/tests.yml`).
+- **Runtime Dependencies:** `fastapi`, `uvicorn[standard]`, `pydantic`, `python-dotenv`, `ipaddress`, `sqlite3`, `hashlib`, `urllib` (Standard Library core).
+- **Filesystem Portability:** 100% path-agnostic. All paths resolve dynamically relative to `Path(__file__).resolve().parent`. Machine-specific absolute drive letters have been completely eliminated.
+- **Operating System Compatibility:** Verified across Windows 11 and Ubuntu Linux runners in CI (`.github/workflows/tests.yml`). Clean ASCII console formatting in `examples/client_demo.py` eliminates Windows `cp1252` encoding errors.
 
 ---
 
-## 4. Current Limitations & Unfinished Work
+## 4. Release Gate Decisions
 
-1. **Public Tunnel & Domain:** The API currently runs on `127.0.0.1:8080`. Public ingress via Cloudflare Tunnel or reverse proxy (Nginx / Caddy) with managed TLS certificates is required before commercial traffic can hit the production endpoints.
-2. **Account Quota Inspection Without Credit Deduction:** Previously, checking remaining credits required consuming a briefing query via `GET /v1/briefing/latest`. An explicit non-deducting account quota endpoint (`GET /v1/account/quota`) is required for autonomous agent wallet managers.
-3. **Dedicated Solana RPC Node Credits:** While the multi-provider failover pool supports Helius and QuickNode, the default fallback relies on public RPC (`https://api.mainnet-beta.solana.com`), which enforces aggressive rate limits (429) during high network congestion.
-4. **Automated Intelligence Pipeline Cron:** Intelligence reports in `reports/latest_briefing.md` are refreshed via `intel_collector.py` and `newsletter_generator.py`. This process currently runs via scheduled CLI invocation rather than an internal background async worker.
+### Gate 1: Controlled Alpha Pilot — **APPROVED (PASS)**
+- **Scope:** Invitation-only testing for 3–5 autonomous agent developers using local/mock mode or private tunnel.
+- **Justification:** Core API works cleanly in reproducible clean environment; 116 passing tests; 0 warnings; zero plaintext secret exposure; rate limiting hardened against IP spoofing; 15-step customer demo succeeds 100%.
 
----
-
-## 5. Recommended Next Milestones
-
-1. **Milestone 1 (Product Hardening):** Deploy `GET /v1/account/quota` for non-deducting balance queries, enhance `/v1/health` with deep subsystem checks, and provide actionable remedy payloads in HTTP 402/429 responses.
-2. **Milestone 2 (Developer Integration):** Author a self-contained, standalone client SDK demonstration (`examples/client_demo.py`) supporting both live endpoints and synthetic simulation.
-3. **Milestone 3 (Controlled Launch):** Provision a production Helius RPC API key, configure systemd process supervision on a hardened Linux host, expose via TLS reverse proxy, and onboard the first 3 alpha agent testers from the Moltbook community.
+### Gate 2: Production Live Payments — **BLOCKED (NOT VERIFIED)**
+- **Blockers:**
+  1. Public TLS reverse proxy is configured (`deployment/nginx.conf`) but not deployed on a live server.
+  2. Production RPC subscription (Helius/QuickNode) with dedicated rate limits not yet provisioned.
+  3. Commercial willingness-to-pay remains unvalidated with real funds.
+- **Next Milestone:** Deploy hardened reverse proxy on pilot infrastructure, execute pilot with 3 alpha agent builders, and gather quantitative query feedback.

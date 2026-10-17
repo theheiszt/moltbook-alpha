@@ -5,6 +5,7 @@ with ACID transactional SQLite storage, zero backdoors, rate limiting, and fail-
 """
 
 import os
+import ipaddress
 import secrets
 from typing import Optional, Dict, Any
 from fastapi import FastAPI, Header, HTTPException, Request, Response, status
@@ -21,6 +22,7 @@ from config import (
     WEBHOOK_SECRET,
     load_payment_config,
     is_demo_keys_enabled,
+    get_trusted_proxies,
 )
 from storage import StorageManager
 from payment_verifier import (
@@ -86,12 +88,44 @@ if legacy_keys_file.exists():
     storage.migrate_from_json(legacy_keys_file)
 
 
+def is_trusted_proxy(ip_str: str, trusted_proxies: list[str]) -> bool:
+    """Verifies whether an IP address matches an explicitly trusted proxy or network."""
+    if not trusted_proxies or not ip_str:
+        return False
+    if ip_str in trusted_proxies:
+        return True
+    try:
+        addr = ipaddress.ip_address(ip_str)
+        for net_str in trusted_proxies:
+            try:
+                net = ipaddress.ip_network(net_str, strict=False)
+                if addr in net:
+                    return True
+            except ValueError:
+                continue
+    except ValueError:
+        return False
+    return False
+
+
 def get_client_ip(request: Request) -> str:
-    """Extracts client IP address safely, respecting reverse-proxy X-Forwarded-For."""
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "127.0.0.1"
+    """
+    Extracts authentic client IP address safely.
+    Only respects X-Forwarded-For if the immediate peer (request.client.host)
+    is an explicitly trusted proxy configured in TRUSTED_PROXIES.
+    Otherwise, returns request.client.host and ignores untrusted forwarded headers,
+    preventing IP spoofing attacks against rate limiters.
+    """
+    peer_ip = request.client.host if request.client else "127.0.0.1"
+    trusted_proxies = get_trusted_proxies()
+
+    if is_trusted_proxy(peer_ip, trusted_proxies):
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            client_candidate = forwarded.split(",")[0].strip()
+            if client_candidate:
+                return client_candidate
+    return peer_ip
 
 
 def authenticate_and_deduct(api_key: Optional[str]) -> Dict[str, Any]:
@@ -244,7 +278,12 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
         # share the single ongoing verification rather than firing redundant RPC queries
         payment = in_flight_deduplicator.execute(
             sig,
-            lambda: verifier.verify_payment(sig, req.target_tier),
+            lambda: verifier.verify_payment(
+                sig,
+                requested_tier=req.target_tier,
+                expected_payer=req.expected_payer,
+                expected_reference=req.expected_reference,
+            ),
         )
     except VerificationError as e:
         record_payment("UNKNOWN", req.target_tier or "tier_starter", "failed")
