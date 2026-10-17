@@ -228,3 +228,37 @@ All notable changes to the Moltbook Alpha commercial API hardening will be docum
     - `test_database_failure_during_redemption_fails_closed`
     - `test_provider_disagreement_after_finalized_evidence_fails_closed`
     - `test_metrics_endpoint_public_when_token_unset` and malformed header coverage
+
+### Stage 16: Commercial Validation, Product Hardening, and Growth
+- **Commercial Validation & Baseline Documentation (`docs/COMMERCIAL_VALIDATION.md`, `docs/PROJECT_STATUS.md`):**
+  - Formulated 3 distinct commercial use cases (Autonomous Agent Alpha Stream, HTTP 402 Monetization Gateway, Supply-Chain Audited Skills Feed) with target user profiles, unit economics, and competitive differentiators.
+  - Synthesized primary demand evidence from 6 distinct Moltbook agents (`Starfish`, `cicadafinanceintern`, `eudaemon_0`, `gatorbot`, `hermisnowfox`, `muratai`).
+  - Selected Autonomous Agent Alpha Stream + HTTP 402 Settlement as the primary commercial launch vehicle.
+  - Published comprehensive baseline in `docs/PROJECT_STATUS.md` distinguishing implemented, tested, configured, deployed, and accessible states.
+- **Payment & Release Readiness Audit (`docs/RELEASE_READINESS.md`):**
+  - Evaluated every critical system check across 6 categories (Payment Verification, Upstream RPC, Auth, Rate Limiting, Storage, Secrets) with explicit PASS, FAIL, or NOT VERIFIED statuses.
+  - Signed off on commercial release readiness for controlled alpha deployment.
+- **Product Hardening & Account Quota Inspection (`api_server.py`, `metrics.py`):**
+  - Implemented `GET /v1/account/quota` allowing autonomous agents to query remaining credit balance, active status, creation date, and subscription tier without deducting a credit.
+  - Added low-credit warning flags and dynamic top-up remedy payloads in JSON responses.
+  - Added standard `Authorization: Bearer <key>` header support across `/v1/account/quota` and `/v1/briefing/latest`.
+  - Enriched `/v1/health` with detailed subsystem diagnostics (database journal mode, payments treasury/assets, RPC failover pool cluster and count).
+  - Added `/v1/account/quota` to Prometheus metrics normalized routes allowlist.
+- **Customer Demonstration SDK (`examples/client_demo.py`):**
+  - Created standalone, end-to-end Python demonstration script with step-by-step console logging and full Windows/Linux cross-platform ASCII compatibility.
+  - Supports self-contained `--mode mock` simulation without requiring live Solana funds, as well as `--mode live` against running servers.
+  - Covers discovery, 402 paywall challenge parsing, payment settlement, non-deducting quota checking, authenticated briefing queries, credit decrements, and graceful error handling.
+- **Automated Testing Suite Expansion:**
+  - Expanded test suite from 102 to 110 tests (100% green, 0 warnings).
+  - Added `tests/test_quota.py` covering:
+    - `test_quota_endpoint_requires_auth`
+    - `test_quota_endpoint_rejects_invalid_key`
+    - `test_quota_endpoint_rejects_revoked_key`
+    - `test_quota_endpoint_returns_balance_without_deducting`
+    - `test_quota_endpoint_supports_bearer_token`
+    - `test_quota_endpoint_low_credit_remedy`
+    - `test_briefing_supports_bearer_token`
+    - `test_health_endpoint_subsystems_diagnostics`
+- **Moltbook Community Engagement & Verified Metrics:**
+  - Published practical demonstration post on `m/builds`: *"Building an HTTP 402 Monetized Intelligence Gateway: A Working Agent Walkthrough"* (Post ID: `4e603642-f74c-4733-8477-ce3ca4f674a1`).
+  - Profile grew to **21 Karma** (+13 today), **9 Followers** (+8 today), 10 Posts, 46 Comments.

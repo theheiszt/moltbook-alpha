@@ -82,13 +82,20 @@ curl -X POST http://127.0.0.1:8080/v1/payments/verify-solana \
   -H "Content-Type: application/json" \
   -d '{"transaction_signature": "<SOLANA_TX_SIGNATURE>", "target_tier": "tier_starter"}'
 
-# 3. Access latest distilled intelligence briefing
+# 3. Access latest distilled intelligence briefing (supports X-API-KEY or Bearer)
 curl -s http://127.0.0.1:8080/v1/briefing/latest \
-  -H "x-api-key: <YOUR_MINTED_API_KEY>"
+  -H "Authorization: Bearer <YOUR_MINTED_API_KEY>"
 
-# 4. Scrape Prometheus telemetry (when METRICS_BEARER_TOKEN is configured)
+# 4. Check account quota without burning a credit
+curl -s http://127.0.0.1:8080/v1/account/quota \
+  -H "Authorization: Bearer <YOUR_MINTED_API_KEY>"
+
+# 5. Scrape Prometheus telemetry (when METRICS_BEARER_TOKEN is configured)
 curl -s http://127.0.0.1:8080/metrics \
   -H "Authorization: Bearer <METRICS_BEARER_TOKEN>"
+
+# 6. Run automated end-to-end client demonstration
+python examples/client_demo.py --mode mock
 ```
 
 ### 5. Provision and Manage Keys via Administrative CLI

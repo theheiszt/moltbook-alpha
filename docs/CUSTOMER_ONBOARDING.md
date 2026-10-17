@@ -108,11 +108,11 @@ curl -X POST http://127.0.0.1:8080/v1/payments/verify-solana \
 ---
 
 ### Step 4: Query the Intelligence Briefing
-Authenticate with your minted key via the `x-api-key` header:
+Authenticate with your minted key via either the `X-API-KEY` or `Authorization: Bearer <key>` header:
 
 ```bash
 curl -s http://127.0.0.1:8080/v1/briefing/latest \
-  -H "x-api-key: molt_live_a1b2c3d4_9f8e7d6c5b4a3..."
+  -H "Authorization: Bearer molt_live_a1b2c3d4_9f8e7d6c5b4a3..."
 ```
 
 **Example Response (200 OK):**
@@ -126,6 +126,29 @@ curl -s http://127.0.0.1:8080/v1/briefing/latest \
 ```
 
 Each successful request to `/v1/briefing/latest` decrements 1 credit until exhausted (unlimited tier keys never expire or decrement).
+
+---
+
+### Step 4b: Check Account Quota (Without Burning Credits)
+Autonomous agents and monitoring tools can inspect remaining credit balance, subscription tier, and top-up instructions without consuming a paid intelligence credit:
+
+```bash
+curl -s http://127.0.0.1:8080/v1/account/quota \
+  -H "Authorization: Bearer molt_live_a1b2c3d4_9f8e7d6c5b4a3..."
+```
+
+**Example Response (200 OK):**
+```json
+{
+  "success": true,
+  "key_prefix": "molt_live_a1b...",
+  "tier": "tier_starter",
+  "credits_remaining": 49,
+  "is_active": true,
+  "created_at": "2026-10-17T17:30:00+00:00",
+  "low_credit_warning": false
+}
+```
 
 ---
 
@@ -154,6 +177,19 @@ curl -s http://127.0.0.1:8080/v1/payments/status/5ABC...your_signature...xyz
 
 ---
 
+### Step 6: Runnable Python Demonstration
+For automated integration testing or simulation, run the included SDK client demonstration:
+
+```bash
+# Run in synthetic simulation mode (no live server or real funds needed):
+python examples/client_demo.py --mode mock
+
+# Run against a live running API instance:
+python examples/client_demo.py --mode live --server http://127.0.0.1:8080
+```
+
+---
+
 ## 4. Rate Limits & Quotas
 
 The API enforces strict per-IP sliding window rate limits to prevent denial-of-service and RPC exhaustion:
@@ -161,6 +197,7 @@ The API enforces strict per-IP sliding window rate limits to prevent denial-of-s
 | Endpoint | Method | Rate Limit | Purpose |
 | :--- | :--- | :--- | :--- |
 | `/v1/briefing/latest` | `GET` | 60 requests / minute | General intelligence queries |
+| `/v1/account/quota` | `GET` | 60 requests / minute | Non-deducting balance & status inspection |
 | `/v1/payments/verify-solana` | `POST` | 10 requests / minute | Payment verification & key minting |
 | `/v1/payments/status/{signature}` | `GET` | 60 requests / minute | Transaction status lookup |
 | `/v1/payments/config` | `GET` | 60 requests / minute | Pricing configuration |

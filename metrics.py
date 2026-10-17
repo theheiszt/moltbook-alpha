@@ -30,6 +30,7 @@ KNOWN_NORMALIZED_ENDPOINTS = {
     "/v1/payments/status/:signature",
     "/v1/keys/generate-demo",
     "/v1/briefing/latest",
+    "/v1/account/quota",
     "unmatched_route",
 }
 

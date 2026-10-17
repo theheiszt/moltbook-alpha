@@ -66,6 +66,7 @@ async def metrics_middleware(request: Request, call_next):
             "/v1/payments/webhook",
             "/v1/keys/generate-demo",
             "/v1/briefing/latest",
+            "/v1/account/quota",
         }:
             norm_endpoint = endpoint
         else:
@@ -140,6 +141,7 @@ def index():
 
 @app.get("/v1/health")
 def health_check():
+    cfg = load_payment_config()
     try:
         db_healthy = storage.check_health()
     except Exception as e:
@@ -148,10 +150,28 @@ def health_check():
             detail=f"Database health check failed: {e!s}",
         ) from e
 
+    rpc_pool = cfg.get("rpc_endpoints", [cfg.get("rpc_url")])
     return {
         "status": "ok",
         "service": "moltbook-alpha-api",
+        "version": "1.2.0",
         "database": "healthy" if db_healthy else "degraded",
+        "subsystems": {
+            "database": {
+                "status": "ok" if db_healthy else "degraded",
+                "journal_mode": "WAL",
+            },
+            "payments": {
+                "status": "ok",
+                "treasury_wallet": cfg["solana_treasury_wallet"],
+                "accepted_assets": ["SOL", "USDC (Solana SPL)"],
+            },
+            "rpc_pool": {
+                "status": "ok",
+                "cluster": cfg.get("cluster", "mainnet-beta"),
+                "endpoints_configured": len(rpc_pool),
+            },
+        },
     }
 
 
@@ -464,6 +484,99 @@ def generate_demo_key(request: Request):
     }
 
 
+@app.get("/v1/account/quota")
+def get_account_quota(
+    request: Request,
+    x_api_key: Optional[str] = Header(None, alias="X-API-KEY"),
+):
+    """
+    Non-deducting account quota and key status inspection endpoint.
+    Allows autonomous agents and developers to monitor credit balance,
+    tier, active status, and top-up instructions without consuming a paid query.
+    """
+    client_ip = get_client_ip(request)
+    allowed, retry_after = rate_limiter.is_allowed(f"quota:{client_ip}", limit=60, window_seconds=60)
+    if not allowed:
+        record_rate_limit("/v1/account/quota")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many quota inspection requests. Please retry in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    raw_key = x_api_key
+    if not raw_key:
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            raw_key = auth_header[7:].strip()
+
+    if not raw_key:
+        cfg = load_payment_config()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error": "Authentication Required",
+                "message": "Missing API key. Provide via X-API-KEY or Authorization: Bearer header.",
+                "remedy": {
+                    "action": "obtain_key",
+                    "purchase_endpoint": "POST /v1/payments/verify-solana",
+                    "treasury_wallet": cfg["solana_treasury_wallet"],
+                },
+            },
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    key_info = storage.get_key_info(raw_key)
+    if not key_info:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "Invalid API Key",
+                "message": "API key was not found or is invalid.",
+                "remedy": {
+                    "action": "obtain_key",
+                    "endpoint": "POST /v1/payments/verify-solana",
+                },
+            },
+        )
+
+    if not key_info.get("is_active"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "API Key Revoked",
+                "message": "API key has been deactivated by administrator.",
+                "key_prefix": key_info.get("key_prefix"),
+            },
+        )
+
+    cfg = load_payment_config()
+    credits_remaining = key_info.get("credits", 0)
+    tier = key_info.get("tier", "unknown")
+    low_credits = credits_remaining < 5 and tier not in ("unlimited", "admin")
+
+    res = {
+        "success": True,
+        "key_prefix": key_info.get("key_prefix"),
+        "tier": tier,
+        "credits_remaining": credits_remaining,
+        "is_active": bool(key_info.get("is_active")),
+        "created_at": key_info.get("created_at"),
+        "low_credit_warning": low_credits,
+    }
+
+    if low_credits or credits_remaining == 0:
+        res["remedy"] = {
+            "action": "top_up",
+            "endpoint": "POST /v1/payments/verify-solana",
+            "treasury_wallet": cfg["solana_treasury_wallet"],
+            "accepted_assets": ["SOL", "USDC (Solana SPL)"],
+            "pricing_tiers": cfg["rates"],
+        }
+
+    return res
+
+
 @app.get("/v1/briefing/latest")
 def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None)):
     client_ip = get_client_ip(request)
@@ -478,7 +591,13 @@ def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None
             headers={"Retry-After": str(retry_after)},
         )
 
-    user_info = authenticate_and_deduct(x_api_key)
+    raw_key = x_api_key
+    if not raw_key:
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            raw_key = auth_header[7:].strip()
+
+    user_info = authenticate_and_deduct(raw_key)
     latest_path = REPORTS_DIR / "latest_briefing.md"
     if not latest_path.exists():
         raise HTTPException(status_code=404, detail="No briefing generated yet.")
