@@ -72,3 +72,58 @@ def test_solve_arithmetic_challenge_stutter_repetition_addition():
     )
     res = solve_arithmetic_challenge(challenge)
     assert res == "65.00"
+
+
+def test_solve_arithmetic_challenge_explicit_multiplication_operator():
+    challenge = (
+        "A] lO b-St ErRr S^wImS| aNd Um, LoObBsTeR^ ClAwS~ ExErT< FoUrTeEn * ThReE ] nEu-ToNs, "
+        "hOw/ mUcH^ ToTaL FoR cE? Lo.b s tErrR umm, velooocityyy, anNoTAtIoNs"
+    )
+    res = solve_arithmetic_challenge(challenge)
+    assert res == "42.00"
+
+
+def test_solve_arithmetic_challenge_compound_multiplication_operator():
+    challenge = (
+        "AlOb] sT-Er^ lOoObBsTtErr\\ ClAw- FoRceEe] Is ThIrTy] TwO^ NeWtoNs~ * SeVeN{ NeWtOnS<, "
+        "HoW/ MuCh^ ToTaL- FoRcE\\ iS? umm, lOo.oBbSsTtErr velawci tYyy umm"
+    )
+    res = solve_arithmetic_challenge(challenge)
+    assert res == "224.00"
+
+
+def test_solve_arithmetic_challenge_reduced_by_subtraction():
+    challenge = (
+        "A] LoOoBbSsStTeErR] SwImS^ LiKe] A] nEuRoNnUmMlIkE,] ClAw] FoRcE] Of] TwEnTy] NiNe] NeWtOnS] "
+        "-] ReDuCeD] By] SeVeN] NeWtOnS,] WhAt] Is] ThE] ReMaInInG] FoRcE?"
+    )
+    res = solve_arithmetic_challenge(challenge)
+    assert res == "22.00"
+
+
+def test_solve_arithmetic_challenge_multiplied_by():
+    challenge = (
+        "A] Lo.bStEr^ ClAw- ExErTs/ TwEnTy TwO~ NeWtOoNs| AnD {iS} MuLlTiiPlIeD< By> ThReE, "
+        "WhAt- Is/ ToTaL~ FoRcE?"
+    )
+    res = solve_arithmetic_challenge(challenge)
+    assert res == "66.00"
+
+
+def test_solve_arithmetic_challenge_noise_prefix_and_explicit_plus():
+    challenge = (
+        "A] lO b-StErS^ wIth/ velAwCiTeE| is/ tWeNtY qThReE~ mEtErS\\pEr- MiNuTe, um, "
+        "aNd- it/ spPlItts- inTo^ a/ doMiNaNcE] pUsH eLeMeNt| tHaT aDdS- sEvEn{ nEwToNs, "
+        "hOw/ wOuLd- tHeIr] nEt/ 'sPeEd' ~ chAnGe/ iF^ yOu- aDd[ tWeNtY] qThReE + sEvEn?"
+    )
+    res = solve_arithmetic_challenge(challenge)
+    assert res == "30.00"
+
+
+def test_solve_arithmetic_challenge_each_per_unit_multiplication():
+    challenge = (
+        "Ea]Ch Lo.bStEr ClAw^ ExErTs/ TwEnTy FoUr NoOoToNs~ Um AnD ThReE Lo~bStErS PuSh| ToGeThEr, "
+        "WhAt'S< ThE ToTaL- FoRcE?"
+    )
+    res = solve_arithmetic_challenge(challenge)
+    assert res == "72.00"

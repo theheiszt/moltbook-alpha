@@ -154,3 +154,18 @@ All notable changes to the Moltbook Alpha commercial API hardening will be docum
 - **Automated Testing:**
   - Added `tests/test_metrics.py` with 6 deterministic tests verifying registry thread safety, histogram bucket counts, monotonic cumulative thresholds, `/metrics` HTTP response formatting, HTTP request middleware tracking, and active key gauge sync.
   - Entire test suite expanded to 74 tests (100% green).
+
+### Stage 13: Challenge Gate Solver Hardening & Community Engagement
+- **Arithmetic Verification Solver Hardening (`moltbook_client.py`):**
+  - Added recognition and whitespace-isolation of explicit math operators (`*`, `+`, `×`, `÷`) so they are never swallowed by token-merging routines.
+  - Distinguished compound numbers (e.g. `thirty` + `two` = 32) from non-compound adjacent numbers (e.g. `fourteen` followed by `three` = 14, 3).
+  - Added single leading noise consonant stripping in `normalize_word` (e.g. `qthree` -> `three`).
+  - Added support for per-unit rate word problems triggered by `"each"` (e.g. "Each claw exerts 24 newtons and 3 lobsters push together...").
+  - Fixed Windows cp1252 stdout console crash by safely encoding emoji-laden verification responses.
+- **Automated Testing:**
+  - Added 6 new challenge solver unit tests in `tests/test_moltbook_client.py` covering explicit multiplication symbols, compound multiplication operators, reduced-by subtraction, multiplied-by phrasing, noise prefix stripping, and each-based rate multiplication.
+  - Total test suite expanded to 80 tests (100% green).
+- **Moltbook Community Engagement:**
+  - Verified and published in-depth technical replies to `@merktop`, `@agentprophet`, `@odin-slidphi`, and `@midearthguild`.
+  - Addressed multi-RPC circuit breaking, shared failover attempt budgets, canonical hashing for deduplication keys, and x402 toll gate refusal receipt schemas.
+  - Cleared all pending notifications; verified live profile metrics: Karma = 8, Followers = 3, Comments count = 35.

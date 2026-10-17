@@ -24,6 +24,10 @@ WORD_TO_NUMBER = {
     "fourten": 14, "thirten": 13, "twelv": 12, "elevn": 11,
 }
 
+TENS = {"twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"}
+ONES = {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "thre"}
+SCALES = {"hundred", "thousand"}
+
 
 def normalize_word(w: str) -> str:
     clean = re.sub(r"[^a-z]", "", w.lower())
@@ -33,6 +37,9 @@ def normalize_word(w: str) -> str:
     collapsed = re.sub(r"(.)\1+", r"\1", clean)
     if collapsed in WORD_TO_NUMBER:
         return collapsed
+    # Strip single leading noise consonant: e.g. 'qthree' -> 'three'
+    if len(clean) > 3 and clean[0] in "qxjz" and clean[1:] in WORD_TO_NUMBER:
+        return clean[1:]
     return clean
 
 
@@ -64,14 +71,23 @@ def parse_number_words(words: List[str]) -> Optional[float]:
 
 
 def merge_fragments(toks: List[str]) -> List[str]:
-    """Merges adjacent hyphenated or broken token fragments (e.g. 'tw' + 'en' + 'ty' -> 'twenty')."""
+    """Merges adjacent hyphenated or broken token fragments while preserving operator boundaries."""
     merged: List[str] = []
     i = 0
+    ops = {"*", "x", "×", "÷", "+", "/", "-"}
     while i < len(toks):
+        if toks[i] in ops:
+            merged.append(toks[i])
+            i += 1
+            continue
+
         matched = False
         for k in (4, 3, 2):
             if i + k <= len(toks):
-                combined = "".join(toks[i:i + k])
+                slice_toks = toks[i:i + k]
+                if any(t in ops for t in slice_toks):
+                    continue
+                combined = "".join(slice_toks)
                 clean_combined = normalize_word(combined)
                 if clean_combined in WORD_TO_NUMBER:
                     merged.append(clean_combined)
@@ -87,9 +103,14 @@ def merge_fragments(toks: List[str]) -> List[str]:
 def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
     """
     Parses and solves Moltbook anti-bot arithmetic challenges.
-    Normalizes punctuation, identifies numbers and operations, and formats to 2 decimal places.
+    Handles explicit operator symbols (*, ×, ÷, +), whitespace/fragment obfuscation,
+    compound vs. distinct sequential number phrases, and operation keywords.
     """
-    cleaned_text = re.sub(r"[^a-zA-Z0-9\s]", " ", challenge_text).lower()
+    spaced_text = challenge_text
+    for op in ["*", "×", "÷", "+"]:
+        spaced_text = spaced_text.replace(op, f" {op} ")
+
+    cleaned_text = re.sub(r"[^a-zA-Z0-9\s*×÷+]", " ", spaced_text).lower()
     raw_tokens = [t.strip() for t in cleaned_text.split() if t.strip()]
     merged = merge_fragments(raw_tokens)
     tokens: List[str] = []
@@ -97,14 +118,43 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
         if not tokens or t != tokens[-1]:
             tokens.append(t)
 
-
-    # Extract number phrases
+    # Extract numbers and explicit operator tokens
     nums: List[float] = []
+    explicit_ops: List[str] = []
     current_num_words: List[str] = []
 
     for t in tokens:
         word_norm = normalize_word(t)
-        if word_norm in WORD_TO_NUMBER or word_norm.isdigit():
+        if t in ["*", "×"]:
+            if current_num_words:
+                val = parse_number_words(current_num_words)
+                if val is not None:
+                    nums.append(val)
+                current_num_words = []
+            explicit_ops.append("*")
+        elif t in ["+", "plus"]:
+            if current_num_words:
+                val = parse_number_words(current_num_words)
+                if val is not None:
+                    nums.append(val)
+                current_num_words = []
+            explicit_ops.append("+")
+        elif t == "÷":
+            if current_num_words:
+                val = parse_number_words(current_num_words)
+                if val is not None:
+                    nums.append(val)
+                current_num_words = []
+            explicit_ops.append("/")
+        elif word_norm in WORD_TO_NUMBER or word_norm.isdigit():
+            if current_num_words:
+                prev_word = current_num_words[-1]
+                can_combine = (prev_word in TENS and word_norm in ONES) or (word_norm in SCALES) or (prev_word in SCALES)
+                if not can_combine:
+                    val = parse_number_words(current_num_words)
+                    if val is not None:
+                        nums.append(val)
+                    current_num_words = []
             current_num_words.append(word_norm)
         else:
             if current_num_words:
@@ -121,27 +171,38 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
     if len(nums) < 2:
         return None
 
-    a, b = nums[0], nums[1]
+    if len(nums) > 2:
+        a, b = nums[-2], nums[-1]
+    else:
+        a, b = nums[0], nums[1]
 
-    # Operation detection: check space-separated text, collapsed text, and collapsed-deduplicated text
+    # Operation detection: explicit operator symbols take highest precedence, then semantic keywords
     collapsed_text = re.sub(r"\s+", "", cleaned_text)
     collapsed_dedup = re.sub(r"(.)\1+", r"\1", collapsed_text)
 
     def has_op(keywords: List[str]) -> bool:
         return any(k in cleaned_text or k in collapsed_text or k in collapsed_dedup for k in keywords)
 
-    if has_op(["slow", "minus", "decreas", "lose", "drop", "differ", "subtract"]):
-        result = a - b
-    elif has_op(["gain", "plus", "increas", "add", "combin", "total"]):
+    if "*" in explicit_ops:
+        result = a * b
+    elif "/" in explicit_ops:
+        result = a / b if b != 0 else 0
+    elif "+" in explicit_ops:
         result = a + b
-    elif has_op(["product", "time", "multipli"]):
+    elif has_op(["reduc", "slow", "minus", "decreas", "lose", "drop", "differ", "subtract", "less"]):
+        result = a - b
+    elif has_op(["product", "times", "multipli", "each"]):
         result = a * b
     elif has_op(["divid", "split", "quotient"]):
         result = a / b if b != 0 else 0
+    elif has_op(["gain", "plus", "increas", "add", "combin"]):
+        result = a + b
     else:
         result = a + b
 
     return f"{result:.2f}"
+
+
 
 
 class MoltbookClient:
@@ -197,13 +258,16 @@ class MoltbookClient:
             return False
 
         ans = solve_arithmetic_challenge(challenge)
-        print(f"[Verification Gate] Code: {code} | Challenge: {challenge!r} -> Computed: {ans}")
+        clean_challenge = challenge.encode("ascii", "replace").decode("ascii")
+        print(f"[Verification Gate] Code: {code} | Challenge: {clean_challenge!r} -> Computed: {ans}")
         if not ans:
             return False
 
         res = self.verify_challenge(code, ans)
-        print(f"[Verification Gate] Response: {res}")
+        clean_res = str(res).encode("ascii", "replace").decode("ascii")
+        print(f"[Verification Gate] Response: {clean_res}")
         return res.get("success", False)
+
 
     def create_post(self, submolt_name: str, title: str, content: str) -> Tuple[Dict[str, Any], bool]:
         payload = {"submolt_name": submolt_name, "title": title, "content": content}
