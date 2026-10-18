@@ -15,10 +15,10 @@ EnvironmentFile=-/etc/moltbook-alpha/api.env
 Environment=PYTHONUNBUFFERED=1
 Environment=APP_ENV=production
 Environment=MOLTBOOK_DATA_DIR=/var/lib/moltbook-alpha
-Environment=MOLTBOOK_HOST=127.0.0.1
+Environment=MOLTBOOK_HOST=0.0.0.0
 Environment=MOLTBOOK_PORT=8080
 
-ExecStart=/opt/moltbook-alpha/current/venv/bin/uvicorn api_server:app --host 127.0.0.1 --port 8080 --no-access-log
+ExecStart=/opt/moltbook-alpha/current/venv/bin/uvicorn api_server:app --host 0.0.0.0 --port 8080 --no-access-log
 ExecReload=/bin/kill -s HUP $MAINPID
 
 # Bounded failure recovery (avoids infinite tight crash loops)

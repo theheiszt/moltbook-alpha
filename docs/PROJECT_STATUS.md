@@ -1,11 +1,11 @@
 # Moltbook Alpha — Verified Project Status & Commercial Baseline
 
-**Document Version:** 1.6.0<br>
-**Audit Date:** 2026-10-18 (DAG Tool Parameters & Cryptographic State Witnesses Release)<br>
+**Document Version:** 1.7.0<br>
+**Audit Date:** 2026-10-18 (Client SDK, Intelligence Engine & Alpha Pilot Release)<br>
 **Branch:** `feat/commercial-api-hardening`<br>
 **Target Environments:** Python 3.11+ / 3.14 (Linux x86_64 Ubuntu 24.04, Windows 11)<br>
-**Verification Baseline:** 191 passing automated tests across 20 test modules, 0 warnings, clean Ruff, clean Git whitespace<br>
-**Active Server Deployment:** HP ProLiant ML150 G6 Ubuntu Server (`10.0.0.190:8080`, commit `8cd7a1f`, release `20261018_040400_8cd7a1f`) [Verified live and operational]<br>
+**Verification Baseline:** 201 passing automated tests across 22 test modules, 0 warnings, clean Ruff, clean Git whitespace<br>
+**Active Server Deployment:** HP ProLiant ML150 G6 Ubuntu Server (`10.0.0.190:8080`, listening on `0.0.0.0:8080`) [Verified live and operational]<br>
 
 ---
 
@@ -99,8 +99,11 @@ System capabilities are classified across the Stage 19 operational dimensions:
 | **Earliest-Deadline-First (EDF) & Ledger Audit** | **Implemented & Tested** | Earliest-expiring credits consumed first; double-entry ledger invariant `granted + refunded - deducted - expired == remaining` enforced. Request failure refund path active. Verified by `tests/test_entitlements_and_topups.py`. |
 | **DAG Tool Parameters (`GET /v1/tools`)** | **Implemented & Tested** | Directed Acyclic Graph engine with topological execution stages, cycle detection, and condition predicates (`dag_tool_parameters.py`). Verified by `tests/test_dag_tool_parameters.py` (7 tests). |
 | **Cryptographic State Witnesses** | **Implemented & Tested** | RFC 8785 JSON canonicalization, Ed25519 digital signatures, monotonic nonces, and hash chaining per key (`cryptographic_witness.py`). Verification endpoint `POST /v1/witnesses/verify`. Verified by `tests/test_cryptographic_witness.py` (7 tests). |
+| **Market Intelligence Engine (`/v1/intel/*`)** | **Implemented & Tested** | Multi-source ingestion (Moltbook submolts, server audit logs, Git VCS history), heuristic signal extractor, Ed25519 signed market briefings. Verified by `tests/test_intel_engine.py` (6 tests). |
+| **Client SDK (`sdk/moltbook_intel`)** | **Implemented & Tested** | Zero-dependency client library, client-side DAG compiler (`ToolDAGResolver`), offline Ed25519 cryptographic witness verification, typed exception mapping, auto-retries. Verified by `tests/test_sdk.py` (4 tests). |
+| **Controlled Alpha Pilot Program (Gate A)** | **Provisioned & Onboarded** | Dedicated 100-credit keys generated for `@lobsternigel`, `@midearthguild`, `@blaze-fire`. Documentation published in `docs/ALPHA_PILOT_ONBOARDING.md`. |
 | **Administrative CLI (`cli.py`)** | **Implemented & Tested** | Provisions administrator and alpha pilot keys (`create-pilot-key`), inspects key status/quota (`inspect-key`), lists invoices (`list-invoices`), and revokes keys (`revoke-key`). Verified by `tests/test_audit_and_health.py`. |
-| **ProLiant Server Deployment** | **Deployed & Operational** | Running on Ubuntu 24.04.4 LTS (`10.0.0.190:8080`) as `moltbook-alpha.service` under unprivileged user `moltbook-api`. Active release `20261018_040400_8cd7a1f` (commit `8cd7a1f`). Verified live via systemd and health probes. |
+| **ProLiant Server Deployment** | **Deployed & Operational** | Running on Ubuntu 24.04.4 LTS (`10.0.0.190:8080`) as `moltbook-alpha.service` under unprivileged user `moltbook-api`. Listening on `0.0.0.0:8080`. Verified live over LAN with end-to-end autonomous agent workflow. |
 | **Production Payment Settlement on Mainnet** | **Not Verified / Blocked** | Requires public TLS deployment, production RPC API keys (Helius/QuickNode), and explicit operator authorization before accepting real customer funds. |
 
 ---

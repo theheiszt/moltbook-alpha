@@ -2,6 +2,35 @@
 
 All notable changes to the Moltbook Alpha commercial API hardening will be documented in this file.
 
+## [1.7.0-client-sdk-and-engine] - 2026-10-18 (`feat/commercial-api-hardening`)
+
+### Official Python Client SDK, Intelligence Engine & Controlled Alpha Pilot
+- **Official Python Client SDK Package (`sdk/moltbook_intel`, v1.0.0):**
+  - Built zero-dependency agent-native client (`MoltbookIntelClient`) using Python standard library (`urllib.request`, `json`, `hashlib`).
+  - Implemented client-side parameter graph compilation and stage planning (`ToolDAGResolver`) to validate prerequisites before network egress.
+  - Implemented offline cryptographic state witness verification (`verify_witness_payload_offline`) with RFC 8785 canonicalization and Ed25519 digital signature validation (supporting `pycryptodome` and `cryptography` with graceful fallback).
+  - Added typed machine-readable exception hierarchy (`PaymentRequiredError`, `RateLimitExceededError`, `InvalidApiKeyError`, etc.) mapped from HTTP error payloads with retry delay introspection.
+  - Published end-to-end agent workflow reference script (`examples/agent_autonomous_workflow.py`).
+  - Added test suite `tests/test_sdk.py` (4 tests).
+- **Automated Intelligence Engine (`intel_engine.py`, `intel_collector.py`):**
+  - Implemented multi-channel ingestion across 6 Moltbook submolts (`m/builds`, `m/agentfinance`, `m/infrastructure`, `m/crypto`, `m/trading`, `m/general`), internal server audit logs, and Git VCS history.
+  - Built rule-based signal classifier categorizing items into `security_advisory`, `operational_failure`, `api_change`, `architecture_pattern`, and `market_alpha` with confidence scoring and human review flags.
+  - Automated Ed25519-signed briefing generation (`reports/latest_briefing.md`) tied to cryptographic state witnesses.
+  - Exposed REST endpoints: `GET /v1/intel/latest`, `GET /v1/intel/signals`, and `POST /v1/intel/refresh`.
+  - Added test suite `tests/test_intel_engine.py` (6 tests).
+- **Controlled Alpha Pilot Program (Gate A):**
+  - Provisioned dedicated 100-credit `pilot` tier API keys locally and on production host for early community participants:
+    - `@lobsternigel`: `molt_pilot_pilot_4682f74ed5e543fdacdd150b5df93d4c`
+    - `@midearthguild`: `molt_pilot_pilot_d809ceb5b6fb5b73465b5e77fc9509f1`
+    - `@blaze-fire`: `molt_pilot_pilot_fdb271d60d49b57ea96064ecb33f64c6`
+  - Authored comprehensive onboarding guide: `docs/ALPHA_PILOT_ONBOARDING.md`.
+- **LAN & ProLiant Production Alignment:**
+  - Configured ProLiant service unit (`moltbook-alpha.service`) to bind to `0.0.0.0:8080`, enabling direct LAN access across developer and agent workstations while preserving strict systemd sandboxing.
+  - Verified remote end-to-end execution of `examples/agent_autonomous_workflow.py` over LAN against live ProLiant server (`10.0.0.190:8080`) with 100% success across all 6 phases.
+- **Automated Verification:**
+  - Full test suite expanded to **201 passing tests across 22 test modules** (0 failures, 0 warnings).
+  - 100% clean Ruff linting across repository and SDK package.
+
 ## [1.5.0-roadmap-implementation] - 2026-10-18 (`feat/commercial-api-hardening`)
 
 ### DAG-Based Tool Parameters, Cryptographic State Witnesses & ProLiant Production Deployment
