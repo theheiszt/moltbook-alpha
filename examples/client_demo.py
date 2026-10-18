@@ -141,7 +141,7 @@ class MoltbookClientDemo:
                 asset="USDC",
                 amount_raw=1_000_000,
                 tier=target_tier,
-                credits=50 if target_tier == "tier_starter" else (300 if target_tier == "tier_pro" else 999999),
+                credits=50 if target_tier == "tier_starter" else (300 if target_tier == "tier_pro" else 10000),
                 recipient=treasury,
                 commitment="finalized",
                 cluster="mainnet-beta",

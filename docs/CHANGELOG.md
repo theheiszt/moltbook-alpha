@@ -2,6 +2,33 @@
 
 All notable changes to the Moltbook Alpha commercial API hardening will be documented in this file.
 
+## [1.3.0-credit-hardening] - 2026-10-18 (`feat/commercial-api-hardening`)
+
+### Commercial Entitlements, 30-Day Premium Lifecycle & 90-Day Credit Lots
+- **Replaced Infinite Queries Model with 30-Day Premium Entitlement:**
+  - Updated `tier_premium` and legacy alias `tier_unlimited` to grant exactly 10,000 queries valid for 30 calendar days.
+  - Implemented strict 30-day cutoff: at expiration, queries cease immediately even if queries remain in the allowance lot.
+  - Replaced hardcoded infinite assumptions and 999999 credit constants across tests, configuration, and documentation.
+- **Implemented Discrete 90-Day Credit Top-Ups:**
+  - Stored top-ups as discrete, auditable lots in `credit_lots` table with independent 90-day expiration timestamps.
+  - Ensured top-up lots survive Premium expiration: unspent top-up credits are preserved but can only be spent when an active entitlement exists.
+  - Automatically restored access to all unexpired top-up credits upon Premium renewal or activation.
+  - Configurable top-up packages in `payment_config.json` and parsed via `TOPUP_PACKAGES` environment variable.
+- **Earliest-Deadline-First (EDF) Credit Consumption:**
+  - Automated selection of earliest-expiring active credit lots during query deduction.
+  - Preserved non-expiring base credits (e.g., from Starter or Pro tiers) until all expiring lots are exhausted.
+- **Double-Entry Ledger Accounting & Worker Failure Refund:**
+  - Added `credit_ledger_events` table tracking all `grant`, `deduct`, `refund`, and `expire` actions.
+  - Enforced mathematical invariant: `granted + refunded - deducted - expired == remaining active balance`.
+  - Added safe refund mechanism (`storage.refund_credit`) restoring deducted credit if worker fails during briefing delivery.
+- **Enhanced Account Quota Inspection (`GET /v1/account/quota`):**
+  - Enriched quota response with current entitlement status, expiration timestamp, days remaining, and active credit lots breakdown.
+  - Maintained 100% backward compatibility for all top-level response keys (`success`, `tier`, `credits_remaining`, `is_active`, `low_credit_warning`).
+- **Comprehensive Test Suite & Documentation:**
+  - Added `tests/test_entitlements_and_topups.py` with 9 exhaustive automated tests for 30-day expiration, 90-day top-ups, EDF deduction order, failure refunds, concurrent thread safety, and replay protection.
+  - Published comprehensive reference policy in `docs/CREDIT_AND_ENTITLEMENT_POLICY.md`.
+  - Total test suite expanded to 165 passing tests with zero failures or warnings.
+
 ## [1.2.0-hardened] - 2026-10-17 (`feat/commercial-api-hardening`)
 
 ### Stage 0: Baseline Security & Architectural Audit

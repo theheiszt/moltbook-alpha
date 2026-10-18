@@ -157,7 +157,7 @@ def get_client_ip(request: Request) -> str:
 
 
 
-def authenticate_and_deduct(api_key: Optional[str]) -> Dict[str, Any]:
+def authenticate_and_deduct(api_key: Optional[str], request_id: Optional[str] = None) -> Dict[str, Any]:
     cfg = load_payment_config()
     if not api_key:
         raise HTTPException(
@@ -165,16 +165,17 @@ def authenticate_and_deduct(api_key: Optional[str]) -> Dict[str, Any]:
             detail={
                 "error": "Payment Required",
                 "message": "Access requires an active API key or payment.",
-                "price": "$0.02 USDC per query or $20/month unlimited.",
+                "price": "Starter: $1 (50 queries), Pro: $5 (300 queries), Premium: $20 (10,000 queries / 30 days).",
                 "purchase_instructions": {
                     "treasury_wallet": cfg["solana_treasury_wallet"],
                     "rates": cfg["rates"],
+                    "topup_packages": cfg.get("topup_packages", {}),
                     "verify_endpoint": "POST /v1/payments/verify-solana",
                 },
             },
         )
 
-    user_info, state = storage.authenticate_and_deduct(api_key)
+    user_info, state = storage.authenticate_and_deduct(api_key, request_id=request_id)
     if state == "invalid":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -184,6 +185,20 @@ def authenticate_and_deduct(api_key: Optional[str]) -> Dict[str, Any]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="API key has been revoked.",
+        )
+    if state == "entitlement_expired":
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "error": "Entitlement Expired",
+                "message": "Premium entitlement has expired. Renew your Premium subscription to continue spending credits.",
+                "purchase_instructions": {
+                    "treasury_wallet": cfg["solana_treasury_wallet"],
+                    "rates": cfg["rates"],
+                    "topup_packages": cfg.get("topup_packages", {}),
+                    "verify_endpoint": "POST /v1/payments/verify-solana",
+                },
+            },
         )
     if state == "exhausted":
         raise HTTPException(
@@ -271,6 +286,7 @@ class CreateInvoiceInput(BaseModel):
     target_tier: Optional[str] = "tier_starter"
     asset: Optional[str] = "USDC"
     expected_payer: Optional[str] = None
+    target_api_key: Optional[str] = None
 
     @field_validator("target_tier")
     @classmethod
@@ -320,6 +336,7 @@ def get_payment_details():
         "treasury_wallet": cfg["solana_treasury_wallet"],
         "accepted_assets": ["SOL", "USDC (Solana SPL)"],
         "pricing_tiers": cfg["rates"],
+        "topup_packages": cfg.get("topup_packages", {}),
         "create_invoice_endpoint": "POST /v1/payments/invoice",
         "verify_endpoint": "POST /v1/payments/verify-solana",
         "claim_endpoint": "POST /v1/payments/invoice/:invoice_id/claim",
@@ -351,6 +368,13 @@ def create_payment_invoice(req: CreateInvoiceInput, request: Request):
     raw_amount = tier_info["usdc_units"] if req.asset == "USDC" else tier_info["sol_lamports"]
     ttl = cfg.get("invoice_ttl_seconds", 1800)
 
+    target_key_hash = None
+    if req.target_api_key:
+        target_info = storage.get_key_info(req.target_api_key)
+        if not target_info:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target API key not found.")
+        target_key_hash = storage.hash_key(req.target_api_key)
+
     inv_record, claim_secret, reference = storage.create_invoice(
         tier=req.target_tier,
         credits=credits,
@@ -360,6 +384,7 @@ def create_payment_invoice(req: CreateInvoiceInput, request: Request):
         cluster=cfg.get("cluster", "mainnet-beta"),
         expiry_seconds=ttl,
         expected_payer=req.expected_payer,
+        target_key_hash=target_key_hash,
     )
 
     if req.asset == "USDC":
@@ -901,9 +926,18 @@ def get_account_quota(
         )
 
     cfg = load_payment_config()
-    credits_remaining = key_info.get("credits", 0)
-    tier = key_info.get("tier", "unknown")
+    quota_details = storage.get_key_quota_details(raw_key) or {}
+    credits_remaining = quota_details.get("credits_remaining", key_info.get("credits", 0))
+    tier = quota_details.get("tier", key_info.get("tier", "unknown"))
+    entitlement = quota_details.get("entitlement", {
+        "tier": tier,
+        "status": "active",
+        "expires_at": key_info.get("entitlement_expires_at"),
+        "days_remaining": None,
+    })
+    credit_lots = quota_details.get("credit_lots", [])
     low_credits = credits_remaining < 5 and tier not in ("unlimited", "admin")
+    is_expired = entitlement.get("status") == "expired"
 
     res = {
         "success": True,
@@ -913,15 +947,18 @@ def get_account_quota(
         "is_active": bool(key_info.get("is_active")),
         "created_at": key_info.get("created_at"),
         "low_credit_warning": low_credits,
+        "entitlement": entitlement,
+        "credit_lots": credit_lots,
     }
 
-    if low_credits or credits_remaining == 0:
+    if low_credits or credits_remaining == 0 or is_expired:
         res["remedy"] = {
-            "action": "top_up",
+            "action": "renew_premium" if is_expired else "top_up",
             "endpoint": "POST /v1/payments/verify-solana",
             "treasury_wallet": cfg["solana_treasury_wallet"],
             "accepted_assets": ["SOL", "USDC (Solana SPL)"],
             "pricing_tiers": cfg["rates"],
+            "topup_packages": cfg.get("topup_packages", {}),
         }
 
     return res
@@ -947,13 +984,24 @@ def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None
         if auth_header.lower().startswith("bearer "):
             raw_key = auth_header[7:].strip()
 
-    user_info = authenticate_and_deduct(raw_key)
+    req_id = f"req_{secrets.token_hex(8)}"
+    user_info = authenticate_and_deduct(raw_key, request_id=req_id)
     latest_path = REPORTS_DIR / "latest_briefing.md"
     if not latest_path.exists():
         raise HTTPException(status_code=404, detail="No briefing generated yet.")
 
-    with open(latest_path, "r", encoding="utf-8") as f:
-        content = f.read()
+    try:
+        with open(latest_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception as e:
+        if user_info.get("key_hash") and user_info.get("lot_id"):
+            storage.refund_credit(
+                key_hash=user_info["key_hash"],
+                lot_id=user_info["lot_id"],
+                request_id=req_id,
+                reason=f"briefing_read_error: {e}"
+            )
+        raise HTTPException(status_code=500, detail="Internal server error reading briefing.") from e
 
     return {
         "success": True,

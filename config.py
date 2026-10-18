@@ -93,24 +93,40 @@ WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "moltbook_webhook_secret_dev")
 # Default production-safe rates (USD values converted to integer micro-units)
 DEFAULT_RATES: Dict[str, Dict[str, Any]] = {
     "tier_starter": {
+        "display_name": "Starter",
         "usd": 1.0,
         "credits": 50,
+        "validity_days": None,
         "usdc_units": 1_000_000,
         "sol_lamports": 5_000_000,  # ~0.005 SOL
     },
     "tier_pro": {
+        "display_name": "Pro",
         "usd": 5.0,
         "credits": 300,
+        "validity_days": None,
         "usdc_units": 5_000_000,
         "sol_lamports": 25_000_000,  # ~0.025 SOL
     },
     "tier_unlimited": {
+        "display_name": "Premium (10,000 queries / 30 days)",
         "usd": 20.0,
-        "credits": 999999,
+        "credits": 10000,
+        "validity_days": 30,
+        "usdc_units": 20_000_000,
+        "sol_lamports": 100_000_000,  # ~0.100 SOL
+    },
+    "tier_premium": {
+        "display_name": "Premium (10,000 queries / 30 days)",
+        "usd": 20.0,
+        "credits": 10000,
+        "validity_days": 30,
         "usdc_units": 20_000_000,
         "sol_lamports": 100_000_000,  # ~0.100 SOL
     },
 }
+
+DEFAULT_TOPUP_PACKAGES: Dict[str, Dict[str, Any]] = {}
 
 
 class ConfigError(Exception):
@@ -172,12 +188,42 @@ def load_payment_config() -> Dict[str, Any]:
     rates: Dict[str, Dict[str, Any]] = {}
     for tier, r in raw_rates.items():
         usd_val = float(r.get("usd", 0.0))
+        validity = r.get("validity_days")
+        display_name = r.get("display_name", tier.replace("tier_", "").capitalize())
         rates[tier] = {
+            "display_name": display_name,
             "usd": usd_val,
             "credits": int(r.get("credits", 0)),
+            "validity_days": int(validity) if validity is not None else None,
             "usdc_units": int(r.get("usdc_units", round(usd_val * (10 ** USDC_DECIMALS)))),
             "sol_lamports": int(r.get("sol_lamports", round(usd_val * 5_000_000))),
         }
+
+    # Load and normalize top-up packages (configurable, default 90 days validity)
+    raw_topups = config_data.get("topup_packages", DEFAULT_TOPUP_PACKAGES)
+    env_topups = os.getenv("TOPUP_PACKAGES")
+    if env_topups:
+        try:
+            raw_topups = json.loads(env_topups)
+        except Exception:
+            pass
+
+    topup_packages: Dict[str, Dict[str, Any]] = {}
+    if isinstance(raw_topups, dict):
+        for pkg_id, p in raw_topups.items():
+            if not isinstance(p, dict):
+                continue
+            usd_val = float(p.get("usd", 0.0))
+            credits_val = int(p.get("credits", 0))
+            validity_days = int(p.get("validity_days", 90))
+            topup_packages[pkg_id] = {
+                "display_name": p.get("display_name", f"Top-up ({credits_val} credits)"),
+                "usd": usd_val,
+                "credits": credits_val,
+                "validity_days": validity_days,
+                "usdc_units": int(p.get("usdc_units", round(usd_val * (10 ** USDC_DECIMALS)))),
+                "sol_lamports": int(p.get("sol_lamports", round(usd_val * 5_000_000))),
+            }
 
     cluster = os.getenv("SOLANA_CLUSTER", config_data.get("cluster", "mainnet-beta")).strip()
     max_age = int(os.getenv("SOLANA_MAX_TX_AGE_SECONDS", str(config_data.get("max_age_seconds", DEFAULT_MAX_TX_AGE_SECONDS))))
@@ -188,6 +234,7 @@ def load_payment_config() -> Dict[str, Any]:
         "rpc_url": rpc_endpoints[0],
         "rpc_endpoints": rpc_endpoints,
         "rates": rates,
+        "topup_packages": topup_packages,
         "cluster": cluster,
         "max_age_seconds": max_age,
         "invoice_ttl_seconds": invoice_ttl,

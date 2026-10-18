@@ -1,11 +1,11 @@
 # Moltbook Alpha — Verified Project Status & Commercial Baseline
 
-**Document Version:** 1.3.0<br>
-**Audit Date:** 2026-10-18 (Stage 19 Commercial Alpha Launch & ProLiant Deployment)<br>
+**Document Version:** 1.4.0<br>
+**Audit Date:** 2026-10-18 (Commercial Credit Hardening & 30-Day Entitlements)<br>
 **Branch:** `feat/commercial-api-hardening`<br>
 **Target Environments:** Python 3.11+ / 3.14 (Linux x86_64 Ubuntu 24.04, Windows 11)<br>
-**Verification Baseline:** 153 passing automated tests, 0 warnings, clean Ruff, clean Git whitespace<br>
-**Active Server Deployment:** HP ProLiant ML150 G6 Ubuntu Server (`10.0.0.190:8080`, commit `a2ec4b1` / release `20261018_024823_a2ec4b1`)
+**Verification Baseline:** 165 passing automated tests across 17 test modules, 0 warnings, clean Ruff, clean Git whitespace<br>
+**Active Server Deployment:** HP ProLiant ML150 G6 Ubuntu Server (`10.0.0.190:8080`, commit `b8a7623`) [Untouched during this mission; pending deployment approval]<br>
 
 ---
 
@@ -87,8 +87,11 @@ System capabilities are classified across the Stage 19 operational dimensions:
 | **RPC Failover & Consensus Pool** | **Implemented & Tested** | Auto-fails over on network timeouts and HTTP 429; cross-checks secondary nodes when consensus enabled. Verified by `tests/test_rpc_failover.py` and `tests/test_concurrency_and_recovery.py`. |
 | **SQLite ACID Concurrency (WAL Mode)** | **Implemented & Tested** | Single atomic update statement prevents negative balances under concurrent threads. Online zero-downtime backup verified via `PRAGMA integrity_check`. Verified by `tests/test_concurrency_and_recovery.py`. |
 | **15-Step Customer Demo (`examples/client_demo.py`)** | **Independently Verified** | Automated SDK walkthrough reproducing full customer journey cleanly in mock simulation mode (`--mode mock`) and live against local ProLiant deployment. |
+| **30-Day Premium Entitlements** | **Implemented & Tested** | 10,000 query allowance with strict 30-day cutoff, replacing legacy infinite models. Full backwards compatibility for `tier_unlimited`. Verified by `tests/test_entitlements_and_topups.py`. |
+| **90-Day Credit Top-Ups** | **Implemented & Tested** | Discrete, auditable lots in `credit_lots` with 90-day validity surviving Premium expiration, spendable only when an active entitlement exists. Verified by `tests/test_entitlements_and_topups.py`. |
+| **Earliest-Deadline-First (EDF) & Ledger Audit** | **Implemented & Tested** | Earliest-expiring credits consumed first; double-entry ledger invariant `granted + refunded - deducted - expired == remaining` enforced. Request failure refund path active. Verified by `tests/test_entitlements_and_topups.py`. |
 | **Administrative CLI (`cli.py`)** | **Implemented & Tested** | Provisions administrator and alpha pilot keys (`create-pilot-key`), inspects key status/quota (`inspect-key`), lists invoices (`list-invoices`), and revokes keys (`revoke-key`). Verified by `tests/test_audit_and_health.py`. |
-| **ProLiant Server Deployment** | **Deployed & Operational** | Running on Ubuntu 24.04.4 LTS (`10.0.0.190:8080`) as `moltbook-alpha.service` under unprivileged user `moltbook-api`. Systemd timers active for backups, health checks, reports, restore tests, and update audits. |
+| **ProLiant Server Deployment** | **Deployed & Operational** | Running on Ubuntu 24.04.4 LTS (`10.0.0.190:8080`) as `moltbook-alpha.service` under unprivileged user `moltbook-api`. (Maintains commit `b8a7623`; new credit hardening remains local pending deployment approval). |
 | **Production Payment Settlement on Mainnet** | **Not Verified / Blocked** | Requires public TLS deployment, production RPC API keys (Helius/QuickNode), and explicit operator authorization before accepting real customer funds. |
 
 ---

@@ -6,16 +6,29 @@
   ],
   "rates": {
     "tier_starter": {
+      "display_name": "Starter",
       "usd": 1.0,
-      "credits": 50
+      "credits": 50,
+      "validity_days": null
     },
     "tier_pro": {
+      "display_name": "Pro",
       "usd": 5.0,
-      "credits": 300
+      "credits": 300,
+      "validity_days": null
     },
     "tier_unlimited": {
+      "display_name": "Premium (10,000 queries / 30 days)",
       "usd": 20.0,
-      "credits": 999999
+      "credits": 10000,
+      "validity_days": 30
+    },
+    "tier_premium": {
+      "display_name": "Premium (10,000 queries / 30 days)",
+      "usd": 20.0,
+      "credits": 10000,
+      "validity_days": 30
     }
-  }
+  },
+  "topup_packages": {}
 }

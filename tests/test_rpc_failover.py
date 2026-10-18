@@ -166,7 +166,8 @@ def test_rpc_failover_across_three_endpoints():
     assert call_log == ["https://node-a.com", "https://node-b.com", "https://node-c.com"]
     assert verifier.active_rpc_endpoint == "https://node-c.com"
     assert payment.tier == "tier_unlimited"
-    assert payment.credits == 999999
+    assert payment.credits == 10000
+
 
 
 def test_rpc_failover_all_endpoints_fail_closed():

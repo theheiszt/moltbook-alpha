@@ -139,8 +139,20 @@ def test_verify_valid_usdc_unlimited_tier():
 
     assert result.asset == "USDC"
     assert result.amount_raw == 20_000_000
-    assert result.tier == "tier_unlimited"
-    assert result.credits == 999999
+    assert result.tier in ("tier_unlimited", "tier_premium")
+    assert result.credits == 10000
+
+
+def test_verify_valid_usdc_premium_tier():
+    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=20_000_000)
+    verifier = SolanaPaymentVerifier(rpc_caller=lambda method, params: {"result": tx})
+    result = verifier.verify_payment(SAMPLE_SIGNATURE, requested_tier="tier_premium")
+
+    assert result.asset == "USDC"
+    assert result.amount_raw == 20_000_000
+    assert result.tier == "tier_premium"
+    assert result.credits == 10000
+
 
 
 def test_verify_valid_native_sol():

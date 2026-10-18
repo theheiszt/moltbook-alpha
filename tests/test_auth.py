@@ -53,8 +53,17 @@ def test_valid_key_deducts_credits_and_exhausts():
     assert "credits exhausted" in resp3.json()["detail"]
 
 
-def test_unlimited_tier_does_not_deduct():
-    raw_key, _ = storage.create_api_key(tier="unlimited", credits=999999, prefix_tag="molt_unlimited")
+def test_unlimited_tier_deducts_from_10k_allowance():
+    raw_key, _ = storage.create_api_key(tier="unlimited", credits=10000, prefix_tag="molt_unlimited")
+    client = TestClient(app)
+    client.get("/v1/briefing/latest", headers={"x-api-key": raw_key})
+    key_info = storage.get_key_info(raw_key)
+    assert key_info["credits"] == 9999
+    assert key_info["tier"] == "premium"
+
+
+def test_admin_tier_does_not_deduct():
+    raw_key, _ = storage.create_api_key(tier="admin", credits=999999, prefix_tag="molt_admin")
     client = TestClient(app)
     client.get("/v1/briefing/latest", headers={"x-api-key": raw_key})
     key_info = storage.get_key_info(raw_key)
