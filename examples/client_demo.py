@@ -120,6 +120,18 @@ class MoltbookClientDemo:
         assert resp.status_code == 402, "Expected HTTP 402 Payment Required!"
         print(f"{Colors.GREEN}[PASS] Paywall challenge verified. Server returned payment remedy instructions.{Colors.RESET}")
 
+        # Step 4: Create Invoice
+        print_step(4, "Create Solana Pay Invoice with Zero-Knowledge Claim Secret")
+        inv_resp = self.request("POST", "/v1/payments/invoice", json_body={"target_tier": target_tier})
+        print(f"POST /v1/payments/invoice -> HTTP {inv_resp.status_code}")
+        inv_data = inv_resp.json()
+        print_json(inv_data)
+        assert inv_resp.status_code == 200, "Invoice creation failed!"
+        inv_id = inv_data["invoice_id"]
+        reference = inv_data["reference"]
+        claim_secret = inv_data["claim_secret"]
+        print(f"{Colors.GREEN}[PASS] Invoice created: {inv_id} with Solana Pay reference {reference[:12]}...{Colors.RESET}")
+
         if self.mode == "mock":
             from unittest.mock import patch
             from payment_verifier import VerifiedPayment
@@ -136,16 +148,17 @@ class MoltbookClientDemo:
                 slot=320140221,
                 block_time=1729188000,
                 confirmation_status="finalized",
+                reference=reference,
             )
             with patch("api_server.SolanaPaymentVerifier.verify_payment", return_value=mock_payment):
-                return self._run_authenticated_steps(target_tier, treasury)
+                return self._run_authenticated_steps(target_tier, treasury, inv_id, claim_secret)
         else:
-            return self._run_authenticated_steps(target_tier, treasury)
+            return self._run_authenticated_steps(target_tier, treasury, inv_id, claim_secret)
 
-    def _run_authenticated_steps(self, target_tier: str, treasury: str) -> bool:
-        # Step 4: Submit settlement
-        print_step(4, "Submit Solana Settlement to Receive Authenticated API Key")
-        payload = {"transaction_signature": self.tx_sig, "target_tier": target_tier}
+    def _run_authenticated_steps(self, target_tier: str, treasury: str, inv_id: str, claim_secret: str) -> bool:
+        # Step 5: Submit settlement
+        print_step(5, "Submit Solana Settlement to Receive Authenticated API Key")
+        payload = {"transaction_signature": self.tx_sig, "invoice_id": inv_id, "claim_secret": claim_secret}
         print(f"Posting mock settlement for transaction signature: {self.tx_sig[:20]}...")
         resp = self.request("POST", "/v1/payments/verify-solana", json_body=payload)
         print(f"POST /v1/payments/verify-solana -> HTTP {resp.status_code}")
@@ -157,14 +170,24 @@ class MoltbookClientDemo:
         initial_credits = verify_data.get("credits")
         print(f"{Colors.GREEN}[PASS] Key successfully minted: {verify_data.get('key_prefix')} ({initial_credits} credits granted){Colors.RESET}")
 
-        # Step 5: Idempotency & replay
-        print_step(5, "Resubmit Identical Signature (Verify Replay Protection)")
+        # Step 5b: Zero-Knowledge Credential Recovery
+        print_step("5b", "Demonstrate Zero-Knowledge Credential Recovery (Socket Drop Simulation)")
+        claim_resp = self.request("POST", f"/v1/payments/invoice/{inv_id}/claim", json_body={"claim_secret": claim_secret})
+        print(f"POST /v1/payments/invoice/{inv_id}/claim -> HTTP {claim_resp.status_code}")
+        claim_data = claim_resp.json()
+        print_json(claim_data)
+        assert claim_resp.status_code == 200
+        assert claim_data["api_key"] == self.api_key
+        print(f"{Colors.GREEN}[PASS] Zero-knowledge recovery verified: retrieved identical key without double payment.{Colors.RESET}")
+
+        # Step 5c: Idempotency & replay
+        print_step("5c", "Resubmit Identical Signature (Verify Replay Protection)")
         resp = self.request("POST", "/v1/payments/verify-solana", json_body=payload)
         print(f"POST /v1/payments/verify-solana (replay) -> HTTP {resp.status_code}")
         replay_data = resp.json()
         print_json(replay_data)
         assert resp.status_code == 200
-        assert replay_data.get("message") == "Key previously redeemed for this transaction signature."
+        assert "previously redeemed" in replay_data.get("message", "") or "already fulfilled" in replay_data.get("message", "")
         print(f"{Colors.GREEN}[PASS] Replay protection confirmed: returned existing key prefix with zero duplicate credits.{Colors.RESET}")
 
         # Step 6: Non-deducting account quota

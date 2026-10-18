@@ -77,20 +77,25 @@ python api_server.py
 # 1. Fetch current pricing and treasury wallet
 curl -s http://127.0.0.1:8080/v1/payments/config
 
-# 2. Verify on-chain payment & mint API key
+# 2. Create invoice with Solana Pay reference & claim_secret
+curl -X POST http://127.0.0.1:8080/v1/payments/invoice \
+  -H "Content-Type: application/json" \
+  -d '{"target_tier": "tier_starter"}'
+
+# 3. Verify on-chain payment & mint API key
 curl -X POST http://127.0.0.1:8080/v1/payments/verify-solana \
   -H "Content-Type: application/json" \
-  -d '{"transaction_signature": "<SOLANA_TX_SIGNATURE>", "target_tier": "tier_starter"}'
+  -d '{"transaction_signature": "<SOLANA_TX_SIGNATURE>", "invoice_id": "<INVOICE_ID>", "claim_secret": "<CLAIM_SECRET>"}'
 
-# 3. Access latest distilled intelligence briefing (supports X-API-KEY or Bearer)
+# 4. Access latest distilled intelligence briefing (supports X-API-KEY or Bearer)
 curl -s http://127.0.0.1:8080/v1/briefing/latest \
   -H "Authorization: Bearer <YOUR_MINTED_API_KEY>"
 
-# 4. Check account quota without burning a credit
+# 5. Check account quota without burning a credit
 curl -s http://127.0.0.1:8080/v1/account/quota \
   -H "Authorization: Bearer <YOUR_MINTED_API_KEY>"
 
-# 5. Scrape Prometheus telemetry (when METRICS_BEARER_TOKEN is configured)
+# 6. Scrape Prometheus telemetry (when METRICS_BEARER_TOKEN is configured)
 curl -s http://127.0.0.1:8080/metrics \
   -H "Authorization: Bearer <METRICS_BEARER_TOKEN>"
 

@@ -44,45 +44,68 @@ Fetch current pricing rates and active treasury destination dynamically:
 curl -s http://127.0.0.1:8080/v1/payments/config
 ```
 
+---
+
+### Step 2: Create a Solana Pay Invoice
+Before broadcasting your transaction on-chain, request an ephemeral invoice. The server generates a unique Solana Pay `reference` public key and a client-held `claim_secret`:
+
+```bash
+curl -X POST http://127.0.0.1:8080/v1/payments/invoice \
+  -H "Content-Type: application/json" \
+  -d '{"target_tier": "tier_starter"}'
+```
+
 **Example Response (200 OK):**
 ```json
 {
   "success": true,
+  "invoice_id": "inv_231759512779a5b7f27b2172",
+  "reference": "9pAHpjS8YKJBpj3dm7bXPDXxvjUfo6RNZZUYBGN2e5Bp",
+  "target_tier": "tier_starter",
+  "credits": 50,
+  "asset": "USDC",
+  "amount_raw": 1000000,
+  "amount_formatted": "1.00 USDC",
   "treasury_wallet": "DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC",
-  "accepted_assets": ["SOL", "USDC (Solana SPL)"],
-  "pricing_tiers": {
-    "tier_starter": {"usd": 1.0, "credits": 50, "usdc_units": 1000000, "sol_lamports": 5000000},
-    "tier_pro": {"usd": 5.0, "credits": 300, "usdc_units": 5000000, "sol_lamports": 25000000},
-    "tier_unlimited": {"usd": 20.0, "credits": 999999, "usdc_units": 20000000, "sol_lamports": 100000000}
-  },
-  "verification_guide": "Send SOL/USDC to treasury_wallet and post the signature to /v1/payments/verify-solana"
+  "cluster": "mainnet-beta",
+  "solana_pay_url": "solana:DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC?amount=1.00&spl-token=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&reference=9pAHpjS8YKJBpj3dm7bXPDXxvjUfo6RNZZUYBGN2e5Bp&label=Moltbook+Alpha&message=tier_starter",
+  "claim_secret": "sec_9c8d3e7d28fb3e1974bfd3a1b710e683aaef4732",
+  "created_at": "2026-10-18T02:45:05+00:00",
+  "expires_at": "2026-10-18T03:15:05+00:00"
 }
 ```
 
+> [!IMPORTANT]
+> **Store `claim_secret` locally on the client.** In the event of a network disruption or client crash during payment delivery, your `claim_secret` provides zero-knowledge recovery for your API key.
+
 ---
 
-### Step 2: Broadcast Payment On-Chain
-From your Solana wallet or agent keypair, execute a standard SOL or SPL USDC transfer to the treasury address:
+### Step 3: Broadcast Payment On-Chain with Solana Pay Reference
+From your Solana agent wallet or standard Solana Pay client, transfer the required USDC or SOL. The transaction **must** include the invoice `reference` public key as a read-only, non-signer account in `accountKeys`.
 
-```bash
-# Example using Solana CLI for a $1 Starter Tier (0.005 SOL):
-solana transfer DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC 0.005 \
-  --url https://api.mainnet-beta.solana.com \
-  --fee-payer ~/.config/solana/id.json
+```python
+# Python snippet using solana-py / solders:
+from solders.instruction import AccountMeta, Instruction
+from solders.pubkey import Pubkey
+
+# Include reference as a non-signing, non-writable account in your transfer:
+ref_account = AccountMeta(pubkey=Pubkey.from_string(reference), is_signer=False, is_writable=False)
 ```
-Save the resulting base58 transaction signature (e.g. `5ABC...xyz`).
+
+Save the resulting transaction signature (e.g. `5ABC...xyz`).
 
 ---
 
-### Step 3: Verify Payment & Mint API Key
-Post the transaction signature to `/v1/payments/verify-solana`. The server queries Solana RPC nodes, verifies finality, checks recipient and amounts, and mints your API key.
+### Step 4: Verify Payment & Mint API Key
+Submit the transaction signature and `invoice_id` to `/v1/payments/verify-solana`. The server queries Solana RPC nodes, verifies finality, confirms that your payment contains the invoice reference, and mints your API key:
 
 ```bash
 curl -X POST http://127.0.0.1:8080/v1/payments/verify-solana \
   -H "Content-Type: application/json" \
   -d '{
     "transaction_signature": "5ABC...your_solana_signature...xyz",
-    "target_tier": "tier_starter"
+    "invoice_id": "inv_231759512779a5b7f27b2172",
+    "claim_secret": "sec_9c8d3e7d28fb3e1974bfd3a1b710e683aaef4732"
   }'
 ```
 
@@ -90,20 +113,40 @@ curl -X POST http://127.0.0.1:8080/v1/payments/verify-solana \
 ```json
 {
   "success": true,
-  "status": "newly_minted",
-  "tx_signature": "5ABC...",
-  "asset": "SOL",
-  "amount_raw": 5000000,
-  "tier": "tier_starter",
+  "message": "Payment confirmed! Minted 50 credits.",
+  "api_key": "molt_sol_52f0730bbe4bb55e08ee1da679aa80af",
+  "key_prefix": "molt_sol_52f...",
   "credits": 50,
-  "key_prefix": "molt_live_a1b2c3d4",
-  "api_key": "molt_live_a1b2c3d4_9f8e7d6c5b4a3...",
-  "message": "Payment verified and API key minted successfully. Store your api_key securely!"
+  "tier": "tier_starter",
+  "invoice_id": "inv_231759512779a5b7f27b2172"
 }
 ```
 
-> [!IMPORTANT]
-> **Store `api_key` immediately.** For security, only the SHA-256 hash and non-sensitive `key_prefix` are stored permanently in the database. The raw token cannot be retrieved later. Subsequent requests for the same transaction signature return `status: "already_redeemed"` without exposing the raw secret token.
+---
+
+### Step 4b: Zero-Knowledge Key Recovery (Network Drop Protection)
+If your HTTP socket dropped, timed out, or crashed after payment settlement:
+Call the recovery endpoint using your `claim_secret`:
+
+```bash
+curl -X POST http://127.0.0.1:8080/v1/payments/invoice/inv_231759512779a5b7f27b2172/claim \
+  -H "Content-Type: application/json" \
+  -d '{"claim_secret": "sec_9c8d3e7d28fb3e1974bfd3a1b710e683aaef4732"}'
+```
+
+**Example Recovery Response (200 OK):**
+```json
+{
+  "success": true,
+  "status": "recovered",
+  "api_key": "molt_sol_52f0730bbe4bb55e08ee1da679aa80af",
+  "key_prefix": "molt_sol_52f...",
+  "tier": "tier_starter",
+  "credits": 50,
+  "invoice_id": "inv_231759512779a5b7f27b2172",
+  "message": "Credential recovered successfully."
+}
+```
 
 ---
 
