@@ -4,6 +4,7 @@ Uses synthetic offline transaction fixtures and mocked RPC endpoints.
 No external network calls or real blockchain funds are used.
 """
 
+import time
 from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 
@@ -29,6 +30,8 @@ def build_synthetic_solana_tx(
     mint=CANONICAL_USDC_MINT,
     decimals=6,
     signature=SAMPLE_SIGNATURE,
+    reference=None,
+    block_time=None,
 ):
     """Generates synthetic Solana JSON-parsed transaction response."""
     meta = {
@@ -44,6 +47,8 @@ def build_synthetic_solana_tx(
         {"pubkey": OTHER_WALLET, "signer": True, "writable": True},
         {"pubkey": recipient, "signer": False, "writable": True},
     ]
+    if reference:
+        account_keys.append({"pubkey": reference, "signer": False, "writable": False})
 
     instructions = []
 
@@ -87,9 +92,12 @@ def build_synthetic_solana_tx(
             },
         })
 
+    if block_time is None:
+        block_time = int(time.time())
+
     return {
         "slot": 12345678,
-        "blockTime": 1700000000,
+        "blockTime": block_time,
         "meta": meta,
         "transaction": {
             "signatures": [signature],
@@ -238,9 +246,19 @@ def test_api_verify_endpoint_idempotency_and_replay(monkeypatch):
     )
 
     client = TestClient(app)
+    inv = client.post("/v1/payments/invoice", json={"target_tier": "tier_starter"}).json()
+    ref = inv["reference"]
+    inv_id = inv["invoice_id"]
+    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000, signature=test_sig, reference=ref)
+
+    monkeypatch.setattr(
+        SolanaPaymentVerifier,
+        "fetch_transaction",
+        MagicMock(return_value=tx),
+    )
 
     # First redemption
-    payload = {"transaction_signature": test_sig, "target_tier": "tier_starter"}
+    payload = {"transaction_signature": test_sig, "invoice_id": inv_id}
     res1 = client.post("/v1/payments/verify-solana", json=payload)
     assert res1.status_code == 200
     data1 = res1.json()
@@ -253,7 +271,7 @@ def test_api_verify_endpoint_idempotency_and_replay(monkeypatch):
     assert res2.status_code == 200
     data2 = res2.json()
     assert data2["success"] is True
-    assert "previously redeemed" in data2["message"]
+    assert "previously redeemed" in data2["message"] or "already fulfilled" in data2["message"]
     # Does not return new raw key or extra credits
     assert data2["credits"] == 50
     assert "api_key" not in data2 or data2.get("api_key") is None
@@ -454,9 +472,14 @@ def test_ambiguous_rpc_timeout_followed_by_successful_retry(monkeypatch):
     import secrets
     from api_server import app, storage
 
+    client = TestClient(app)
+    inv = client.post("/v1/payments/invoice", json={"target_tier": "tier_starter"}).json()
+    ref = inv["reference"]
+    inv_id = inv["invoice_id"]
+
     b58_chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
     sig = SAMPLE_SIGNATURE[:80] + "".join(secrets.choice(b58_chars) for _ in range(8))
-    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000, signature=sig)
+    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000, signature=sig, reference=ref)
 
     # 1. First attempt times out
     call_attempts = 0
@@ -470,8 +493,7 @@ def test_ambiguous_rpc_timeout_followed_by_successful_retry(monkeypatch):
 
     monkeypatch.setattr(SolanaPaymentVerifier, "fetch_transaction", mock_fetch)
 
-    client = TestClient(app)
-    res1 = client.post("/v1/payments/verify-solana", json={"transaction_signature": sig})
+    res1 = client.post("/v1/payments/verify-solana", json={"transaction_signature": sig, "invoice_id": inv_id})
     assert res1.status_code == 502
     assert "Solana RPC communication error" in res1.json()["detail"]
 
@@ -479,7 +501,7 @@ def test_ambiguous_rpc_timeout_followed_by_successful_retry(monkeypatch):
     assert storage.get_payment_redemption(sig) is None
 
     # 2. Second attempt succeeds and mints key
-    res2 = client.post("/v1/payments/verify-solana", json={"transaction_signature": sig})
+    res2 = client.post("/v1/payments/verify-solana", json={"transaction_signature": sig, "invoice_id": inv_id})
     assert res2.status_code == 200
     assert res2.json()["success"] is True
     assert "molt_sol_" in res2.json()["api_key"]

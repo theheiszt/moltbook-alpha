@@ -90,8 +90,11 @@ def test_api_logs_audit_events_for_payments():
     client = TestClient(app)
     rate_limiter.reset()
 
+    inv = client.post("/v1/payments/invoice", json={"target_tier": "tier_starter"}).json()
+    inv_id = inv["invoice_id"]
+
     test_sig = "".join(random.choices(b58, k=88))
-    payload = {"transaction_signature": test_sig, "target_tier": "tier_starter"}
+    payload = {"transaction_signature": test_sig, "invoice_id": inv_id}
 
     with patch("api_server.SolanaPaymentVerifier.verify_payment") as mock_verify:
         from payment_verifier import VerifiedPayment
@@ -102,6 +105,7 @@ def test_api_logs_audit_events_for_payments():
             tier="tier_starter",
             credits=50,
             recipient="DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC",
+            reference=inv["reference"],
         )
 
         resp = client.post(

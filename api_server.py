@@ -7,6 +7,7 @@ with ACID transactional SQLite storage, zero backdoors, rate limiting, and fail-
 import os
 import ipaddress
 import secrets
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from fastapi import FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse
@@ -19,12 +20,13 @@ from config import (
     INDEX_HTML_PATH,
     BASE_DIR,
     BASE58_PATTERN,
+    CANONICAL_USDC_MINT,
     WEBHOOK_SECRET,
     load_payment_config,
     is_demo_keys_enabled,
     get_trusted_proxies,
 )
-from storage import StorageManager
+from storage import StorageManager, StorageError
 from payment_verifier import (
     SolanaPaymentVerifier,
     VerifyPaymentInput,
@@ -59,11 +61,16 @@ async def metrics_middleware(request: Request, call_next):
         endpoint = request.url.path
         if endpoint.startswith("/v1/payments/status/"):
             norm_endpoint = "/v1/payments/status/:signature"
+        elif endpoint.startswith("/v1/payments/invoice/") and endpoint.endswith("/claim"):
+            norm_endpoint = "/v1/payments/invoice/:id/claim"
+        elif endpoint.startswith("/v1/payments/invoice/"):
+            norm_endpoint = "/v1/payments/invoice/:id"
         elif endpoint in {
             "/",
             "/metrics",
             "/v1/health",
             "/v1/payments/config",
+            "/v1/payments/invoice",
             "/v1/payments/verify-solana",
             "/v1/payments/webhook",
             "/v1/keys/generate-demo",
@@ -260,8 +267,52 @@ def get_prometheus_metrics(request: Request):
     )
 
 
-@app.get("/v1/payments/config")
+class CreateInvoiceInput(BaseModel):
+    target_tier: Optional[str] = "tier_starter"
+    asset: Optional[str] = "USDC"
+    expected_payer: Optional[str] = None
 
+    @field_validator("target_tier")
+    @classmethod
+    def validate_tier(cls, v: Optional[str]) -> str:
+        t = (v or "tier_starter").strip()
+        cfg = load_payment_config()
+        if t not in cfg["rates"]:
+            raise ValueError(f"Unknown target_tier '{t}'. Must be one of: {list(cfg['rates'].keys())}")
+        return t
+
+    @field_validator("asset")
+    @classmethod
+    def validate_asset(cls, v: Optional[str]) -> str:
+        a = (v or "USDC").strip().upper()
+        if a not in ("USDC", "SOL"):
+            raise ValueError("Asset must be 'USDC' or 'SOL'.")
+        return a
+
+    @field_validator("expected_payer")
+    @classmethod
+    def validate_payer(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return None
+        s = v.strip()
+        if not (32 <= len(s) <= 44) or not BASE58_PATTERN.match(s):
+            raise ValueError("expected_payer must be valid base58 between 32 and 44 characters.")
+        return s
+
+
+class ClaimInvoiceInput(BaseModel):
+    claim_secret: str
+
+    @field_validator("claim_secret")
+    @classmethod
+    def validate_secret(cls, v: str) -> str:
+        s = v.strip()
+        if not s.startswith("sec_") or len(s) < 20:
+            raise ValueError("Invalid claim_secret format. Must start with 'sec_'.")
+        return s
+
+
+@app.get("/v1/payments/config")
 def get_payment_details():
     cfg = load_payment_config()
     return {
@@ -269,7 +320,158 @@ def get_payment_details():
         "treasury_wallet": cfg["solana_treasury_wallet"],
         "accepted_assets": ["SOL", "USDC (Solana SPL)"],
         "pricing_tiers": cfg["rates"],
-        "verification_guide": "Send SOL/USDC to treasury_wallet and post the signature to /v1/payments/verify-solana",
+        "create_invoice_endpoint": "POST /v1/payments/invoice",
+        "verify_endpoint": "POST /v1/payments/verify-solana",
+        "claim_endpoint": "POST /v1/payments/invoice/:invoice_id/claim",
+        "verification_guide": (
+            "1. Create an invoice via POST /v1/payments/invoice. "
+            "2. Send SOL/USDC to treasury_wallet with invoice reference account. "
+            "3. Submit signature and invoice_id to /v1/payments/verify-solana."
+        ),
+    }
+
+
+@app.post("/v1/payments/invoice")
+def create_payment_invoice(req: CreateInvoiceInput, request: Request):
+    client_ip = get_client_ip(request)
+
+    # Rate limiting: max 20 invoice creation attempts per minute per IP
+    allowed, retry_after = rate_limiter.is_allowed(f"create_invoice:{client_ip}", limit=20, window_seconds=60)
+    if not allowed:
+        record_rate_limit("/v1/payments/invoice")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many invoice creation requests. Please retry in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    cfg = load_payment_config()
+    tier_info = cfg["rates"][req.target_tier]
+    credits = tier_info["credits"]
+    raw_amount = tier_info["usdc_units"] if req.asset == "USDC" else tier_info["sol_lamports"]
+    ttl = cfg.get("invoice_ttl_seconds", 1800)
+
+    inv_record, claim_secret, reference = storage.create_invoice(
+        tier=req.target_tier,
+        credits=credits,
+        asset=req.asset,
+        amount_raw=raw_amount,
+        recipient=cfg["solana_treasury_wallet"],
+        cluster=cfg.get("cluster", "mainnet-beta"),
+        expiry_seconds=ttl,
+        expected_payer=req.expected_payer,
+    )
+
+    if req.asset == "USDC":
+        formatted_amt = f"{raw_amount / 1_000_000:.2f} USDC"
+        solana_pay_url = (
+            f"solana:{cfg['solana_treasury_wallet']}?amount={raw_amount / 1_000_000:.2f}"
+            f"&spl-token={CANONICAL_USDC_MINT}&reference={reference}&label=Moltbook+Alpha&message={req.target_tier}"
+        )
+    else:
+        formatted_amt = f"{raw_amount / 1_000_000_000:.4f} SOL"
+        solana_pay_url = (
+            f"solana:{cfg['solana_treasury_wallet']}?amount={raw_amount / 1_000_000_000:.4f}"
+            f"&reference={reference}&label=Moltbook+Alpha&message={req.target_tier}"
+        )
+
+    storage.log_audit_event(
+        "invoice_created",
+        f"Invoice {inv_record['invoice_id']} created for {req.target_tier} ({formatted_amt}) [ref: {reference[:12]}...]",
+        ip_address=client_ip,
+    )
+
+    return {
+        "success": True,
+        "invoice_id": inv_record["invoice_id"],
+        "reference": reference,
+        "target_tier": req.target_tier,
+        "credits": credits,
+        "asset": req.asset,
+        "amount_raw": raw_amount,
+        "amount_formatted": formatted_amt,
+        "treasury_wallet": cfg["solana_treasury_wallet"],
+        "cluster": inv_record["cluster"],
+        "solana_pay_url": solana_pay_url,
+        "claim_secret": claim_secret,
+        "created_at": inv_record["created_at"],
+        "expires_at": inv_record["expires_at"],
+        "instructions": (
+            f"Send {formatted_amt} to treasury wallet {cfg['solana_treasury_wallet']} including "
+            f"reference account '{reference}'. Then submit the signature with invoice_id '{inv_record['invoice_id']}' "
+            "to POST /v1/payments/verify-solana. Keep your claim_secret safe for credential recovery."
+        ),
+    }
+
+
+@app.get("/v1/payments/invoice/{invoice_id}")
+def get_invoice_status(invoice_id: str):
+    inv = storage.get_invoice(invoice_id)
+    if not inv:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Invoice '{invoice_id}' not found.",
+        )
+    return {
+        "success": True,
+        "invoice_id": inv["invoice_id"],
+        "reference": inv["reference"],
+        "status": inv["status"],
+        "tier": inv["tier"],
+        "credits": inv["credits"],
+        "asset": inv["asset"],
+        "amount_raw": inv["amount_raw"],
+        "recipient": inv["recipient"],
+        "cluster": inv["cluster"],
+        "tx_signature": inv.get("tx_signature"),
+        "created_at": inv["created_at"],
+        "expires_at": inv["expires_at"],
+        "fulfilled_at": inv.get("fulfilled_at"),
+    }
+
+
+@app.post("/v1/payments/invoice/{invoice_id}/claim")
+def claim_invoice_credential(invoice_id: str, req: ClaimInvoiceInput, request: Request):
+    client_ip = get_client_ip(request)
+
+    # Rate limiting: max 10 claim attempts per minute per IP
+    allowed, retry_after = rate_limiter.is_allowed(f"claim_invoice:{client_ip}", limit=10, window_seconds=60)
+    if not allowed:
+        record_rate_limit(f"/v1/payments/invoice/{invoice_id}/claim")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many credential claim attempts. Please retry in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    try:
+        recovered = storage.claim_invoice_credential(invoice_id, req.claim_secret)
+    except StorageError as e:
+        storage.log_audit_event(
+            "claim_credential_failed",
+            f"Claim failed for invoice {invoice_id}: {e!s}",
+            ip_address=client_ip,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+
+    storage.log_audit_event(
+        "claim_credential_success",
+        f"Claim recovered key {recovered['key_prefix']} for invoice {invoice_id}",
+        ip_address=client_ip,
+    )
+
+    return {
+        "success": True,
+        "status": "recovered",
+        "api_key": recovered["api_key"],
+        "key_prefix": recovered["key_prefix"],
+        "tier": recovered["tier"],
+        "credits": recovered["credits"],
+        "invoice_id": invoice_id,
+        "message": recovered["message"],
     }
 
 
@@ -293,22 +495,85 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
         )
 
     sig = req.transaction_signature.strip()
-    verifier = SolanaPaymentVerifier()
+    cfg = load_payment_config()
+
+    # Replay check: if already redeemed, return existing metadata
+    existing_redemption = storage.get_payment_redemption(sig)
+    if existing_redemption:
+        storage.log_audit_event(
+            "payment_replay_attempt",
+            f"Replay detected for sig={sig[:16]}..., returning existing key {existing_redemption['key_prefix']}",
+            ip_address=client_ip,
+        )
+        return {
+            "success": True,
+            "message": "Key previously redeemed for this transaction signature.",
+            "key_prefix": existing_redemption["key_prefix"],
+            "tier": existing_redemption["tier"],
+            "credits": existing_redemption["remaining_credits"],
+        }
+
+    # Resolve invoice
+    invoice = None
+    if req.invoice_id:
+        invoice = storage.get_invoice(req.invoice_id)
+        if not invoice:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Invoice '{req.invoice_id}' not found.",
+            )
+        if invoice["status"] == "fulfilled":
+            redemption = storage.get_payment_redemption(invoice.get("tx_signature") or sig)
+            return {
+                "success": True,
+                "message": "Invoice was already fulfilled.",
+                "key_prefix": redemption["key_prefix"] if redemption else "",
+                "tier": invoice["tier"],
+                "credits": invoice["credits"],
+            }
+        if invoice["status"] == "expired":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invoice '{req.invoice_id}' has expired. Please create a new invoice.",
+            )
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if now_iso > invoice["expires_at"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invoice '{req.invoice_id}' expired at {invoice['expires_at']}.",
+            )
+    elif req.expected_reference:
+        invoice = storage.get_invoice_by_reference(req.expected_reference)
+
+    if not invoice:
+        # Reject unbound payment attempts to prevent front-running
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Payment verification requires an active invoice. Unbound payments without an "
+                "invoice ID or invoice reference are rejected to protect against transaction front-running. "
+                "Please create an invoice via POST /v1/payments/invoice before submitting payment."
+            ),
+        )
+
+    expected_ref = invoice["reference"]
+    target_tier = invoice["tier"]
+    expected_payer = req.expected_payer
+
+    verifier = SolanaPaymentVerifier(max_age_seconds=cfg.get("max_age_seconds", 1800))
 
     try:
-        # In-flight deduplication: concurrent requests for the exact same signature
-        # share the single ongoing verification rather than firing redundant RPC queries
         payment = in_flight_deduplicator.execute(
             sig,
             lambda: verifier.verify_payment(
                 sig,
-                requested_tier=req.target_tier,
-                expected_payer=req.expected_payer,
-                expected_reference=req.expected_reference,
+                requested_tier=target_tier,
+                expected_payer=expected_payer,
+                expected_reference=expected_ref,
             ),
         )
     except VerificationError as e:
-        record_payment("UNKNOWN", req.target_tier or "tier_starter", "failed")
+        record_payment("UNKNOWN", target_tier, "failed")
         storage.log_audit_event(
             "payment_verification_failed",
             f"Verification rejected for sig={sig[:16]}...: {e!s}",
@@ -319,26 +584,49 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
             detail=f"Payment verification failed: {e!s}",
         ) from e
     except RPCError as e:
-        record_payment("UNKNOWN", req.target_tier or "tier_starter", "rpc_error")
+        record_payment("UNKNOWN", target_tier, "rpc_error")
         storage.log_audit_event(
             "payment_rpc_error",
             f"RPC failure verifying sig={sig[:16]}...: {e!s}",
             ip_address=client_ip,
         )
-        # Network, timeout, or node failures fail closed with 502/503
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Solana RPC communication error: {e!s}",
         ) from e
 
-    # Atomic redemption into persistent storage
-    redemption_result = storage.redeem_payment(
-        tx_signature=payment.tx_signature,
-        asset=payment.asset,
-        amount_raw=payment.amount_raw,
-        tier=payment.tier,
-        credits_to_grant=payment.credits,
-    )
+    # Verify payment matches invoice asset and amount
+    if payment.asset != invoice["asset"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Payment asset '{payment.asset}' does not match invoice expected asset '{invoice['asset']}'.",
+        )
+    if payment.amount_raw < invoice["amount_raw"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Payment amount ({payment.amount_raw}) is below invoice required amount ({invoice['amount_raw']}).",
+        )
+
+    # Atomic fulfillment and redemption
+    try:
+        redemption_result = storage.fulfill_invoice_and_redeem(
+            invoice_id=invoice["invoice_id"],
+            tx_signature=payment.tx_signature,
+            asset=payment.asset,
+            amount_raw=payment.amount_raw,
+            tier=payment.tier,
+            credits_to_grant=payment.credits,
+            claim_secret=req.claim_secret,
+            payer=payment.payer,
+            reference=payment.reference or expected_ref,
+            slot=payment.slot,
+            block_time=payment.block_time,
+        )
+    except StorageError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invoice settlement failed: {e!s}",
+        ) from e
 
     record_payment(payment.asset, payment.tier, redemption_result["status"])
 
@@ -358,7 +646,7 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
 
     storage.log_audit_event(
         "payment_redeemed_success",
-        f"Redeemed {payment.asset} (raw: {payment.amount_raw}) for tier {payment.tier} ({payment.credits} credits). Key: {redemption_result['key_prefix']} [rpc: {payment.rpc_endpoint_used}]",
+        f"Redeemed {payment.asset} (raw: {payment.amount_raw}) for invoice {invoice['invoice_id']} tier {payment.tier} ({payment.credits} credits). Key: {redemption_result['key_prefix']} [rpc: {payment.rpc_endpoint_used}]",
         ip_address=client_ip,
     )
 
@@ -369,6 +657,7 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
         "key_prefix": redemption_result["key_prefix"],
         "credits": redemption_result["credits"],
         "tier": redemption_result["tier"],
+        "invoice_id": invoice["invoice_id"],
     }
 
 

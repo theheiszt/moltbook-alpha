@@ -20,9 +20,23 @@ TREASURY_WALLET = "DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC"
 TEST_SIGNATURE = "5wHu1qwLq7Xg5WpS1Gv7nJ8cK3L9bM2rT4vN6pQ8sY1xZ3aB5cD7eF9gH2jK4mN6pQ8sY1xZ3aB5cD7eF9gH2jK4"
 
 
-def make_valid_usdc_tx(amount_micro_usdc: int = 1_000_000, recipient: str = TREASURY_WALLET) -> dict:
+def make_valid_usdc_tx(
+    amount_micro_usdc: int = 1_000_000,
+    recipient: str = TREASURY_WALLET,
+    reference: str = None,
+    block_time: int = None,
+) -> dict:
+    if block_time is None:
+        import time
+        block_time = int(time.time())
+    account_keys = [
+        {"pubkey": "BuyerWallet11111111111111111111111111111111", "signer": True},
+        {"pubkey": recipient, "signer": False},
+    ]
+    if reference:
+        account_keys.append({"pubkey": reference, "signer": False, "writable": False})
     return {
-        "blockTime": 1700000000,
+        "blockTime": block_time,
         "slot": 250000000,
         "meta": {
             "err": None,
@@ -44,10 +58,7 @@ def make_valid_usdc_tx(amount_micro_usdc: int = 1_000_000, recipient: str = TREA
         },
         "transaction": {
             "message": {
-                "accountKeys": [
-                    {"pubkey": "BuyerWallet11111111111111111111111111111111", "signer": True},
-                    {"pubkey": recipient, "signer": False},
-                ]
+                "accountKeys": account_keys
             }
         },
     }
@@ -212,10 +223,14 @@ def test_api_verify_endpoint_succeeds_through_rpc_failover():
     client = TestClient(app)
     rate_limiter.reset()
 
+    inv = client.post("/v1/payments/invoice", json={"target_tier": "tier_starter"}).json()
+    ref = inv["reference"]
+    inv_id = inv["invoice_id"]
+
     import random
     b58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
     sig = "".join(random.choices(b58, k=88))
-    payload = {"transaction_signature": sig, "target_tier": "tier_starter"}
+    payload = {"transaction_signature": sig, "invoice_id": inv_id}
 
     with patch.dict(os.environ, {
         "SOLANA_RPC_URL": "https://flaky-primary.com",
@@ -225,7 +240,7 @@ def test_api_verify_endpoint_succeeds_through_rpc_failover():
             def side_effect(endpoint, method, params):
                 if "flaky-primary" in endpoint:
                     raise RPCError("HTTP error 429: Too Many Requests")
-                return {"jsonrpc": "2.0", "result": make_valid_usdc_tx(1_000_000)}
+                return {"jsonrpc": "2.0", "result": make_valid_usdc_tx(1_000_000, reference=ref)}
 
             mock_http.side_effect = side_effect
 

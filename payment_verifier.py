@@ -16,6 +16,7 @@ from config import (
     BASE58_PATTERN,
     CANONICAL_USDC_MINT,
     USDC_DECIMALS,
+    CLUSTER_GENESIS_HASHES,
     load_payment_config,
 )
 from metrics import record_rpc_hop, record_verification_latency, sanitize_provider_host
@@ -34,9 +35,11 @@ class RPCError(Exception):
 
 class VerifyPaymentInput(BaseModel):
     transaction_signature: str
-    target_tier: Optional[str] = "tier_starter"
+    invoice_id: Optional[str] = None
+    target_tier: Optional[str] = None
     expected_payer: Optional[str] = None
     expected_reference: Optional[str] = None
+    claim_secret: Optional[str] = None
 
     @field_validator("transaction_signature")
     @classmethod
@@ -139,6 +142,28 @@ class SolanaPaymentVerifier:
                 raise VerificationError(
                     f"Cluster mismatch: RPC endpoint '{endpoint}' is configured for devnet/testnet, but settlement requires mainnet-beta."
                 )
+
+    def validate_cluster_genesis(self, endpoint: Optional[str] = None) -> bool:
+        """
+        Cryptographically validates cluster identity by querying getGenesisHash.
+        Fails closed if the returned hash mismatches the expected cluster genesis.
+        """
+        expected = CLUSTER_GENESIS_HASHES.get(self.cluster)
+        if not expected:
+            return True
+        targets = [endpoint] if endpoint else self.rpc_endpoints
+        for ep in targets:
+            try:
+                res = self._call_endpoint(ep, "getGenesisHash", [])
+                actual = res.get("result") if isinstance(res, dict) else None
+                if actual and actual != expected:
+                    raise VerificationError(
+                        f"Cluster genesis hash mismatch: endpoint '{ep}' returned genesis hash '{actual}', "
+                        f"but cluster '{self.cluster}' requires '{expected}'."
+                    )
+            except RPCError:
+                raise
+        return True
 
     def _call_endpoint(self, endpoint: str, method: str, params: list) -> Dict[str, Any]:
         try:
@@ -396,8 +421,13 @@ class SolanaPaymentVerifier:
                     f"Transaction finality evidence missing: invalid blockTime timestamp '{block_time}'."
                 )
 
+            now_ts = int(time.time())
+            if block_time > now_ts + 60:
+                raise VerificationError(
+                    f"Transaction timestamp is in the future ({block_time} > {now_ts} + 60s allowed clock skew)."
+                )
+
             if self.max_age_seconds:
-                now_ts = int(time.time())
                 age = now_ts - block_time
                 if age > self.max_age_seconds:
                     raise VerificationError(

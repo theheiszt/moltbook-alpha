@@ -333,3 +333,278 @@ def test_scenario_14_missing_or_disagreeing_rpc_metadata():
         with pytest.raises(VerificationError) as exc_info:
             verifier.verify_payment(SIG_88)
         assert "Transaction payload is malformed" in str(exc_info.value)
+
+
+# =========================================================================
+# Stage 1 & 2 Remediation Scenarios (Hardened Settlement & Front-Running Defense)
+# =========================================================================
+
+def test_scenario_15_adversarial_frontrun_blocked_by_invoice_binding(monkeypatch):
+    """
+    Attacker monitors on-chain transactions and observes Customer A's payment.
+    Attacker attempts to:
+    1. Verify without an invoice -> 400 Bad Request.
+    2. Verify with Attacker's own invoice -> 400 Bad Request (reference mismatch).
+    Customer A verifies with their legitimate invoice -> 200 OK.
+    """
+    from fastapi.testclient import TestClient
+    from api_server import app, rate_limiter
+    from tests.test_payments import build_synthetic_solana_tx
+    import secrets
+
+    client = TestClient(app)
+    rate_limiter.reset()
+
+    # Customer A creates invoice
+    inv_a = client.post("/v1/payments/invoice", json={"target_tier": "tier_starter"}).json()
+    ref_a = inv_a["reference"]
+    inv_id_a = inv_a["invoice_id"]
+
+    # Customer A pays on chain (tx includes ref_a)
+    b58_chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+    tx_sig = "".join(secrets.choice(b58_chars) for _ in range(88))
+    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000, signature=tx_sig, reference=ref_a)
+
+    monkeypatch.setattr(SolanaPaymentVerifier, "fetch_transaction", lambda self, s: tx)
+
+    # Attacker B attempt 1: Submit transaction with no invoice
+    res_b1 = client.post("/v1/payments/verify-solana", json={"transaction_signature": tx_sig})
+    assert res_b1.status_code == 400
+    assert "requires an active invoice" in res_b1.json()["detail"]
+
+    # Attacker B attempt 2: Create their own invoice and try to bind Customer A's transaction
+    inv_b = client.post("/v1/payments/invoice", json={"target_tier": "tier_starter"}).json()
+    res_b2 = client.post(
+        "/v1/payments/verify-solana",
+        json={"transaction_signature": tx_sig, "invoice_id": inv_b["invoice_id"]},
+    )
+    assert res_b2.status_code == 400
+    assert "Reference mismatch" in res_b2.json()["detail"]
+
+    # Legitimate Customer A submits payment with correct invoice_id
+    res_a = client.post(
+        "/v1/payments/verify-solana",
+        json={"transaction_signature": tx_sig, "invoice_id": inv_id_a},
+    )
+    assert res_a.status_code == 200
+    data_a = res_a.json()
+    assert data_a["success"] is True
+    assert "molt_sol_" in data_a["api_key"]
+    assert data_a["credits"] == 50
+
+
+def test_scenario_16_zero_knowledge_credential_recovery_after_network_drop(monkeypatch):
+    """
+    Customer creates invoice with claim_secret.
+    Transaction is confirmed, but client socket drops before receiving the API key response.
+    Customer uses POST /v1/payments/invoice/{invoice_id}/claim with claim_secret to recover the API key.
+    Attacker with wrong claim_secret is rejected.
+    """
+    from fastapi.testclient import TestClient
+    from api_server import app, rate_limiter
+    from tests.test_payments import build_synthetic_solana_tx
+    import secrets
+
+    client = TestClient(app)
+    rate_limiter.reset()
+
+    inv = client.post("/v1/payments/invoice", json={"target_tier": "tier_starter"}).json()
+    ref = inv["reference"]
+    inv_id = inv["invoice_id"]
+    claim_secret = inv["claim_secret"]
+
+    b58_chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+    tx_sig = "".join(secrets.choice(b58_chars) for _ in range(88))
+    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000, signature=tx_sig, reference=ref)
+    monkeypatch.setattr(SolanaPaymentVerifier, "fetch_transaction", lambda self, s: tx)
+
+    # Customer verifies payment (or background webhook verifies it)
+    res_verify = client.post(
+        "/v1/payments/verify-solana",
+        json={"transaction_signature": tx_sig, "invoice_id": inv_id, "claim_secret": claim_secret},
+    )
+    assert res_verify.status_code == 200
+    issued_key = res_verify.json()["api_key"]
+
+    # Attacker attempts to claim with incorrect secret (must match sec_ prefix schema)
+    res_bad_claim = client.post(
+        f"/v1/payments/invoice/{inv_id}/claim",
+        json={"claim_secret": "sec_" + "w" * 40},
+    )
+    assert res_bad_claim.status_code == 400
+    assert "Invalid claim secret" in res_bad_claim.json()["detail"]
+
+    # Legitimate Customer recovers key using original claim_secret
+    res_claim = client.post(
+        f"/v1/payments/invoice/{inv_id}/claim",
+        json={"claim_secret": claim_secret},
+    )
+    assert res_claim.status_code == 200
+    claim_data = res_claim.json()
+    assert claim_data["success"] is True
+    assert claim_data["status"] == "recovered"
+    assert claim_data["api_key"] == issued_key
+    assert claim_data["credits"] == 50
+
+
+def test_scenario_17_expired_invoice_rejection(monkeypatch):
+    """
+    Invoices past expires_at are strictly rejected.
+    """
+    from fastapi.testclient import TestClient
+    from api_server import app, storage, rate_limiter
+    from datetime import datetime, timezone, timedelta
+    from tests.test_payments import build_synthetic_solana_tx
+    import secrets
+
+    client = TestClient(app)
+    rate_limiter.reset()
+
+    inv = client.post("/v1/payments/invoice", json={"target_tier": "tier_starter"}).json()
+    inv_id = inv["invoice_id"]
+    ref = inv["reference"]
+
+    # Manually backdate invoice expires_at in storage to simulate expiration
+    past_iso = (datetime.now(timezone.utc) - timedelta(seconds=10)).isoformat()
+    with storage.connection() as conn:
+        with conn:
+            conn.execute(
+                "UPDATE payment_invoices SET expires_at = ?, status = 'expired' WHERE invoice_id = ?",
+                (past_iso, inv_id),
+            )
+
+    b58_chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+    tx_sig = "".join(secrets.choice(b58_chars) for _ in range(88))
+    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000, signature=tx_sig, reference=ref)
+    monkeypatch.setattr(SolanaPaymentVerifier, "fetch_transaction", lambda self, s: tx)
+
+    res = client.post(
+        "/v1/payments/verify-solana",
+        json={"transaction_signature": tx_sig, "invoice_id": inv_id},
+    )
+    assert res.status_code == 400
+    assert "expired" in res.json()["detail"].lower()
+
+
+def test_scenario_18_mismatched_asset_or_amount_against_invoice(monkeypatch):
+    """
+    Submitting payment with wrong asset or insufficient amount compared to invoice terms is rejected.
+    """
+    from fastapi.testclient import TestClient
+    from api_server import app, rate_limiter
+    from tests.test_payments import build_synthetic_solana_tx
+    import secrets
+
+    client = TestClient(app)
+    rate_limiter.reset()
+
+    # Invoice created for tier_starter (USDC, 1_000_000 raw)
+    inv = client.post("/v1/payments/invoice", json={"target_tier": "tier_starter"}).json()
+    inv_id = inv["invoice_id"]
+    ref = inv["reference"]
+
+    b58_chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+    tx_sig = "".join(secrets.choice(b58_chars) for _ in range(88))
+
+    # Pay with SOL instead of USDC
+    tx_sol = build_synthetic_solana_tx(asset="SOL", amount_raw=5_000_000, signature=tx_sig, reference=ref)
+    monkeypatch.setattr(SolanaPaymentVerifier, "fetch_transaction", lambda self, s: tx_sol)
+
+    res_sol = client.post(
+        "/v1/payments/verify-solana",
+        json={"transaction_signature": tx_sig, "invoice_id": inv_id},
+    )
+    assert res_sol.status_code == 400
+    assert "does not match invoice expected asset" in res_sol.json()["detail"]
+
+    # Pay with insufficient USDC (e.g. 500,000 raw instead of 1,000,000)
+    tx_underpaid = build_synthetic_solana_tx(asset="USDC", amount_raw=500_000, signature=tx_sig, reference=ref)
+    monkeypatch.setattr(SolanaPaymentVerifier, "fetch_transaction", lambda self, s: tx_underpaid)
+
+    res_under = client.post(
+        "/v1/payments/verify-solana",
+        json={"transaction_signature": tx_sig, "invoice_id": inv_id},
+    )
+    assert res_under.status_code == 400
+    assert "below" in res_under.json()["detail"].lower() and "minimum" in res_under.json()["detail"].lower()
+
+
+def test_scenario_19_future_timestamp_rejected():
+    """
+    Transactions with block_time in the future (> 60s ahead) are rejected to prevent clock skew attacks.
+    """
+    import time
+    from tests.test_payments import build_synthetic_solana_tx
+
+    verifier = SolanaPaymentVerifier(rpc_caller=lambda *a, **k: {})
+    future_time = int(time.time()) + 300  # 5 minutes in future
+    tx_future = build_synthetic_solana_tx(signature=SIG_88, block_time=future_time)
+
+    with patch.object(verifier, "fetch_transaction", return_value=tx_future):
+        with pytest.raises(VerificationError) as exc_info:
+            verifier.verify_payment(SIG_88, requested_tier="tier_starter")
+        assert "timestamp is in the future" in str(exc_info.value)
+
+
+def test_scenario_20_cluster_genesis_hash_validation():
+    """
+    Validates cluster genesis hash to prevent cross-cluster replay or RPC node misdirection.
+    """
+    from config import SOLANA_MAINNET_GENESIS_HASH, SOLANA_DEVNET_GENESIS_HASH
+
+    # 1. Matching mainnet hash passes
+    verifier_mainnet = SolanaPaymentVerifier(
+        cluster="mainnet-beta",
+        rpc_caller=lambda method, params: {"result": SOLANA_MAINNET_GENESIS_HASH},
+    )
+    assert verifier_mainnet.validate_cluster_genesis() is True
+
+    # 2. Node claiming mainnet but returning devnet genesis hash fails closed
+    verifier_spoofed = SolanaPaymentVerifier(
+        cluster="mainnet-beta",
+        rpc_caller=lambda method, params: {"result": SOLANA_DEVNET_GENESIS_HASH},
+    )
+    with pytest.raises(VerificationError) as exc_info:
+        verifier_spoofed.validate_cluster_genesis()
+    assert "Cluster genesis hash mismatch" in str(exc_info.value)
+
+
+def test_scenario_21_revoked_key_claim_blocked(monkeypatch):
+    """
+    If an API key is revoked by an administrator, claiming via claim_secret is blocked.
+    """
+    from fastapi.testclient import TestClient
+    from api_server import app, storage, rate_limiter
+    from tests.test_payments import build_synthetic_solana_tx
+    import secrets
+
+    client = TestClient(app)
+    rate_limiter.reset()
+
+    inv = client.post("/v1/payments/invoice", json={"target_tier": "tier_starter"}).json()
+    ref = inv["reference"]
+    inv_id = inv["invoice_id"]
+    claim_secret = inv["claim_secret"]
+
+    b58_chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+    tx_sig = "".join(secrets.choice(b58_chars) for _ in range(88))
+    tx = build_synthetic_solana_tx(asset="USDC", amount_raw=1_000_000, signature=tx_sig, reference=ref)
+    monkeypatch.setattr(SolanaPaymentVerifier, "fetch_transaction", lambda self, s: tx)
+
+    # Fulfill invoice with claim_secret so envelope is encrypted
+    res = client.post(
+        "/v1/payments/verify-solana",
+        json={"transaction_signature": tx_sig, "invoice_id": inv_id, "claim_secret": claim_secret},
+    )
+    api_key = res.json()["api_key"]
+
+    # Admin revokes key
+    storage.revoke_api_key(api_key, reason="Policy violation")
+
+    # Claim attempt must fail closed
+    res_claim = client.post(
+        f"/v1/payments/invoice/{inv_id}/claim",
+        json={"claim_secret": claim_secret},
+    )
+    assert res_claim.status_code == 400
+    assert "revoked" in res_claim.json()["detail"].lower()

@@ -7,6 +7,7 @@ and fail-safe payment configuration loading.
 import os
 import json
 import re
+import secrets
 from pathlib import Path
 from typing import Dict, Any
 
@@ -37,6 +38,41 @@ LAMPORTS_PER_SOL = 1_000_000_000
 
 # Base58 regex pattern (Solana addresses and signatures)
 BASE58_PATTERN = re.compile(r"^[1-9A-HJ-NP-Za-km-z]+$")
+
+# Base58 alphabet and encoder for Solana Pay references
+B58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+
+def b58encode(data: bytes) -> str:
+    """Encodes arbitrary bytes into a standard Base58 string (Bitcoin/Solana alphabet)."""
+    leading_zeros = len(data) - len(data.lstrip(b"\x00"))
+    num = int.from_bytes(data, "big")
+    chars = []
+    while num > 0:
+        num, rem = divmod(num, 58)
+        chars.append(B58_ALPHABET[rem])
+    return ("1" * leading_zeros) + "".join(reversed(chars))
+
+
+def generate_solana_reference() -> str:
+    """Generates a cryptographically random Base58 public key for Solana Pay reference binding."""
+    return b58encode(secrets.token_bytes(32))
+
+
+# Solana Cluster Genesis Hashes
+SOLANA_MAINNET_GENESIS_HASH = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"
+SOLANA_DEVNET_GENESIS_HASH = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
+SOLANA_TESTNET_GENESIS_HASH = "4uhcVJyU9pJkvQyS88uRDiswHXSCkY3zQawwpjk2NsNY"
+
+CLUSTER_GENESIS_HASHES: Dict[str, str] = {
+    "mainnet-beta": SOLANA_MAINNET_GENESIS_HASH,
+    "devnet": SOLANA_DEVNET_GENESIS_HASH,
+    "testnet": SOLANA_TESTNET_GENESIS_HASH,
+}
+
+# Timing & Age Limits (seconds)
+DEFAULT_MAX_TX_AGE_SECONDS = 1800  # 30 minutes
+DEFAULT_INVOICE_TTL_SECONDS = 1800  # 30 minutes
 
 # Webhook authentication secret for push-based settlement (e.g. Shyft / Helius webhooks)
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "moltbook_webhook_secret_dev")
@@ -130,11 +166,18 @@ def load_payment_config() -> Dict[str, Any]:
             "sol_lamports": int(r.get("sol_lamports", round(usd_val * 5_000_000))),
         }
 
+    cluster = os.getenv("SOLANA_CLUSTER", config_data.get("cluster", "mainnet-beta")).strip()
+    max_age = int(os.getenv("SOLANA_MAX_TX_AGE_SECONDS", str(config_data.get("max_age_seconds", DEFAULT_MAX_TX_AGE_SECONDS))))
+    invoice_ttl = int(os.getenv("SOLANA_INVOICE_TTL_SECONDS", str(config_data.get("invoice_ttl_seconds", DEFAULT_INVOICE_TTL_SECONDS))))
+
     return {
         "solana_treasury_wallet": treasury_wallet,
         "rpc_url": rpc_endpoints[0],
         "rpc_endpoints": rpc_endpoints,
         "rates": rates,
+        "cluster": cluster,
+        "max_age_seconds": max_age,
+        "invoice_ttl_seconds": invoice_ttl,
     }
 
 
