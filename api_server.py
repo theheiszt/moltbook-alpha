@@ -10,8 +10,8 @@ import secrets
 import re
 import asyncio
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any
-from fastapi import FastAPI, Header, HTTPException, Request, Response, status
+from typing import Optional, Dict, Any, List
+from fastapi import FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -1630,6 +1630,148 @@ def refresh_intelligence():
         "briefing_id": briefing["briefing_id"],
         "state_witness_id": briefing["state_witness_id"],
     }
+
+
+@app.websocket("/v1/ws/alpha")
+async def websocket_alpha_stream(
+    websocket: WebSocket,
+    api_key: Optional[str] = None,
+    token: Optional[str] = None,
+):
+    """
+    Real-time streaming WebSocket endpoint for verified Moltbook Alpha signals.
+    Enforces per-session authentication and 1-credit lot deduction.
+    Supports heartbeats, category filters, and live push notifications.
+    """
+    await websocket.accept()
+    raw_key = api_key or token
+
+    if not raw_key:
+        try:
+            auth_msg = await asyncio.wait_for(websocket.receive_json(), timeout=5.0)
+            if isinstance(auth_msg, dict) and auth_msg.get("type") == "auth":
+                raw_key = auth_msg.get("api_key") or auth_msg.get("token")
+        except Exception:
+            pass
+
+    if not raw_key:
+        await websocket.send_json({
+            "type": "error",
+            "code": "AUTH_REQUIRED",
+            "message": "Authentication required. Provide ?token=... query param or initial auth message within 5s.",
+        })
+        await websocket.close(code=4408)
+        return
+
+    # Authenticate and deduct 1 credit for the live session
+    req_id = f"ws_sess_{secrets.token_hex(6)}"
+    record, auth_status = storage.authenticate_and_deduct(raw_key, request_id=req_id)
+    if auth_status != "ok" or not record:
+        if auth_status in ("exhausted", "entitlement_expired"):
+            await websocket.send_json({
+                "type": "error",
+                "code": "PAYMENT_REQUIRED",
+                "status": auth_status,
+                "message": "Credit quota exhausted or entitlement expired. Top up via /v1/payments/verify-solana.",
+            })
+            await websocket.close(code=4402)
+        else:
+            await websocket.send_json({
+                "type": "error",
+                "code": "FORBIDDEN",
+                "status": auth_status,
+                "message": "Invalid or revoked API key.",
+            })
+            await websocket.close(code=4403)
+        return
+
+    session_id = f"wss_{secrets.token_hex(8)}"
+    now_iso = datetime.now(timezone.utc).isoformat()
+    storage.log_audit_event("ws_connected", f"WebSocket session {session_id} authenticated for tier {record['tier']}")
+
+    await websocket.send_json({
+        "type": "authenticated",
+        "session_id": session_id,
+        "tier": record["tier"],
+        "remaining_credits": record.get("credits", 0),
+        "timestamp": now_iso,
+    })
+
+    # Default filters
+    sub_categories: Optional[List[str]] = None
+    min_confidence = "LOW"
+    seen_signal_ids: set[str] = set()
+
+    # Send initial backlog of latest signals
+    initial_signals = intel_engine.search_signals(limit=10)
+    for sig in reversed(initial_signals):
+        seen_signal_ids.add(sig["signal_id"])
+        await websocket.send_json({
+            "type": "signal",
+            "session_id": session_id,
+            "signal": sig,
+        })
+
+    # Concurrently handle incoming frames (ping, subscribe) and outgoing stream
+    async def receiver():
+        nonlocal sub_categories, min_confidence
+        try:
+            while True:
+                msg = await websocket.receive_json()
+                if not isinstance(msg, dict):
+                    continue
+                msg_type = msg.get("type")
+                if msg_type == "ping":
+                    await websocket.send_json({
+                        "type": "pong",
+                        "session_id": session_id,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    })
+                elif msg_type == "subscribe":
+                    cats = msg.get("categories")
+                    if isinstance(cats, list):
+                        sub_categories = [str(c) for c in cats]
+                    conf = msg.get("min_confidence")
+                    if conf:
+                        min_confidence = str(conf).upper()
+                    await websocket.send_json({
+                        "type": "subscribed",
+                        "session_id": session_id,
+                        "categories": sub_categories,
+                        "min_confidence": min_confidence,
+                    })
+        except WebSocketDisconnect:
+            pass
+        except Exception:
+            pass
+
+    receiver_task = asyncio.create_task(receiver())
+
+    try:
+        while not receiver_task.done():
+            await asyncio.sleep(2.0)
+            current_signals = intel_engine.search_signals(limit=15)
+            for s in reversed(current_signals):
+                sid = s["signal_id"]
+                if sid in seen_signal_ids:
+                    continue
+                seen_signal_ids.add(sid)
+
+                if sub_categories and s["category"] not in sub_categories:
+                    continue
+
+                await websocket.send_json({
+                    "type": "signal",
+                    "session_id": session_id,
+                    "signal": s,
+                })
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        receiver_task.cancel()
+        storage.log_audit_event("ws_disconnected", f"WebSocket session {session_id} ended")
 
 
 if __name__ == "__main__":

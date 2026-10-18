@@ -9,11 +9,13 @@ import re
 import json
 import hashlib
 import subprocess
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-from config import BASE_DIR, REPORTS_DIR, DB_PATH
+from config import BASE_DIR, REPORTS_DIR, DB_PATH, load_payment_config
 from storage import StorageManager
 from moltbook_client import MoltbookClient
 
@@ -118,6 +120,14 @@ class IntelEngine:
             cur.execute(
                 "INSERT OR IGNORE INTO intel_sources (source_id, source_name, source_type, created_at) VALUES (?, ?, 'vcs_repository', ?)",
                 ("git_repository_log", "Moltbook Alpha Git Commits & Change History", now_iso)
+            )
+            cur.execute(
+                "INSERT OR IGNORE INTO intel_sources (source_id, source_name, source_type, created_at) VALUES (?, ?, 'onchain_dex', ?)",
+                ("onchain_dex_telemetry", "Solana DEX & Token Market Feeds (Jupiter & Raydium)", now_iso)
+            )
+            cur.execute(
+                "INSERT OR IGNORE INTO intel_sources (source_id, source_name, source_type, created_at) VALUES (?, ?, 'onchain_cluster', ?)",
+                ("solana_cluster_telemetry", "Solana Network RPC & Cluster Health Telemetry", now_iso)
             )
             conn.commit()
 
@@ -294,6 +304,211 @@ class IntelEngine:
 
         return new_count
 
+    def ingest_onchain_dex_telemetry(
+        self,
+        tokens: Optional[List[Dict[str, str]]] = None,
+        mock_feed: Optional[List[Dict[str, Any]]] = None,
+        timeout_seconds: float = 3.0
+    ) -> int:
+        """
+        Ingests real-time Solana DEX price & liquidity metrics from Jupiter Price API v2.
+        Supports deterministic mock_feed injection for hermetic tests.
+        """
+        source_id = "onchain_dex_telemetry"
+        now_iso = datetime.now(timezone.utc).isoformat()
+        tracked = tokens or [
+            {"symbol": "SOL", "mint": "So11111111111111111111111111111111111111112"},
+            {"symbol": "JUP", "mint": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN"},
+            {"symbol": "RAY", "mint": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R"},
+            {"symbol": "BONK", "mint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"},
+        ]
+
+        items_data = []
+        if mock_feed is not None:
+            items_data = mock_feed
+        else:
+            mint_map = {t["mint"]: t["symbol"] for t in tracked}
+            ids_param = ",".join(tracked_m["mint"] for tracked_m in tracked)
+            url = f"https://api.jup.ag/price/v2?ids={ids_param}&showExtraInfo=true"
+            try:
+                req = urllib.request.Request(
+                    url,
+                    headers={"User-Agent": "MoltbookAlphaIntel/2.0"}
+                )
+                with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
+                    payload = json.loads(resp.read().decode("utf-8"))
+                    data_map = payload.get("data", {})
+                    for mint, info in data_map.items():
+                        if not info:
+                            continue
+                        symbol = mint_map.get(mint, mint[:8])
+                        price_val = float(info.get("price", 0.0))
+                        extra = info.get("extraInfo", {})
+                        items_data.append({
+                            "symbol": symbol,
+                            "mint": mint,
+                            "price": price_val,
+                            "confidence": extra.get("confidenceLevel", "medium"),
+                            "depth": extra.get("depth", {}),
+                            "last_swapped": extra.get("lastSwappedPrice", {}),
+                            "raw": info,
+                        })
+            except Exception as e:
+                # Fail-soft network handling
+                print(f"[!] Warning: DEX feed ingestion error: {e}")
+                return 0
+
+        new_count = 0
+        with self.storage.connection() as conn:
+            cur = conn.cursor()
+            for feed_item in items_data:
+                symbol = feed_item.get("symbol", "TOKEN")
+                price = feed_item.get("price", 0.0)
+                mint = feed_item.get("mint", "unknown")
+                confidence = feed_item.get("confidence", "HIGH")
+                depth = feed_item.get("depth", {})
+                last_swapped = feed_item.get("last_swapped", {})
+                buy_price = float(last_swapped.get("buyPrice", price) or price)
+                sell_price = float(last_swapped.get("sellPrice", price) or price)
+                spread_pct = abs(buy_price - sell_price) / max(buy_price, 0.000001) * 100.0
+
+                title = f"[DEX Market Feed] {symbol}/USDC ${price:,.4f}"
+                content = (
+                    f"Asset: {symbol}\n"
+                    f"Price: ${price:,.4f}\n"
+                    f"Mint: {mint}\n"
+                    f"Confidence: {confidence}\n"
+                    f"Bid/Ask Spread: {spread_pct:.3f}%\n"
+                    f"Depth: {json.dumps(depth)}"
+                )
+                item_id = f"itm_dex_{symbol.lower()}_{hashlib.sha256(content.encode()).hexdigest()[:10]}"
+                url = f"https://jup.ag/swap/{symbol}-USDC"
+                content_hash = hashlib.sha256(f"{title}\n{content}".encode("utf-8")).hexdigest()
+
+                cur.execute("SELECT item_id FROM intel_items WHERE content_hash = ?", (content_hash,))
+                if cur.fetchone():
+                    continue
+
+                cur.execute("""
+                    INSERT INTO intel_items (
+                        item_id, source_id, content_hash, author, title, content,
+                        url, raw_metadata_json, published_at, ingested_at, engagement_score
+                    ) VALUES (?, ?, ?, 'jupiter_dex_feed', ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    item_id, source_id, content_hash, title, content,
+                    url, json.dumps(feed_item), now_iso, now_iso, 25
+                ))
+                new_count += 1
+
+            cur.execute(
+                "UPDATE intel_sources SET last_polled_at = ?, items_collected_count = items_collected_count + ? WHERE source_id = ?",
+                (now_iso, new_count, source_id)
+            )
+            conn.commit()
+
+        return new_count
+
+    def ingest_solana_cluster_telemetry(
+        self,
+        rpc_url: Optional[str] = None,
+        mock_telemetry: Optional[Dict[str, Any]] = None,
+        timeout_seconds: float = 3.0
+    ) -> int:
+        """
+        Ingests real-time Solana cluster health, slot progression, and TPS telemetry.
+        Supports mock_telemetry injection for deterministic testing.
+        """
+        source_id = "solana_cluster_telemetry"
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        telemetry: Dict[str, Any] = {}
+        if mock_telemetry is not None:
+            telemetry = mock_telemetry
+        else:
+            cfg = load_payment_config()
+            target_rpc = rpc_url or cfg.get("rpc_url") or "https://api.mainnet-beta.solana.com"
+            try:
+                def _rpc_call(method: str, params: list) -> Any:
+                    req_body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode("utf-8")
+                    req = urllib.request.Request(
+                        target_rpc,
+                        data=req_body,
+                        headers={"Content-Type": "application/json", "User-Agent": "MoltbookAlphaIntel/2.0"}
+                    )
+                    with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
+                        res = json.loads(resp.read().decode("utf-8"))
+                        return res.get("result")
+
+                slot = _rpc_call("getSlot", [{"commitment": "confirmed"}])
+                samples = _rpc_call("getRecentPerformanceSamples", [1])
+                health = "ok"
+                try:
+                    health = _rpc_call("getHealth", []) or "ok"
+                except Exception:
+                    health = "ok"
+
+                tps = 0.0
+                non_vote_tps = 0.0
+                sample_secs = 60
+                if samples and isinstance(samples, list) and len(samples) > 0:
+                    s0 = samples[0]
+                    sample_secs = max(s0.get("samplePeriodSecs", 60), 1)
+                    num_txs = s0.get("numTransactions", 0)
+                    tps = num_txs / sample_secs
+                    non_vote = s0.get("numNonVoteTransactions", 0)
+                    non_vote_tps = non_vote / sample_secs
+
+                telemetry = {
+                    "slot": slot or 0,
+                    "tps": tps,
+                    "non_vote_tps": non_vote_tps,
+                    "sample_period_secs": sample_secs,
+                    "health": health,
+                    "rpc_endpoint": target_rpc,
+                }
+            except Exception as e:
+                print(f"[!] Warning: Solana cluster telemetry error: {e}")
+                return 0
+
+        slot = telemetry.get("slot", 0)
+        tps = telemetry.get("tps", 0.0)
+        non_vote_tps = telemetry.get("non_vote_tps", 0.0)
+        health = telemetry.get("health", "ok")
+
+        title = f"[Solana Cluster Telemetry] Slot {slot:,} - TPS: {tps:,.1f} ({health})"
+        content = (
+            f"Solana Cluster Health: {health}\n"
+            f"Slot: {slot}\n"
+            f"Instantaneous TPS: {tps:,.1f}\n"
+            f"Non-Vote TPS: {non_vote_tps:,.1f}\n"
+            f"RPC Target: {telemetry.get('rpc_endpoint', 'default')}"
+        )
+        item_id = f"itm_sol_slot_{slot}_{hashlib.sha256(content.encode()).hexdigest()[:8]}"
+        content_hash = hashlib.sha256(f"{title}\n{content}".encode("utf-8")).hexdigest()
+
+        with self.storage.connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT item_id FROM intel_items WHERE content_hash = ?", (content_hash,))
+            if cur.fetchone():
+                return 0
+
+            cur.execute("""
+                INSERT INTO intel_items (
+                    item_id, source_id, content_hash, author, title, content,
+                    url, raw_metadata_json, published_at, ingested_at, engagement_score
+                ) VALUES (?, ?, ?, 'solana_telemetry', ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                item_id, source_id, content_hash, title, content,
+                f"solana://slot/{slot}", json.dumps(telemetry), now_iso, now_iso, 20
+            ))
+            cur.execute(
+                "UPDATE intel_sources SET last_polled_at = ?, items_collected_count = items_collected_count + 1 WHERE source_id = ?",
+                (now_iso, source_id)
+            )
+            conn.commit()
+
+        return 1
+
     def collect_all_sources(self) -> Dict[str, int]:
         """Runs end-to-end collection across all approved external and internal sources."""
         stats = {}
@@ -302,6 +517,8 @@ class IntelEngine:
 
         stats["internal_audit_logs"] = self.ingest_internal_audit_logs(limit=30)
         stats["git_repository"] = self.ingest_git_history(limit=15)
+        stats["onchain_dex"] = self.ingest_onchain_dex_telemetry()
+        stats["solana_cluster"] = self.ingest_solana_cluster_telemetry()
         return stats
 
     def extract_signals(self, limit_items: int = 100) -> int:
@@ -312,7 +529,7 @@ class IntelEngine:
         with self.storage.connection() as conn:
             cur = conn.cursor()
             cur.execute("""
-                SELECT item_id, source_id, author, title, content, url, published_at
+                SELECT item_id, source_id, author, title, content, url, published_at, raw_metadata_json
                 FROM intel_items
                 WHERE item_id NOT IN (SELECT DISTINCT item_id FROM intel_signals)
                 ORDER BY ingested_at DESC
@@ -347,11 +564,34 @@ class IntelEngine:
             r"\b(dag|directed acyclic graph|topological|hash chain|state witness|rfc 8785|double-entry|ledger|fail-closed|idempotency|monotonic)\b",
             re.IGNORECASE
         )
+        liquidity_patterns = re.compile(
+            r"\b(liquidity surge|volume breakout|liquidity spike|whale accumulation|large pool deposit|liquidity influx|depth surge)\b",
+            re.IGNORECASE
+        )
+        volatility_patterns = re.compile(
+            r"\b(volatility expansion|sharp deviation|price flash|violent swing|range breakout|regime change|momentum breakout)\b",
+            re.IGNORECASE
+        )
+        arbitrage_patterns = re.compile(
+            r"\b(arbitrage spread|cross-venue spread|triangular arbitrage|dislocation|pool divergence|dex spread|bid/ask spread)\b",
+            re.IGNORECASE
+        )
+        congestion_patterns = re.compile(
+            r"\b(cluster congestion|tps drop|high latency|slot degradation|rpc degraded|tx drop rate|degraded health)\b",
+            re.IGNORECASE
+        )
 
         for row in unindexed:
             item_id = row["item_id"]
             title = row["title"]
             content = row["content"]
+            source_id = row["source_id"]
+            raw_meta_str = row["raw_metadata_json"] if "raw_metadata_json" in row.keys() else "{}"
+            raw_meta = {}
+            try:
+                raw_meta = json.loads(raw_meta_str) if raw_meta_str else {}
+            except Exception:
+                raw_meta = {}
             full_text = f"{title}\n{content}"
 
             # 1. Security Advisories
@@ -429,6 +669,72 @@ class IntelEngine:
                     now_iso
                 ))
 
+            # 6. Quant: Liquidity Surge
+            m_liq = liquidity_patterns.search(full_text)
+            cluster_tps = float(raw_meta.get("tps", 0.0))
+            if m_liq or (source_id == "solana_cluster_telemetry" and cluster_tps >= 2200.0):
+                sig_id = f"sig_liq_{item_id[4:16]}"
+                signals_to_insert.append((
+                    sig_id, item_id, "liquidity_surge",
+                    f"Liquidity & Throughput Surge: {title[:80]}",
+                    f"High throughput / liquidity velocity observed ({cluster_tps:.1f} TPS or keyword match).",
+                    "HIGH",
+                    0,
+                    1,
+                    "Capitalize on high transaction velocity and expand order routing volume.",
+                    now_iso
+                ))
+
+            # 7. Quant: Volatility Expansion
+            m_vol = volatility_patterns.search(full_text)
+            if m_vol:
+                sig_id = f"sig_vol_{item_id[4:16]}"
+                signals_to_insert.append((
+                    sig_id, item_id, "volatility_expansion",
+                    f"Volatility Regime Shift: {title[:80]}",
+                    f"Identified momentum breakout pattern '{m_vol.group(0)}' in asset flow.",
+                    "HIGH",
+                    0,
+                    1,
+                    "Widen protective slippage stops and adjust dynamic market maker spreads.",
+                    now_iso
+                ))
+
+            # 8. Quant: Arbitrage Spread
+            m_arb = arbitrage_patterns.search(full_text)
+            dex_last = raw_meta.get("last_swapped", {})
+            buy_p = float(dex_last.get("buyPrice", 0.0) or 0.0)
+            sell_p = float(dex_last.get("sellPrice", 0.0) or 0.0)
+            spread_pct = (abs(buy_p - sell_p) / max(buy_p, 0.0001) * 100.0) if buy_p > 0 else 0.0
+            if m_arb or (source_id == "onchain_dex_telemetry" and spread_pct >= 0.3):
+                sig_id = f"sig_arb_{item_id[4:16]}"
+                signals_to_insert.append((
+                    sig_id, item_id, "arbitrage_spread",
+                    f"Cross-Pool Arbitrage Dislocation: {title[:80]}",
+                    f"Detected pricing divergence with spread {spread_pct:.3f}%. Context: {content[:150]}...",
+                    "VERIFIED" if source_id == "onchain_dex_telemetry" else "HIGH",
+                    0,
+                    1,
+                    "Execute atomic cross-DEX routing via Jupiter aggregator.",
+                    now_iso
+                ))
+
+            # 9. Operational Alert: Cluster Congestion
+            m_cong = congestion_patterns.search(full_text)
+            cluster_health = raw_meta.get("health", "ok")
+            if m_cong or (source_id == "solana_cluster_telemetry" and (cluster_health != "ok" or (0 < cluster_tps < 800.0))):
+                sig_id = f"sig_cong_{item_id[4:16]}"
+                signals_to_insert.append((
+                    sig_id, item_id, "operational_failure",
+                    f"Cluster Health Notice: {title[:80]}",
+                    f"Network slowdown observed (TPS: {cluster_tps:.1f}, health: {cluster_health}).",
+                    "VERIFIED" if source_id == "solana_cluster_telemetry" else "HIGH",
+                    0,
+                    1,
+                    "Route RPC traffic to secondary validator endpoint and queue non-critical transactions.",
+                    now_iso
+                ))
+
         if not signals_to_insert:
             return 0
 
@@ -476,17 +782,25 @@ class IntelEngine:
             "api_change": [],
             "architecture_pattern": [],
             "market_alpha": [],
+            "liquidity_surge": [],
+            "volatility_expansion": [],
+            "arbitrage_spread": [],
+            "cluster_health": [],
         }
         for s in signals:
             cat = s["category"]
             if cat in by_cat:
                 by_cat[cat].append(s)
+            elif "fail" in cat or "cluster" in cat:
+                by_cat["operational_failure"].append(s)
+            else:
+                by_cat["market_alpha"].append(s)
 
         # Markdown Document Assembly
         md_lines = [
             "# Moltbook Alpha — Verified Intelligence & Market Briefing",
             f"**Audit & Generation Timestamp:** {now_str}",
-            "**Data Sources:** 6 Approved Submolts, Server Audit Logs, Git VCS History",
+            "**Data Sources:** 6 Approved Submolts, Solana DEX Feeds (Jupiter/Raydium), Cluster Telemetry, Audit Logs, Git VCS History",
             f"**Analyzed Base:** {total_items} items ingested | {len(signals)} actionable signals extracted\n",
             "---",
             "\n## 1. Executive Intelligence & Breakout Findings\n",
@@ -536,7 +850,7 @@ class IntelEngine:
             "---",
             "\n## 4. Operational Telemetry & Failure Forensics\n",
         ])
-        fail_signals = by_cat["operational_failure"]
+        fail_signals = by_cat["operational_failure"] + by_cat["cluster_health"]
         if not fail_signals:
             md_lines.append("All operational subsystems (WAL storage, RPC failover, rate limiting) operating normally.\n")
         else:
@@ -550,11 +864,11 @@ class IntelEngine:
             "---",
             "\n## 5. Market Alpha & Agentic Finance Opportunities\n",
         ])
-        alpha_signals = by_cat["market_alpha"]
+        alpha_signals = by_cat["market_alpha"] + by_cat["liquidity_surge"] + by_cat["volatility_expansion"] + by_cat["arbitrage_spread"]
         if not alpha_signals:
             md_lines.append("No high-confidence financial arbitrage signals in current block.\n")
         else:
-            for s in alpha_signals[:5]:
+            for s in alpha_signals[:6]:
                 md_lines.append(f"- **{s['headline']}**")
                 md_lines.append(f"  - {s['summary']}")
                 md_lines.append(f"  - _Strategy:_ {s['remedy_description']}\n")

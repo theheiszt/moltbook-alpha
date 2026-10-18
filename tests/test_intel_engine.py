@@ -165,3 +165,87 @@ def test_api_intel_latest_endpoint_with_auth():
     assert "briefing_markdown" in body
     assert len(body["briefing_markdown"]) > 100
     assert "state_witness_id" in body
+
+
+def test_onchain_dex_telemetry_ingestion_and_quant_signals(tmp_path):
+    db_file = tmp_path / "test_dex.db"
+    sm = StorageManager(db_file)
+    engine = IntelEngine(sm)
+
+    mock_feed = [
+        {
+            "symbol": "SOL",
+            "mint": "So11111111111111111111111111111111111111112",
+            "price": 182.45,
+            "confidence": "HIGH",
+            "depth": {"bids": 1200000, "asks": 1150000},
+            "last_swapped": {"buyPrice": 182.90, "sellPrice": 181.80},
+        },
+        {
+            "symbol": "JUP",
+            "mint": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+            "price": 1.25,
+            "confidence": "HIGH",
+            "depth": {"bids": 400000, "asks": 380000},
+            "last_swapped": {"buyPrice": 1.25, "sellPrice": 1.25},
+        }
+    ]
+
+    count = engine.ingest_onchain_dex_telemetry(mock_feed=mock_feed)
+    assert count == 2
+
+    # Deduplication test
+    count_dupe = engine.ingest_onchain_dex_telemetry(mock_feed=mock_feed)
+    assert count_dupe == 0
+
+    # Extract quant signals
+    sig_count = engine.extract_signals(limit_items=10)
+    assert sig_count >= 1
+
+    signals = engine.search_signals(category="arbitrage_spread")
+    assert len(signals) >= 1
+    assert "Cross-Pool Arbitrage" in signals[0]["headline"]
+    assert signals[0]["confidence"] == "VERIFIED"
+    assert "Jupiter" in signals[0]["remedy_description"]
+
+
+def test_solana_cluster_telemetry_ingestion_and_signals(tmp_path):
+    db_file = tmp_path / "test_cluster.db"
+    sm = StorageManager(db_file)
+    engine = IntelEngine(sm)
+
+    # Ingest high-throughput telemetry
+    telemetry_surge = {
+        "slot": 312050000,
+        "tps": 2850.5,
+        "non_vote_tps": 1120.0,
+        "sample_period_secs": 60,
+        "health": "ok",
+        "rpc_endpoint": "https://api.mainnet-beta.solana.com",
+    }
+
+    count = engine.ingest_solana_cluster_telemetry(mock_telemetry=telemetry_surge)
+    assert count == 1
+
+    # Extract signals
+    engine.extract_signals(limit_items=10)
+    surge_sigs = engine.search_signals(category="liquidity_surge")
+    assert len(surge_sigs) >= 1
+    assert "Throughput Surge" in surge_sigs[0]["headline"]
+
+    # Ingest degraded cluster telemetry
+    telemetry_degraded = {
+        "slot": 312050500,
+        "tps": 340.0,
+        "non_vote_tps": 85.0,
+        "sample_period_secs": 60,
+        "health": "degraded",
+        "rpc_endpoint": "https://api.mainnet-beta.solana.com",
+    }
+    engine.ingest_solana_cluster_telemetry(mock_telemetry=telemetry_degraded)
+    engine.extract_signals(limit_items=10)
+
+    fail_sigs = engine.search_signals(category="operational_failure")
+    cluster_fail = [s for s in fail_sigs if "Cluster Health Notice" in s["headline"]]
+    assert len(cluster_fail) >= 1
+    assert cluster_fail[0]["confidence"] == "VERIFIED"
