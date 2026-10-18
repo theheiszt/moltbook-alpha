@@ -24,6 +24,7 @@ from errors import (
     ApiError,
     format_error_payload,
 )
+from dag_tool_parameters import TOOL_DAG_REGISTRY
 
 from config import (
     DB_PATH,
@@ -33,10 +34,12 @@ from config import (
     BASE58_PATTERN,
     CANONICAL_USDC_MINT,
     WEBHOOK_SECRET,
+    WITNESS_KEY_PATH,
     load_payment_config,
     is_demo_keys_enabled,
     get_trusted_proxies,
 )
+from cryptographic_witness import WitnessManager, WitnessKeyManager
 from storage import StorageManager, StorageError
 from payment_verifier import (
     SolanaPaymentVerifier,
@@ -90,11 +93,18 @@ async def metrics_middleware(request: Request, call_next):
             norm_endpoint = "/v1/payments/invoice/:id"
         elif endpoint.startswith("/v1/errors/"):
             norm_endpoint = "/v1/errors/:code"
+        elif endpoint.startswith("/v1/tools/") and endpoint.endswith("/parameter-graph"):
+            norm_endpoint = "/v1/tools/:tool/parameter-graph"
+        elif endpoint.startswith("/v1/witnesses/") and endpoint not in {"/v1/witnesses/public-keys", "/v1/witnesses/verify"}:
+            norm_endpoint = "/v1/witnesses/:id"
         elif endpoint in {
             "/",
             "/metrics",
             "/v1/health",
             "/v1/errors",
+            "/v1/tools",
+            "/v1/witnesses/public-keys",
+            "/v1/witnesses/verify",
             "/v1/payments/config",
             "/v1/payments/invoice",
             "/v1/payments/verify-solana",
@@ -269,10 +279,12 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content=content, headers=headers)
 
 
-# Initialize storage, rate limiter, and deduplicator
+# Initialize storage, rate limiter, deduplicator, and cryptographic state witness manager
 storage = StorageManager(DB_PATH)
 rate_limiter = SlidingWindowRateLimiter()
 in_flight_deduplicator = InFlightDeduplicator()
+witness_key_manager = WitnessKeyManager(WITNESS_KEY_PATH)
+witness_manager = WitnessManager(storage, witness_key_manager)
 
 
 # Run one-time legacy migration from api_keys.json if present (skipping any admin backdoors)
@@ -1189,12 +1201,32 @@ def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None
             )
         raise HTTPException(status_code=500, detail="Internal server error reading briefing.") from e
 
-    return {
+    witness_id = None
+    if user_info.get("key_hash"):
+        try:
+            w = witness_manager.create_witness(
+                action="QUERY_DEDUCTED",
+                actor=user_info.get("key_prefix", "unknown"),
+                key_hash=user_info.get("key_hash"),
+                lot_id=user_info.get("lot_id"),
+                pre_balance=(user_info.get("credits") or 0) + 1,
+                credit_delta=-1,
+                post_balance=user_info.get("credits"),
+                request_id=req_id,
+            )
+            witness_id = w["witness_id"]
+        except Exception:
+            pass
+
+    res = {
         "success": True,
         "user_tier": user_info.get("tier"),
         "credits_remaining": user_info.get("credits"),
         "briefing_markdown": content,
     }
+    if witness_id:
+        res["state_witness_id"] = witness_id
+    return res
 
 
 @app.get("/v1/errors")
@@ -1242,6 +1274,81 @@ def get_error_definition(code: str):
         "description": defn.description,
         "docs_url": defn.docs_url,
     }
+
+
+@app.get("/v1/tools")
+def list_available_tools():
+    """
+    Returns registered agent tools with links to their parameter DAGs.
+    """
+    return {
+        "version": "1.0.0",
+        "tools": [
+            {
+                "tool_name": name,
+                "version": dag.version,
+                "description": dag.description,
+                "parameter_count": len(dag.parameters),
+                "parameter_graph_endpoint": f"/v1/tools/{name}/parameter-graph",
+            }
+            for name, dag in TOOL_DAG_REGISTRY.items()
+        ],
+    }
+
+
+@app.get("/v1/tools/{tool_name}/parameter-graph")
+def get_tool_parameter_graph(tool_name: str):
+    """
+    Returns the compiled Directed Acyclic Graph (DAG) for a tool,
+    including prerequisite dependencies, topological execution stages, and resolvers.
+    """
+    dag = TOOL_DAG_REGISTRY.get(tool_name)
+    if not dag:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tool '{tool_name}' not found in registered tool catalog.",
+        )
+    return dag.to_dict()
+
+
+class VerifyWitnessInput(BaseModel):
+    witness: Dict[str, Any]
+    public_key_base58: Optional[str] = None
+
+
+@app.get("/v1/witnesses/public-keys")
+def get_witness_public_keys():
+    """
+    Returns active Ed25519 public keys used for signing cryptographic state witnesses.
+    Allows autonomous agents to verify non-repudiation and RFC 8785 canonical hash integrity.
+    """
+    return witness_manager.get_public_keys_metadata()
+
+
+@app.get("/v1/witnesses/{witness_id}")
+def get_state_witness(witness_id: str):
+    """
+    Fetches an immutable cryptographic state witness record by ID.
+    """
+    record = witness_manager.get_witness(witness_id)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"State witness '{witness_id}' not found.",
+        )
+    return record
+
+
+@app.post("/v1/witnesses/verify")
+def verify_state_witness(input_data: VerifyWitnessInput):
+    """
+    Verifies an Ed25519 cryptographic state witness payload against RFC 8785 canonicalization
+    and the server's public key (or an optionally supplied public key).
+    """
+    return witness_manager.verify_witness_payload(
+        input_data.witness,
+        public_key_b58=input_data.public_key_base58,
+    )
 
 
 if __name__ == "__main__":

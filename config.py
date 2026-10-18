@@ -42,6 +42,7 @@ DB_PATH = DATA_DIR / "moltbook.db"
 REPORTS_DIR = Path(os.getenv("MOLTBOOK_REPORTS_DIR", str(BASE_DIR / "reports"))).resolve()
 INDEX_HTML_PATH = BASE_DIR / "index.html"
 PAYMENT_CONFIG_PATH = BASE_DIR / "payment_config.json"
+WITNESS_KEY_PATH = Path(os.getenv("WITNESS_KEY_PATH", str(DATA_DIR / "witness_ed25519.pem"))).resolve()
 
 # Solana Mainnet Canonical USDC Mint (6 decimals)
 CANONICAL_USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
