@@ -1111,8 +1111,10 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
     expected_ref = invoice["reference"]
     target_tier = invoice["tier"]
     expected_payer = req.expected_payer
-
-    verifier = SolanaPaymentVerifier(max_age_seconds=cfg.get("max_age_seconds", 1800))
+    verifier = SolanaPaymentVerifier(
+        max_age_seconds=cfg.get("max_age_seconds", 1800),
+        require_consensus=cfg.get("require_consensus", False),
+    )
 
     try:
         payment = in_flight_deduplicator.execute(
@@ -1271,7 +1273,10 @@ def handle_payment_webhook(
 
     sig = req.transaction_signature.strip()
     cfg = load_payment_config()
-    verifier = SolanaPaymentVerifier(max_age_seconds=cfg.get("max_age_seconds", 1800))
+    verifier = SolanaPaymentVerifier(
+        max_age_seconds=cfg.get("max_age_seconds", 1800),
+        require_consensus=cfg.get("require_consensus", False),
+    )
 
     try:
         payment = in_flight_deduplicator.execute(

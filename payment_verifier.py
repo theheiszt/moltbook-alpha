@@ -113,7 +113,7 @@ class SolanaPaymentVerifier:
         cluster: str = "mainnet-beta",
         min_slot: int = 1,
         max_age_seconds: Optional[int] = None,
-        require_consensus: bool = False,
+        require_consensus: Optional[bool] = None,
     ):
         cfg = load_payment_config()
         self.treasury_wallet = (treasury_wallet or cfg["solana_treasury_wallet"]).strip()
@@ -123,7 +123,7 @@ class SolanaPaymentVerifier:
         self.cluster = cluster
         self.min_slot = min_slot
         self.max_age_seconds = max_age_seconds
-        self.require_consensus = require_consensus
+        self.require_consensus = require_consensus if require_consensus is not None else cfg.get("require_consensus", False)
 
         # Build ordered list of failover RPC endpoints
         if rpc_endpoints:
