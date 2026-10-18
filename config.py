@@ -22,7 +22,20 @@ except ImportError:
     pass
 
 APP_ENV = os.getenv("APP_ENV", "development").lower()
-DATA_DIR = Path(os.getenv("MOLTBOOK_DATA_DIR", str(BASE_DIR / "data"))).resolve()
+
+
+def _resolve_data_dir() -> Path:
+    env_dir = os.getenv("MOLTBOOK_DATA_DIR")
+    if env_dir:
+        return Path(env_dir).resolve()
+    # On Linux production server, check standard system data directory
+    sys_path = Path("/var/lib/moltbook-alpha")
+    if sys_path.is_dir() and os.name != "nt":
+        return sys_path
+    return (BASE_DIR / "data").resolve()
+
+
+DATA_DIR = _resolve_data_dir()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 DB_PATH = DATA_DIR / "moltbook.db"

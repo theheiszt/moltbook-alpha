@@ -65,3 +65,11 @@ def test_demo_keys_enabled_flag(monkeypatch):
 
 def test_canonical_usdc_mint_matches_mainnet():
     assert CANONICAL_USDC_MINT == "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+
+
+def test_resolve_data_dir(monkeypatch, tmp_path):
+    from config import _resolve_data_dir
+    # When MOLTBOOK_DATA_DIR is explicitly provided, it takes highest precedence
+    custom_dir = tmp_path / "custom_data"
+    monkeypatch.setenv("MOLTBOOK_DATA_DIR", str(custom_dir))
+    assert _resolve_data_dir() == custom_dir.resolve()
