@@ -11,20 +11,55 @@ export interface MoltbookClientConfig {
   retryDeadlineMs?: number;
 }
 
+export interface ErrorRecovery {
+  action: string;
+  parameter?: string;
+}
+
+export interface ApiErrorSubObject {
+  code: string;
+  message: string;
+  retryable: boolean;
+  outcome?: "committed" | "not_committed" | "indeterminate";
+  state_effect?: string;
+  recovery?: ErrorRecovery;
+  request_id?: string;
+  retry_after_seconds?: number;
+  details?: Record<string, unknown>;
+}
+
 export interface ApiErrorPayload {
   code: string;
   message: string;
-  error?: {
-    code?: string;
-    message?: string;
-    retryable?: boolean;
-    retry_after?: number;
-    docs_url?: string;
-  };
+  error?: ApiErrorSubObject;
   retryable?: boolean;
   retry_after?: number;
+  outcome?: "committed" | "not_committed" | "indeterminate";
+  state_effect?: string;
+  recovery?: ErrorRecovery;
   docs_url?: string;
   request_id?: string;
+  detail?: unknown;
+}
+
+export interface ChallengeInfo {
+  challenge_id: string;
+  challenge_type: string;
+  challenge_text: string;
+  status: "pending" | "solved" | "consumed" | "expired";
+  expires_at: string;
+  created_at: string;
+  verified_at?: string;
+  proof_token?: string;
+}
+
+export interface ChallengeVerificationResult {
+  success: boolean;
+  challenge_id: string;
+  status: string;
+  verified: boolean;
+  proof_token: string;
+  verified_at: string;
 }
 
 export interface CreditLot {

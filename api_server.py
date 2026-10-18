@@ -24,6 +24,8 @@ from errors import (
     ERROR_REGISTRY,
     ApiError,
     format_error_payload,
+    OperationOutcome,
+    RecoveryAction,
 )
 from dag_tool_parameters import TOOL_DAG_REGISTRY
 
@@ -106,6 +108,8 @@ async def metrics_middleware(request: Request, call_next):
             norm_endpoint = "/v1/errors/:code"
         elif endpoint.startswith("/v1/tools/") and endpoint.endswith("/parameter-graph"):
             norm_endpoint = "/v1/tools/:tool/parameter-graph"
+        elif endpoint.startswith("/v1/challenges/") and endpoint != "/v1/challenges/verify":
+            norm_endpoint = "/v1/challenges/:id"
         elif endpoint.startswith("/v1/witnesses/") and endpoint not in {"/v1/witnesses/public-keys", "/v1/witnesses/verify"}:
             norm_endpoint = "/v1/witnesses/:id"
         elif endpoint in {
@@ -113,6 +117,8 @@ async def metrics_middleware(request: Request, call_next):
             "/metrics",
             "/v1/health",
             "/v1/errors",
+            "/v1/challenges",
+            "/v1/challenges/verify",
             "/v1/tools",
             "/v1/witnesses/public-keys",
             "/v1/witnesses/verify",
@@ -191,6 +197,10 @@ async def api_error_handler(request: Request, exc: ApiError):
         retry_after=exc.retry_after,
         docs_url=exc.docs_url,
         legacy_detail=exc.legacy_detail,
+        outcome=exc.outcome,
+        state_effect=exc.state_effect,
+        recovery_action=exc.recovery_action,
+        recovery=exc.recovery,
     )
     return JSONResponse(status_code=exc.status_code, content=content, headers=headers)
 
@@ -787,6 +797,179 @@ def claim_invoice_credential(invoice_id: str, req: ClaimInvoiceInput, request: R
     }
 
 
+class CreateChallengeInput(BaseModel):
+    challenge_type: Optional[str] = "arithmetic"
+    expiry_seconds: Optional[int] = 120
+
+
+class VerifyChallengeInput(BaseModel):
+    challenge_id: str
+    answer: str
+
+
+@app.post("/v1/challenges")
+def create_challenge(request: Request, req: Optional[CreateChallengeInput] = None):
+    """
+    Creates a new verification challenge with a short TTL (default: 120s).
+    Returns the challenge question and challenge ID without disclosing the expected answer.
+    """
+    client_ip = get_client_ip(request)
+    allowed, retry_after = rate_limiter.is_allowed(f"create_challenge:{client_ip}", limit=30, window_seconds=60)
+    if not allowed:
+        raise ApiError(
+            code=ErrorCode.RATE_LIMITED,
+            status_code=429,
+            retryable=True,
+            retry_after=retry_after,
+            message=f"Rate limit exceeded. Please retry in {retry_after} seconds.",
+        )
+
+    ch_type = (req.challenge_type if req and req.challenge_type else "arithmetic")
+    expiry = (req.expiry_seconds if req and req.expiry_seconds else 120)
+    record = storage.create_verification_challenge(challenge_type=ch_type, expiry_seconds=expiry)
+    return {
+        "success": True,
+        "challenge_id": record["challenge_id"],
+        "challenge_type": record["challenge_type"],
+        "challenge_text": record["challenge_text"],
+        "status": record["status"],
+        "expires_at": record["expires_at"],
+        "created_at": record["created_at"],
+    }
+
+
+@app.get("/v1/challenges/{challenge_id}")
+def get_challenge_status(challenge_id: str, request: Request):
+    """
+    Inspects the status of an existing verification challenge.
+    Never exposes internal secrets or expected answers.
+    """
+    record = storage.get_verification_challenge(challenge_id)
+    if not record:
+        raise ApiError(
+            code=ErrorCode.CHALLENGE_NOT_FOUND,
+            status_code=404,
+            retryable=False,
+            outcome=OperationOutcome.NOT_COMMITTED,
+            state_effect="none",
+            recovery_action=RecoveryAction.REQUEST_NEW_CHALLENGE,
+            message="Verification challenge was not found.",
+        )
+    return {
+        "success": True,
+        "challenge_id": record["challenge_id"],
+        "challenge_type": record["challenge_type"],
+        "challenge_text": record["challenge_text"],
+        "status": record["status"],
+        "expires_at": record["expires_at"],
+        "created_at": record["created_at"],
+        "verified_at": record.get("verified_at"),
+        "proof_token": record.get("proof_token"),
+    }
+
+
+@app.post("/v1/challenges/verify")
+def verify_challenge(req: VerifyChallengeInput, request: Request):
+    """
+    Submits an answer for a verification challenge.
+    Evaluates against atomic SQLite state machine:
+    - If challenge does not exist -> 404 CHALLENGE_NOT_FOUND
+    - If challenge is expired -> 410 CHALLENGE_EXPIRED
+    - If challenge is already consumed -> 410 CHALLENGE_CONSUMED
+    - If challenge was already answered -> 409 CHALLENGE_ALREADY_ANSWERED (returns existing proof)
+    - If answer is wrong -> consumes challenge, returns 400 WRONG_ANSWER
+    - If answer is correct -> transitions to solved, returns 200 with proof token
+    """
+    client_ip = get_client_ip(request)
+    allowed, retry_after = rate_limiter.is_allowed(f"verify_challenge:{client_ip}", limit=30, window_seconds=60)
+    if not allowed:
+        raise ApiError(
+            code=ErrorCode.RATE_LIMITED,
+            status_code=429,
+            retryable=True,
+            retry_after=retry_after,
+            message=f"Rate limit exceeded. Please retry in {retry_after} seconds.",
+        )
+
+    res = storage.verify_challenge_answer(req.challenge_id, req.answer)
+    state = res.get("state")
+
+    if state == "not_found":
+        raise ApiError(
+            code=ErrorCode.CHALLENGE_NOT_FOUND,
+            status_code=404,
+            retryable=False,
+            outcome=OperationOutcome.NOT_COMMITTED,
+            state_effect="none",
+            recovery_action=RecoveryAction.REQUEST_NEW_CHALLENGE,
+            message="Verification challenge was not found.",
+        )
+    elif state == "expired":
+        raise ApiError(
+            code=ErrorCode.CHALLENGE_EXPIRED,
+            status_code=410,
+            retryable=False,
+            outcome=OperationOutcome.NOT_COMMITTED,
+            state_effect="none",
+            recovery_action=RecoveryAction.REQUEST_NEW_CHALLENGE,
+            message="Verification challenge has expired past its validity window.",
+        )
+    elif state == "consumed":
+        raise ApiError(
+            code=ErrorCode.CHALLENGE_CONSUMED,
+            status_code=410,
+            retryable=False,
+            outcome=OperationOutcome.NOT_COMMITTED,
+            state_effect="challenge_consumed",
+            recovery_action=RecoveryAction.REQUEST_NEW_CHALLENGE,
+            message="This challenge has already been consumed by a prior failed attempt and can no longer be used.",
+        )
+    elif state == "wrong_answer":
+        storage.log_audit_event(
+            "challenge_wrong_answer",
+            f"Challenge {req.challenge_id} failed with incorrect answer and was consumed.",
+            ip_address=client_ip,
+        )
+        raise ApiError(
+            code=ErrorCode.WRONG_ANSWER,
+            status_code=400,
+            retryable=False,
+            outcome=OperationOutcome.NOT_COMMITTED,
+            state_effect="challenge_consumed",
+            recovery_action=RecoveryAction.REQUEST_NEW_CHALLENGE,
+            message="Submitted challenge answer is incorrect. The challenge has been consumed and cannot be reused.",
+        )
+    elif state == "already_answered":
+        raise ApiError(
+            code=ErrorCode.CHALLENGE_ALREADY_ANSWERED,
+            status_code=409,
+            retryable=False,
+            outcome=OperationOutcome.COMMITTED,
+            state_effect="none",
+            recovery_action=RecoveryAction.RETRIEVE_EXISTING_RESULT,
+            message="This challenge was already successfully solved. The existing verification result can be retrieved.",
+            details={
+                "challenge_id": res["challenge_id"],
+                "proof_token": res.get("proof_token"),
+                "verified_at": res.get("verified_at"),
+            },
+        )
+
+    storage.log_audit_event(
+        "challenge_verified",
+        f"Challenge {req.challenge_id} verified successfully. Issued proof {res['proof_token']}.",
+        ip_address=client_ip,
+    )
+    return {
+        "success": True,
+        "challenge_id": res["challenge_id"],
+        "status": "solved",
+        "verified": True,
+        "proof_token": res["proof_token"],
+        "verified_at": res["verified_at"],
+    }
+
+
 @app.post("/v1/payments/verify-solana")
 def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: Response):
     client_ip = get_client_ip(request)
@@ -809,9 +992,48 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
     sig = req.transaction_signature.strip()
     cfg = load_payment_config()
 
-    # Replay check: if already redeemed, return existing metadata
+    # Replay check: if already redeemed, verify invoice and account binding
     existing_redemption = storage.get_payment_redemption(sig)
     if existing_redemption:
+        # Cross-invoice replay prevention
+        if req.invoice_id and existing_redemption.get("invoice_id") and existing_redemption["invoice_id"] != req.invoice_id:
+            storage.log_audit_event(
+                "payment_cross_invoice_replay_rejected",
+                f"Signature {sig[:16]}... already redeemed for invoice {existing_redemption['invoice_id']}, rejected for invoice {req.invoice_id}",
+                ip_address=client_ip,
+            )
+            raise ApiError(
+                code=ErrorCode.DUPLICATE_PAYMENT_REUSE,
+                message=f"Transaction signature was already redeemed for a different invoice ({existing_redemption['invoice_id']}).",
+                status_code=409,
+                outcome=OperationOutcome.NOT_COMMITTED,
+                state_effect="none",
+                recovery_action=RecoveryAction.CREATE_NEW_INVOICE,
+                details={
+                    "tx_signature": sig,
+                    "existing_invoice_id": existing_redemption["invoice_id"],
+                    "requested_invoice_id": req.invoice_id,
+                },
+            )
+
+        # Cross-account replay prevention
+        if req.invoice_id:
+            inv = storage.get_invoice(req.invoice_id)
+            if inv and inv.get("target_key_hash") and existing_redemption.get("key_hash") and inv["target_key_hash"] != existing_redemption["key_hash"]:
+                storage.log_audit_event(
+                    "payment_cross_account_replay_rejected",
+                    f"Signature {sig[:16]}... already redeemed for different account, rejected for invoice {req.invoice_id}",
+                    ip_address=client_ip,
+                )
+                raise ApiError(
+                    code=ErrorCode.DUPLICATE_PAYMENT_REUSE,
+                    message="Transaction signature was already redeemed for a different account.",
+                    status_code=409,
+                    outcome=OperationOutcome.NOT_COMMITTED,
+                    state_effect="none",
+                    recovery_action=RecoveryAction.CREATE_NEW_INVOICE,
+                )
+
         storage.log_audit_event(
             "payment_replay_attempt",
             f"Replay detected for sig={sig[:16]}..., returning existing key {existing_redemption['key_prefix']}",
@@ -823,6 +1045,7 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
             "key_prefix": existing_redemption["key_prefix"],
             "tier": existing_redemption["tier"],
             "credits": existing_redemption["remaining_credits"],
+            "invoice_id": existing_redemption.get("invoice_id") or req.invoice_id,
         }
 
     # Resolve invoice
@@ -830,9 +1053,13 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
     if req.invoice_id:
         invoice = storage.get_invoice(req.invoice_id)
         if not invoice:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Invoice '{req.invoice_id}' not found.",
+            raise ApiError(
+                code=ErrorCode.RESOURCE_NOT_FOUND,
+                status_code=404,
+                message=f"Invoice '{req.invoice_id}' not found.",
+                outcome=OperationOutcome.NOT_COMMITTED,
+                state_effect="none",
+                recovery_action=RecoveryAction.CREATE_NEW_INVOICE,
             )
         if invoice["status"] == "fulfilled":
             redemption = storage.get_payment_redemption(invoice.get("tx_signature") or sig)
@@ -842,30 +1069,43 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
                 "key_prefix": redemption["key_prefix"] if redemption else "",
                 "tier": invoice["tier"],
                 "credits": invoice["credits"],
+                "invoice_id": invoice["invoice_id"],
             }
         if invoice["status"] == "expired":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invoice '{req.invoice_id}' has expired. Please create a new invoice.",
+            raise ApiError(
+                code=ErrorCode.INVOICE_EXPIRED,
+                status_code=400,
+                message=f"Invoice '{req.invoice_id}' has expired. Please create a new invoice.",
+                outcome=OperationOutcome.NOT_COMMITTED,
+                state_effect="none",
+                recovery_action=RecoveryAction.CREATE_NEW_INVOICE,
             )
         now_iso = datetime.now(timezone.utc).isoformat()
         if now_iso > invoice["expires_at"]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invoice '{req.invoice_id}' expired at {invoice['expires_at']}.",
+            raise ApiError(
+                code=ErrorCode.INVOICE_EXPIRED,
+                status_code=400,
+                message=f"Invoice '{req.invoice_id}' expired at {invoice['expires_at']}.",
+                outcome=OperationOutcome.NOT_COMMITTED,
+                state_effect="none",
+                recovery_action=RecoveryAction.CREATE_NEW_INVOICE,
             )
     elif req.expected_reference:
         invoice = storage.get_invoice_by_reference(req.expected_reference)
 
     if not invoice:
         # Reject unbound payment attempts to prevent front-running
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
+        raise ApiError(
+            code=ErrorCode.UNBOUND_PAYMENT_REJECTED,
+            status_code=400,
+            message=(
                 "Payment verification requires an active invoice. Unbound payments without an "
                 "invoice ID or invoice reference are rejected to protect against transaction front-running. "
                 "Please create an invoice via POST /v1/payments/invoice before submitting payment."
             ),
+            outcome=OperationOutcome.NOT_COMMITTED,
+            state_effect="none",
+            recovery_action=RecoveryAction.CREATE_NEW_INVOICE,
         )
 
     expected_ref = invoice["reference"]
@@ -891,9 +1131,14 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
             f"Verification rejected for sig={sig[:16]}...: {e!s}",
             ip_address=client_ip,
         )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Payment verification failed: {e!s}",
+        raise ApiError(
+            code=ErrorCode.PAYMENT_VERIFICATION_FAILED,
+            status_code=400,
+            retryable=False,
+            outcome=OperationOutcome.NOT_COMMITTED,
+            state_effect="none",
+            recovery_action=RecoveryAction.CREATE_NEW_INVOICE,
+            message=f"Payment verification failed: {e!s}",
         ) from e
     except RPCError as e:
         record_payment("UNKNOWN", target_tier, "rpc_error")
@@ -902,21 +1147,37 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
             f"RPC failure verifying sig={sig[:16]}...: {e!s}",
             ip_address=client_ip,
         )
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Solana RPC communication error: {e!s}",
+        raise ApiError(
+            code=ErrorCode.RPC_GATEWAY_ERROR,
+            status_code=502,
+            retryable=True,
+            retry_after=5,
+            outcome=OperationOutcome.INDETERMINATE,
+            state_effect="none",
+            recovery_action=RecoveryAction.POLL_PAYMENT_STATUS,
+            message=f"Solana RPC communication error: {e!s}",
         ) from e
 
     # Verify payment matches invoice asset and amount
     if payment.asset != invoice["asset"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Payment asset '{payment.asset}' does not match invoice expected asset '{invoice['asset']}'.",
+        raise ApiError(
+            code=ErrorCode.PAYMENT_VERIFICATION_FAILED,
+            status_code=400,
+            retryable=False,
+            outcome=OperationOutcome.NOT_COMMITTED,
+            state_effect="none",
+            recovery_action=RecoveryAction.CREATE_NEW_INVOICE,
+            message=f"Payment asset '{payment.asset}' does not match invoice expected asset '{invoice['asset']}'.",
         )
     if payment.amount_raw < invoice["amount_raw"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Payment amount ({payment.amount_raw}) is below invoice required amount ({invoice['amount_raw']}).",
+        raise ApiError(
+            code=ErrorCode.PAYMENT_VERIFICATION_FAILED,
+            status_code=400,
+            retryable=False,
+            outcome=OperationOutcome.NOT_COMMITTED,
+            state_effect="none",
+            recovery_action=RecoveryAction.CREATE_NEW_INVOICE,
+            message=f"Payment amount ({payment.amount_raw}) is below invoice required amount ({invoice['amount_raw']}).",
         )
 
     # Atomic fulfillment and redemption
@@ -1466,7 +1727,8 @@ def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None
 def get_error_registry():
     """
     Returns the complete machine-readable error code registry,
-    including HTTP status mappings, retryability semantics, and documentation URLs.
+    including HTTP status mappings, retryability semantics, operation outcomes,
+    state effects, recovery actions, and documentation URLs.
     """
     return {
         "version": "1.0.0",
@@ -1476,6 +1738,9 @@ def get_error_registry():
                 "code": v.code.value,
                 "status_code": v.status_code,
                 "retryable": v.retryable,
+                "outcome": v.outcome.value if isinstance(v.outcome, OperationOutcome) else str(v.outcome),
+                "state_effect": v.state_effect,
+                "recovery_action": v.recovery_action.value if isinstance(v.recovery_action, RecoveryAction) else str(v.recovery_action),
                 "default_retry_after": v.default_retry_after,
                 "default_message": v.default_message,
                 "description": v.description,
@@ -1502,6 +1767,9 @@ def get_error_definition(code: str):
         "code": defn.code.value,
         "status_code": defn.status_code,
         "retryable": defn.retryable,
+        "outcome": defn.outcome.value if isinstance(defn.outcome, OperationOutcome) else str(defn.outcome),
+        "state_effect": defn.state_effect,
+        "recovery_action": defn.recovery_action.value if isinstance(defn.recovery_action, RecoveryAction) else str(defn.recovery_action),
         "default_retry_after": defn.default_retry_after,
         "default_message": defn.default_message,
         "description": defn.description,

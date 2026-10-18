@@ -84,6 +84,20 @@ def decrypt_key_envelope(envelope_b64: str, secret: str) -> str:
     return plaintext.decode("utf-8")
 
 
+def normalize_challenge_answer(ans: str) -> str:
+    """
+    Normalizes challenge answer string for robust deterministic comparison.
+    Converts numbers to canonical two-decimal format (e.g. 46, 46.0, 46.00 -> '46.00').
+    Trims whitespace and lowercases string values.
+    """
+    cleaned = str(ans).strip().lower()
+    try:
+        val = float(cleaned)
+        return f"{val:.2f}"
+    except (ValueError, TypeError):
+        return cleaned
+
+
 class StorageManager:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path).resolve()
@@ -281,6 +295,21 @@ class StorageManager:
                         FOREIGN KEY(key_hash) REFERENCES api_keys(key_hash)
                     );
                     CREATE INDEX IF NOT EXISTS idx_threshold_alerts_key ON quota_threshold_alerts(key_hash);
+
+                    CREATE TABLE IF NOT EXISTS verification_challenges (
+                        challenge_id TEXT PRIMARY KEY,
+                        challenge_type TEXT NOT NULL,
+                        challenge_text TEXT NOT NULL,
+                        expected_answer_hash TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        attempts INTEGER NOT NULL DEFAULT 0,
+                        expires_at TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        verified_at TEXT,
+                        proof_token TEXT
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_challenges_status ON verification_challenges(status);
+                    CREATE INDEX IF NOT EXISTS idx_challenges_expires ON verification_challenges(expires_at);
                 """)
 
                 cur = conn.cursor()
@@ -1849,7 +1878,7 @@ class StorageManager:
             cur = conn.cursor()
             cur.execute(
                 """
-                SELECT p.tx_signature, p.asset, p.tier, p.credits_granted, p.redeemed_at,
+                SELECT p.tx_signature, p.key_hash, p.asset, p.tier, p.credits_granted, p.redeemed_at,
                        p.invoice_id, p.payer_wallet, p.reference, p.slot, p.block_time,
                        k.key_prefix, k.credits, k.is_active
                 FROM payment_redemptions p
@@ -1864,6 +1893,7 @@ class StorageManager:
             keys = row.keys()
             return {
                 "tx_signature": row["tx_signature"],
+                "key_hash": row["key_hash"],
                 "asset": row["asset"],
                 "tier": row["tier"],
                 "credits_granted": row["credits_granted"],
@@ -1877,6 +1907,192 @@ class StorageManager:
                 "slot": row["slot"] if "slot" in keys else None,
                 "block_time": row["block_time"] if "block_time" in keys else None,
             }
+
+    def create_verification_challenge(
+        self,
+        challenge_type: str = "arithmetic",
+        expiry_seconds: int = 120,
+        challenge_text: Optional[str] = None,
+        expected_answer: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Creates a new verification challenge with a short TTL (default: 120s).
+        Stores a secure SHA-256 hash of the normalized answer.
+        Never persists or returns the plaintext solution.
+        """
+        challenge_id = f"ch_{secrets.token_hex(12)}"
+        now = self.get_now()
+        created_at_iso = now.isoformat()
+        expires_at_iso = (now + timedelta(seconds=expiry_seconds)).isoformat()
+
+        if challenge_text is None or expected_answer is None:
+            a = secrets.randbelow(40) + 10
+            b = secrets.randbelow(30) + 5
+            op = secrets.choice(["+", "-"])
+            if op == "+":
+                ans_val = a + b
+                text = f"Calculate {a} plus {b} to verify."
+            else:
+                if a < b:
+                    a, b = b, a
+                ans_val = a - b
+                text = f"Calculate {a} minus {b} to verify."
+            expected_answer = f"{ans_val:.2f}"
+            challenge_text = text
+
+        norm_ans = normalize_challenge_answer(str(expected_answer))
+        ans_hash = hashlib.sha256(norm_ans.encode("utf-8")).hexdigest()
+
+        with self._lock, self.connection() as conn:
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO verification_challenges (
+                        challenge_id, challenge_type, challenge_text, expected_answer_hash,
+                        status, attempts, expires_at, created_at
+                    ) VALUES (?, ?, ?, ?, 'pending', 0, ?, ?)
+                    """,
+                    (challenge_id, challenge_type, challenge_text, ans_hash, expires_at_iso, created_at_iso)
+                )
+
+        return {
+            "challenge_id": challenge_id,
+            "challenge_type": challenge_type,
+            "challenge_text": challenge_text,
+            "status": "pending",
+            "expires_at": expires_at_iso,
+            "created_at": created_at_iso,
+        }
+
+    def get_verification_challenge(self, challenge_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieves verification challenge state. Excludes expected answer and hash.
+        Checks TTL lazily.
+        """
+        with self._lock, self.connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT challenge_id, challenge_type, challenge_text, status,
+                       attempts, expires_at, created_at, verified_at, proof_token
+                FROM verification_challenges
+                WHERE challenge_id = ?
+                """,
+                (challenge_id.strip(),)
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            res = dict(row)
+            now_iso = self.get_now_iso()
+            if res["status"] == "pending" and now_iso > res["expires_at"]:
+                res["status"] = "expired"
+            return res
+
+    def verify_challenge_answer(self, challenge_id: str, submitted_answer: str) -> Dict[str, Any]:
+        """
+        Atomically evaluates challenge answer against the state machine:
+        - If not found -> state: 'not_found'
+        - If expired or past TTL -> state: 'expired'
+        - If already solved -> state: 'already_answered' with existing proof_token
+        - If already consumed -> state: 'consumed'
+        - If pending and answer is incorrect -> transitions to 'consumed', state: 'wrong_answer'
+        - If pending and answer is correct -> transitions to 'solved', state: 'solved' with new proof_token
+        """
+        clean_cid = challenge_id.strip()
+        now_iso = self.get_now_iso()
+
+        with self._lock, self.connection() as conn:
+            with conn:
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    SELECT challenge_id, challenge_type, challenge_text, expected_answer_hash,
+                           status, attempts, expires_at, created_at, verified_at, proof_token
+                    FROM verification_challenges
+                    WHERE challenge_id = ?
+                    """,
+                    (clean_cid,)
+                )
+                row = cur.fetchone()
+                if not row:
+                    return {"state": "not_found", "challenge_id": clean_cid}
+
+                # Check expiry
+                if row["status"] == "expired" or now_iso > row["expires_at"]:
+                    if row["status"] == "pending":
+                        cur.execute("UPDATE verification_challenges SET status = 'expired' WHERE challenge_id = ?", (clean_cid,))
+                    return {
+                        "state": "expired",
+                        "challenge_id": clean_cid,
+                        "expires_at": row["expires_at"],
+                    }
+
+                # Check already answered
+                if row["status"] == "solved":
+                    return {
+                        "state": "already_answered",
+                        "challenge_id": clean_cid,
+                        "proof_token": row["proof_token"],
+                        "verified_at": row["verified_at"],
+                    }
+
+                # Check already consumed
+                if row["status"] == "consumed":
+                    return {
+                        "state": "consumed",
+                        "challenge_id": clean_cid,
+                    }
+
+                # Challenge is pending: verify answer
+                norm_sub = normalize_challenge_answer(submitted_answer)
+                sub_hash = hashlib.sha256(norm_sub.encode("utf-8")).hexdigest()
+                is_correct = hmac.compare_digest(row["expected_answer_hash"], sub_hash)
+
+                if not is_correct:
+                    cur.execute(
+                        """
+                        UPDATE verification_challenges
+                        SET status = 'consumed', attempts = attempts + 1
+                        WHERE challenge_id = ? AND status = 'pending'
+                        """,
+                        (clean_cid,)
+                    )
+                    return {
+                        "state": "wrong_answer",
+                        "challenge_id": clean_cid,
+                    }
+
+                proof_token = f"proof_{secrets.token_hex(16)}"
+                cur.execute(
+                    """
+                    UPDATE verification_challenges
+                    SET status = 'solved', attempts = attempts + 1, verified_at = ?, proof_token = ?
+                    WHERE challenge_id = ? AND status = 'pending'
+                    """,
+                    (now_iso, proof_token, clean_cid)
+                )
+                if cur.rowcount == 0:
+                    cur.execute(
+                        "SELECT status, verified_at, proof_token FROM verification_challenges WHERE challenge_id = ?",
+                        (clean_cid,)
+                    )
+                    latest = cur.fetchone()
+                    if latest and latest["status"] == "solved":
+                        return {
+                            "state": "already_answered",
+                            "challenge_id": clean_cid,
+                            "proof_token": latest["proof_token"],
+                            "verified_at": latest["verified_at"],
+                        }
+                    return {"state": "consumed", "challenge_id": clean_cid}
+
+                return {
+                    "state": "solved",
+                    "challenge_id": clean_cid,
+                    "proof_token": proof_token,
+                    "verified_at": now_iso,
+                }
 
 
     def migrate_from_json(self, json_path: Path):

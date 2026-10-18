@@ -1,6 +1,7 @@
 """
 Moltbook Alpha Client SDK — Structured Exceptions.
-Maps machine-readable error responses into typed Python exceptions with retry semantics.
+Maps machine-readable error responses into typed Python exceptions with deterministic retry guidance,
+operation outcome semantics, state effects, and recovery actions.
 """
 
 from typing import Optional, Dict, Any
@@ -19,6 +20,9 @@ class MoltbookApiError(Exception):
         retry_after: Optional[int] = None,
         request_id: Optional[str] = None,
         docs_url: Optional[str] = None,
+        outcome: str = "not_committed",
+        state_effect: str = "none",
+        recovery: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(f"[{code}] {message} (status: {status_code}, req_id: {request_id})")
         self.code = code
@@ -29,6 +33,10 @@ class MoltbookApiError(Exception):
         self.retry_after = retry_after
         self.request_id = request_id
         self.docs_url = docs_url
+        self.outcome = outcome
+        self.state_effect = state_effect
+        self.recovery = recovery or {"action": "inspect_parameters"}
+        self.recovery_action = self.recovery.get("action", "inspect_parameters")
 
 
 class AuthenticationRequiredError(MoltbookApiError):
@@ -83,6 +91,38 @@ class InvoiceExpiredError(MoltbookApiError):
     pass
 
 
+class InvoiceAlreadyFulfilledError(MoltbookApiError):
+    pass
+
+
+class DuplicatePaymentReuseError(MoltbookApiError):
+    pass
+
+
+class PaymentVerificationFailedError(MoltbookApiError):
+    pass
+
+
+class WrongAnswerError(MoltbookApiError):
+    pass
+
+
+class ChallengeExpiredError(MoltbookApiError):
+    pass
+
+
+class ChallengeConsumedError(MoltbookApiError):
+    pass
+
+
+class ChallengeAlreadyAnsweredError(MoltbookApiError):
+    pass
+
+
+class ChallengeNotFoundError(MoltbookApiError):
+    pass
+
+
 ERROR_CODE_MAP = {
     "AUTHENTICATION_REQUIRED": AuthenticationRequiredError,
     "INVALID_API_KEY": InvalidApiKeyError,
@@ -98,6 +138,14 @@ ERROR_CODE_MAP = {
     "VALIDATION_ERROR": ValidationError,
     "UNBOUND_PAYMENT_REJECTED": UnboundPaymentError,
     "INVOICE_EXPIRED": InvoiceExpiredError,
+    "INVOICE_ALREADY_FULFILLED": InvoiceAlreadyFulfilledError,
+    "DUPLICATE_PAYMENT_REUSE": DuplicatePaymentReuseError,
+    "PAYMENT_VERIFICATION_FAILED": PaymentVerificationFailedError,
+    "WRONG_ANSWER": WrongAnswerError,
+    "CHALLENGE_EXPIRED": ChallengeExpiredError,
+    "CHALLENGE_CONSUMED": ChallengeConsumedError,
+    "CHALLENGE_ALREADY_ANSWERED": ChallengeAlreadyAnsweredError,
+    "CHALLENGE_NOT_FOUND": ChallengeNotFoundError,
 }
 
 
@@ -111,6 +159,9 @@ def raise_for_error_payload(status_code: int, payload: Dict[str, Any], request_i
     retry_after = payload.get("retry_after") or payload.get("retry_after_seconds") or nested_err.get("retry_after_seconds")
     req_id = payload.get("request_id") or request_id
     docs_url = payload.get("docs_url")
+    outcome = payload.get("outcome") or nested_err.get("outcome") or "not_committed"
+    state_effect = payload.get("state_effect") or nested_err.get("state_effect") or "none"
+    recovery = payload.get("recovery") or nested_err.get("recovery") or {"action": "inspect_parameters"}
 
     exc_class = ERROR_CODE_MAP.get(code, MoltbookApiError)
     raise exc_class(
@@ -122,4 +173,7 @@ def raise_for_error_payload(status_code: int, payload: Dict[str, Any], request_i
         retry_after=retry_after,
         request_id=req_id,
         docs_url=docs_url,
+        outcome=outcome,
+        state_effect=state_effect,
+        recovery=recovery,
     )

@@ -7,6 +7,7 @@
 import {
   MoltbookClientConfig,
   ApiErrorPayload,
+  ErrorRecovery,
   QuotaInfo,
   IntelSignal,
   IntelBriefing,
@@ -14,6 +15,8 @@ import {
   PaymentVerificationResult,
   StateWitnessRecord,
   ToolDAGGraph,
+  ChallengeInfo,
+  ChallengeVerificationResult,
 } from "./types.js";
 import { verifyWitnessOffline } from "./crypto.js";
 
@@ -24,6 +27,10 @@ export class MoltbookApiError extends Error {
   public retryAfter?: number;
   public docsUrl?: string;
   public requestId?: string;
+  public outcome: "committed" | "not_committed" | "indeterminate";
+  public stateEffect: string;
+  public recoveryAction: string;
+  public recovery?: ErrorRecovery;
 
   constructor(payload: ApiErrorPayload, statusCode: number = 500) {
     const msg = payload.message || payload.error?.message || payload.code || "Unknown Moltbook API error";
@@ -32,9 +39,13 @@ export class MoltbookApiError extends Error {
     this.code = payload.code || payload.error?.code || "INTERNAL_ERROR";
     this.statusCode = statusCode;
     this.retryable = Boolean(payload.retryable ?? payload.error?.retryable ?? false);
-    this.retryAfter = payload.retry_after ?? payload.error?.retry_after;
-    this.docsUrl = payload.docs_url ?? payload.error?.docs_url;
-    this.requestId = payload.request_id;
+    this.retryAfter = payload.retry_after ?? payload.error?.retry_after_seconds;
+    this.docsUrl = payload.docs_url;
+    this.requestId = payload.request_id || payload.error?.request_id;
+    this.outcome = payload.outcome ?? payload.error?.outcome ?? "not_committed";
+    this.stateEffect = payload.state_effect ?? payload.error?.state_effect ?? "none";
+    this.recovery = payload.recovery ?? payload.error?.recovery;
+    this.recoveryAction = this.recovery?.action || "inspect_parameters";
   }
 }
 
@@ -252,6 +263,31 @@ export class MoltbookIntelClient {
     return this._request<PaymentVerificationResult>("/v1/payments/verify-solana", {
       method: "POST",
       body: payload,
+    });
+  }
+
+  // --- Verification Challenges ---
+  public async createChallenge(options: { challengeType?: string; expirySeconds?: number } = {}): Promise<ChallengeInfo> {
+    return this._request<ChallengeInfo>("/v1/challenges", {
+      method: "POST",
+      body: {
+        challenge_type: options.challengeType || "arithmetic",
+        expiry_seconds: options.expirySeconds || 120,
+      },
+    });
+  }
+
+  public async getChallenge(challengeId: string): Promise<ChallengeInfo> {
+    return this._request<ChallengeInfo>(`/v1/challenges/${encodeURIComponent(challengeId)}`);
+  }
+
+  public async verifyChallenge(challengeId: string, answer: string): Promise<ChallengeVerificationResult> {
+    return this._request<ChallengeVerificationResult>("/v1/challenges/verify", {
+      method: "POST",
+      body: {
+        challenge_id: challengeId,
+        answer,
+      },
     });
   }
 

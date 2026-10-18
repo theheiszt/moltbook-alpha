@@ -100,16 +100,36 @@ describe("@moltbook/intel-sdk — TypeScript / Node SDK Tests", () => {
 
     const err = new MoltbookApiError(
       {
-        code: "PAYMENT_REQUIRED",
-        message: "Credit quota exhausted",
+        error: {
+          code: "CHALLENGE_ALREADY_CONSUMED",
+          message: "This challenge can no longer be used.",
+          retryable: false,
+          outcome: "not_committed",
+          state_effect: "challenge_consumed",
+          recovery: {
+            action: "request_new_challenge",
+          },
+          request_id: "req_ch_001",
+        },
+        code: "CHALLENGE_ALREADY_CONSUMED",
+        message: "This challenge can no longer be used.",
         retryable: false,
-        request_id: "req_err_1",
+        outcome: "not_committed",
+        state_effect: "challenge_consumed",
+        recovery: {
+          action: "request_new_challenge",
+        },
+        request_id: "req_ch_001",
       },
-      402
+      410
     );
-    assert.equal(err.code, "PAYMENT_REQUIRED");
-    assert.equal(err.statusCode, 402);
+    assert.equal(err.code, "CHALLENGE_ALREADY_CONSUMED");
+    assert.equal(err.statusCode, 410);
     assert.equal(err.retryable, false);
-    assert.equal(err.requestId, "req_err_1");
+    assert.equal(err.requestId, "req_ch_001");
+    assert.equal(err.outcome, "not_committed");
+    assert.equal(err.stateEffect, "challenge_consumed");
+    assert.equal(err.recoveryAction, "request_new_challenge");
+    assert.equal(err.recovery?.action, "request_new_challenge");
   });
 });
