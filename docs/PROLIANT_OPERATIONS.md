@@ -119,4 +119,24 @@ ssh -i "$env:USERPROFILE\.ssh\moltbook_proliant" user@10.0.0.190 "sudo /opt/molt
 
 1. **Payment Restrictions:** Production live payments remain **strictly disabled** (`ENABLE_DEMO_KEYS=false`, mock payment settlement active for alpha testing).
 2. **Network Isolation:** API binds exclusively to `127.0.0.1:8080`. External traffic routes only via authenticated private tunnel (e.g. Cloudflare Access).
-3. **Secret Hygiene:** Database passwords, webhook secrets, and private keys are never stored in git or logs. All environment variables reside in `/etc/moltbook-alpha/api.env` (permissions `0600`, owned by `root`).
+3. **Secret Hygiene:** Database passwords, webhook secrets, and private keys are never stored in git or logs. All environment variables reside in `/etc/moltbook-alpha/api.env` (permissions `0640`, owned by `root:moltbook-api`).
+
+---
+
+## 6. Active Systemd Timers & Automated Operations
+
+The following unattended systemd timers are active and managed independently by systemd on the ProLiant:
+
+| Timer Unit | Service Unit | Schedule / Cadence | Running User | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `moltbook-health.timer` | `moltbook-health.service` | Every 5 minutes | `moltbook-api` | Probes `/v1/health`, verifies SQLite integrity, checks disk space, logs to journald. |
+| `moltbook-backup.timer` | `moltbook-backup.service` | Daily at 03:00 UTC | `moltbook-api` | Creates consistent online SQLite backup, generates SHA256 checksum, prunes >14 days. |
+| `moltbook-restore-test.timer` | `moltbook-restore-test.service` | Weekly (Sun 04:00 UTC) | `moltbook-api` | Restores latest snapshot into isolated `/tmp` sandbox; verifies checksum and table schemas. |
+| `moltbook-update-audit.timer` | `moltbook-update-audit.service` | Daily at 05:00 UTC | `root` | Scans for pending Ubuntu security packages without rebooting; logs status to journald. |
+| `moltbook-report.timer` | `moltbook-report.service` | Daily at 06:00 UTC | `moltbook-api` | Generates concise system and service health report to journald. |
+
+### Check Active Timer Schedules
+```powershell
+ssh -i "$env:USERPROFILE\.ssh\moltbook_proliant" user@10.0.0.190 "systemctl list-timers 'moltbook*'"
+```
+
