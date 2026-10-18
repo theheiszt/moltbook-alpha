@@ -3,6 +3,8 @@ Description=Moltbook Alpha Commercial Intelligence API Service
 After=network.target network-online.target
 Wants=network-online.target
 Documentation=https://github.com/moltbook/moltbook-intel
+StartLimitIntervalSec=60s
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -22,8 +24,6 @@ ExecReload=/bin/kill -s HUP $MAINPID
 # Bounded failure recovery (avoids infinite tight crash loops)
 Restart=on-failure
 RestartSec=5s
-StartLimitIntervalSec=60s
-StartLimitBurst=5
 
 # Filesystem & Capability Hardening
 ProtectSystem=strict
