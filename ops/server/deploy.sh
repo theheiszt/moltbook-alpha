@@ -95,7 +95,32 @@ echo "[DEPLOY] Updating current release symlink..."
 ln -sfn "$RELEASE_DIR" "${CURRENT_LINK}.tmp"
 mv -Tf "${CURRENT_LINK}.tmp" "$CURRENT_LINK"
 
-# 6. Reload systemd and restart service
+# 6. Synchronize operational scripts to /usr/local/sbin/moltbook-ops
+if [ -d "${CURRENT_LINK}/ops/server" ]; then
+    echo "[OPS] Syncing operational scripts to /usr/local/sbin/moltbook-ops..."
+    mkdir -p /usr/local/sbin/moltbook-ops
+    cp "${CURRENT_LINK}/ops/server"/*.sh /usr/local/sbin/moltbook-ops/
+    chown root:root /usr/local/sbin/moltbook-ops/*.sh
+    chmod 755 /usr/local/sbin/moltbook-ops/*.sh
+fi
+
+# 7. Install and enable systemd units and timers
+if [ -d "${CURRENT_LINK}/ops/systemd" ]; then
+    echo "[SYSTEMD] Syncing systemd units and timers to /etc/systemd/system/..."
+    cp "${CURRENT_LINK}/ops/systemd"/* /etc/systemd/system/
+    chown root:root /etc/systemd/system/moltbook*
+    chmod 644 /etc/systemd/system/moltbook*
+    systemctl daemon-reload
+    for timer_file in "${CURRENT_LINK}/ops/systemd/"*.timer; do
+        if [ -f "$timer_file" ]; then
+            t_name="$(basename "$timer_file")"
+            echo "[SYSTEMD] Enabling and starting timer: ${t_name}"
+            systemctl enable --now "$t_name" || true
+        fi
+    done
+fi
+
+# 8. Reload systemd and restart service
 if [ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]; then
     echo "[SYSTEMD] Reloading daemon and restarting ${SERVICE_NAME}..."
     systemctl daemon-reload
