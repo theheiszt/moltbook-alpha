@@ -40,6 +40,7 @@ from config import (
     get_trusted_proxies,
 )
 from cryptographic_witness import WitnessManager, WitnessKeyManager
+from intel_engine import IntelEngine
 from storage import StorageManager, StorageError
 from payment_verifier import (
     SolanaPaymentVerifier,
@@ -105,6 +106,9 @@ async def metrics_middleware(request: Request, call_next):
             "/v1/tools",
             "/v1/witnesses/public-keys",
             "/v1/witnesses/verify",
+            "/v1/intel/latest",
+            "/v1/intel/signals",
+            "/v1/intel/refresh",
             "/v1/payments/config",
             "/v1/payments/invoice",
             "/v1/payments/verify-solana",
@@ -279,12 +283,13 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content=content, headers=headers)
 
 
-# Initialize storage, rate limiter, deduplicator, and cryptographic state witness manager
+# Initialize storage, rate limiter, deduplicator, cryptographic state witness manager, and intel engine
 storage = StorageManager(DB_PATH)
 rate_limiter = SlidingWindowRateLimiter()
 in_flight_deduplicator = InFlightDeduplicator()
 witness_key_manager = WitnessKeyManager(WITNESS_KEY_PATH)
 witness_manager = WitnessManager(storage, witness_key_manager)
+intel_engine = IntelEngine(storage)
 
 
 # Run one-time legacy migration from api_keys.json if present (skipping any admin backdoors)
@@ -1349,6 +1354,54 @@ def verify_state_witness(input_data: VerifyWitnessInput):
         input_data.witness,
         public_key_b58=input_data.public_key_base58,
     )
+
+
+@app.get("/v1/intel/latest")
+def get_intel_latest(request: Request, x_api_key: Optional[str] = Header(None)):
+    """
+    Returns the latest synthesized market intelligence briefing,
+    including actionable signals, verified sources, and cryptographic state witness ID.
+    Enforces atomic credit deduction via API key or Bearer token.
+    """
+    return get_latest_briefing(request, x_api_key=x_api_key)
+
+
+@app.get("/v1/intel/signals")
+def get_intel_signals(
+    category: Optional[str] = None,
+    confidence: Optional[str] = None,
+    limit: int = 25,
+):
+    """
+    Queries indexed intelligence signals across security advisories, API changes,
+    operational failures, architecture patterns, and market alpha.
+    """
+    signals = intel_engine.search_signals(
+        category=category,
+        confidence=confidence,
+        limit=min(limit, 100),
+    )
+    return {
+        "count": len(signals),
+        "signals": signals,
+    }
+
+
+@app.post("/v1/intel/refresh")
+def refresh_intelligence():
+    """
+    Triggers an immediate collection and synthesis cycle across all approved sources.
+    """
+    stats = intel_engine.collect_all_sources()
+    signals_count = intel_engine.extract_signals(limit_items=100)
+    briefing = intel_engine.generate_briefing(witness_manager=witness_manager)
+    return {
+        "status": "success",
+        "sources_collected": stats,
+        "signals_extracted": signals_count,
+        "briefing_id": briefing["briefing_id"],
+        "state_witness_id": briefing["state_witness_id"],
+    }
 
 
 if __name__ == "__main__":
