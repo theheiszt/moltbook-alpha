@@ -2,6 +2,32 @@
 
 All notable changes to the Moltbook Alpha commercial API hardening will be documented in this file.
 
+## [1.4.0-error-taxonomy] - 2026-10-18 (`feat/commercial-api-hardening`)
+
+### Agent-Native Error Taxonomy, API Reliability Contract & Architectural Design
+- **Unified Machine-Readable Error Contract:**
+  - Implemented versioned error response schema across all 11 API routes: `code`, `message`, `details`, `retryable`, `retry_after`, `request_id`, `docs_url`, and backwards-compatible `detail`.
+  - Defined comprehensive `ErrorCode` enum and `ERROR_REGISTRY` in `errors.py` with 20 registered codes, status mappings, retryability flags, and documentation links.
+  - Implemented centralized exception handlers for `ApiError`, `HTTPException`, `RequestValidationError` (422), and uncaught `Exception` (500).
+- **Request Tracing & Log Correlation:**
+  - Added `request_tracing_middleware` injecting `request.state.request_id` and stamping `X-Request-ID` on all HTTP responses and error payloads.
+  - Correlated client-side error responses with SQLite `audit_log` events without leaking sensitive internals.
+- **Zero-Breakage Backwards-Compatibility Bridge:**
+  - Preserved legacy `detail` field dynamically: delivers legacy dict structure for tests checking `data["detail"]["error"]`, string for tests checking string containment, and structured Pydantic error list on 422.
+  - 100% pass rate maintained on all existing 165 tests without requiring client modifications.
+- **Programmatic Discovery Endpoints:**
+  - Added `GET /v1/errors`: Exposes the complete machine-readable error taxonomy registry.
+  - Added `GET /v1/errors/{code}`: Returns individual code metadata and retry semantics.
+  - Normalized error routes in Prometheus `metrics_middleware`.
+- **Security Redaction:**
+  - Strict redaction ensures raw Python exception stack traces, filesystem paths, and secrets are never returned to clients; safely logged server-side with unique request correlation IDs.
+- **Automated Verification:**
+  - Added `tests/test_error_handling.py` with 12 comprehensive automated test cases covering schema conformance, request ID propagation, rate limit guidance, transient RPC recovery, 500 error redaction, and backwards compatibility.
+  - Total test suite expanded to **177 passing tests across 18 modules** (0 failures, 0 warnings).
+- **Roadmap Architectural Design Proposals:**
+  - Published `docs/DAG_TOOL_PARAMETERS_DESIGN.md`: Directed acyclic graph parameter modeling with cycle detection, Kahn topological sorting, and staged execution planning.
+  - Published `docs/CRYPTOGRAPHIC_STATE_WITNESSES_DESIGN.md`: Cryptographic state witnesses with RFC 8785 canonicalization, Ed25519 signing, and monotonic hash chains.
+
 ## [1.3.0-credit-hardening] - 2026-10-18 (`feat/commercial-api-hardening`)
 
 ### Commercial Entitlements, 30-Day Premium Lifecycle & 90-Day Credit Lots

@@ -7,12 +7,23 @@ with ACID transactional SQLite storage, zero backdoors, rate limiting, and fail-
 import os
 import ipaddress
 import secrets
+import re
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from fastapi import FastAPI, Header, HTTPException, Request, Response, status
-from fastapi.responses import HTMLResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, field_validator
 import uvicorn
+
+from errors import (
+    DOCS_BASE_URL,
+    ErrorCode,
+    ERROR_REGISTRY,
+    ApiError,
+    format_error_payload,
+)
 
 from config import (
     DB_PATH,
@@ -51,6 +62,18 @@ app = FastAPI(
 
 
 @app.middleware("http")
+async def request_tracing_middleware(request: Request, call_next):
+    req_id = request.headers.get("x-request-id")
+    if not req_id or not re.match(r"^[a-zA-Z0-9_\-\.]{8,64}$", req_id):
+        req_id = f"req_{secrets.token_hex(8)}"
+    request.state.request_id = req_id
+
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = req_id
+    return response
+
+
+@app.middleware("http")
 async def metrics_middleware(request: Request, call_next):
     status_code = 500
     try:
@@ -65,10 +88,13 @@ async def metrics_middleware(request: Request, call_next):
             norm_endpoint = "/v1/payments/invoice/:id/claim"
         elif endpoint.startswith("/v1/payments/invoice/"):
             norm_endpoint = "/v1/payments/invoice/:id"
+        elif endpoint.startswith("/v1/errors/"):
+            norm_endpoint = "/v1/errors/:code"
         elif endpoint in {
             "/",
             "/metrics",
             "/v1/health",
+            "/v1/errors",
             "/v1/payments/config",
             "/v1/payments/invoice",
             "/v1/payments/verify-solana",
@@ -81,6 +107,166 @@ async def metrics_middleware(request: Request, call_next):
         else:
             norm_endpoint = "unmatched_route"
         record_request(norm_endpoint, request.method, status_code)
+
+
+@app.exception_handler(ApiError)
+async def api_error_handler(request: Request, exc: ApiError):
+    req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+    headers = dict(exc.headers)
+    headers["X-Request-ID"] = req_id
+    if exc.retry_after is not None:
+        headers["Retry-After"] = str(exc.retry_after)
+
+    content = format_error_payload(
+        code=exc.code,
+        message=exc.message,
+        request_id=req_id,
+        status_code=exc.status_code,
+        details=exc.details,
+        retryable=exc.retryable,
+        retry_after=exc.retry_after,
+        docs_url=exc.docs_url,
+        legacy_detail=exc.legacy_detail,
+    )
+    return JSONResponse(status_code=exc.status_code, content=content, headers=headers)
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+    headers = dict(exc.headers or {})
+    headers["X-Request-ID"] = req_id
+
+    status_code = exc.status_code
+    detail = exc.detail
+    path = request.url.path
+
+    retry_after = None
+    if "Retry-After" in headers:
+        try:
+            retry_after = int(headers["Retry-After"])
+        except (ValueError, TypeError):
+            pass
+
+    details = detail if isinstance(detail, dict) else None
+    if isinstance(detail, dict):
+        msg = detail.get("message") or detail.get("error") or "An error occurred."
+    else:
+        msg = str(detail)
+
+    if status_code == 401:
+        if path == "/metrics":
+            code = ErrorCode.UNAUTHORIZED_METRICS
+        elif "webhook" in path:
+            code = ErrorCode.UNAUTHORIZED_WEBHOOK
+        else:
+            code = ErrorCode.AUTHENTICATION_REQUIRED
+    elif status_code == 402:
+        if isinstance(detail, dict) and "entitlement" in str(detail.get("error", "")).lower():
+            code = ErrorCode.ENTITLEMENT_EXPIRED
+        elif "exhausted" in str(detail).lower():
+            code = ErrorCode.CREDITS_EXHAUSTED
+        else:
+            code = ErrorCode.PAYMENT_REQUIRED
+    elif status_code == 403:
+        if "revoked" in str(detail).lower():
+            code = ErrorCode.API_KEY_REVOKED
+        elif "demo" in str(detail).lower():
+            code = ErrorCode.FEATURE_DISABLED
+        else:
+            code = ErrorCode.INVALID_API_KEY
+    elif status_code == 404:
+        code = ErrorCode.RESOURCE_NOT_FOUND
+    elif status_code == 429:
+        code = ErrorCode.RATE_LIMIT_EXCEEDED
+    elif status_code == 502:
+        code = ErrorCode.RPC_GATEWAY_ERROR
+        if retry_after is None:
+            retry_after = 5
+    elif status_code == 503:
+        code = ErrorCode.DATABASE_UNAVAILABLE
+        if retry_after is None:
+            retry_after = 10
+    elif status_code == 400:
+        d_lower = str(detail).lower()
+        if "unbound" in d_lower or "active invoice" in d_lower:
+            code = ErrorCode.UNBOUND_PAYMENT_REJECTED
+        elif "expired" in d_lower:
+            code = ErrorCode.INVOICE_EXPIRED
+        elif "already fulfilled" in d_lower:
+            code = ErrorCode.INVOICE_ALREADY_FULFILLED
+        elif "claim secret" in d_lower:
+            code = ErrorCode.INVALID_CLAIM_SECRET
+        else:
+            code = ErrorCode.PAYMENT_VERIFICATION_FAILED
+    elif status_code == 422:
+        code = ErrorCode.VALIDATION_ERROR
+    else:
+        code = ErrorCode.INTERNAL_SERVER_ERROR
+
+    content = format_error_payload(
+        code=code.value,
+        message=msg,
+        request_id=req_id,
+        status_code=status_code,
+        details=details,
+        retry_after=retry_after,
+        legacy_detail=detail,
+    )
+    return JSONResponse(status_code=status_code, content=content, headers=headers)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+    headers = {"X-Request-ID": req_id}
+    raw_errors = jsonable_encoder(exc.errors())
+
+    structured_errors = []
+    for err in raw_errors:
+        loc = err.get("loc", [])
+        field = ".".join(str(p) for p in loc if p != "body") or "payload"
+        structured_errors.append({
+            "field": field,
+            "message": err.get("msg", "Validation error"),
+            "type": err.get("type", "value_error"),
+        })
+
+    content = format_error_payload(
+        code=ErrorCode.VALIDATION_ERROR.value,
+        message="Request input validation failed. Check parameters and payload schema.",
+        request_id=req_id,
+        status_code=422,
+        details={"errors": structured_errors},
+        retryable=False,
+        legacy_detail=raw_errors,
+    )
+    return JSONResponse(status_code=422, content=content, headers=headers)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+    headers = {"X-Request-ID": req_id}
+
+    try:
+        storage.log_audit_event(
+            "unhandled_server_exception",
+            f"Unhandled {type(exc).__name__}: {exc!s} [req_id: {req_id}]",
+            ip_address=request.client.host if request.client else "unknown",
+        )
+    except Exception:
+        pass
+
+    content = format_error_payload(
+        code=ErrorCode.INTERNAL_SERVER_ERROR.value,
+        message="Internal server error. Incident has been recorded with request ID.",
+        request_id=req_id,
+        status_code=500,
+        retryable=False,
+        legacy_detail="Internal server error. Incident has been recorded.",
+    )
+    return JSONResponse(status_code=500, content=content, headers=headers)
 
 
 # Initialize storage, rate limiter, and deduplicator
@@ -984,7 +1170,7 @@ def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None
         if auth_header.lower().startswith("bearer "):
             raw_key = auth_header[7:].strip()
 
-    req_id = f"req_{secrets.token_hex(8)}"
+    req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
     user_info = authenticate_and_deduct(raw_key, request_id=req_id)
     latest_path = REPORTS_DIR / "latest_briefing.md"
     if not latest_path.exists():
@@ -1008,6 +1194,53 @@ def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None
         "user_tier": user_info.get("tier"),
         "credits_remaining": user_info.get("credits"),
         "briefing_markdown": content,
+    }
+
+
+@app.get("/v1/errors")
+def get_error_registry():
+    """
+    Returns the complete machine-readable error code registry,
+    including HTTP status mappings, retryability semantics, and documentation URLs.
+    """
+    return {
+        "version": "1.0.0",
+        "docs_base_url": DOCS_BASE_URL,
+        "errors": {
+            k: {
+                "code": v.code.value,
+                "status_code": v.status_code,
+                "retryable": v.retryable,
+                "default_retry_after": v.default_retry_after,
+                "default_message": v.default_message,
+                "description": v.description,
+                "docs_url": v.docs_url,
+            }
+            for k, v in ERROR_REGISTRY.items()
+        },
+    }
+
+
+@app.get("/v1/errors/{code}")
+def get_error_definition(code: str):
+    """
+    Returns the specification and retry semantics for a specific error code.
+    """
+    norm_code = code.strip().upper()
+    defn = ERROR_REGISTRY.get(norm_code)
+    if not defn:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Error code '{code}' not recognized in error taxonomy registry.",
+        )
+    return {
+        "code": defn.code.value,
+        "status_code": defn.status_code,
+        "retryable": defn.retryable,
+        "default_retry_after": defn.default_retry_after,
+        "default_message": defn.default_message,
+        "description": defn.description,
+        "docs_url": defn.docs_url,
     }
 
 

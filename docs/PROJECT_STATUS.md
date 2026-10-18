@@ -1,10 +1,10 @@
 # Moltbook Alpha — Verified Project Status & Commercial Baseline
 
-**Document Version:** 1.4.0<br>
-**Audit Date:** 2026-10-18 (Commercial Credit Hardening & 30-Day Entitlements)<br>
+**Document Version:** 1.5.0<br>
+**Audit Date:** 2026-10-18 (Agent-Native Error Taxonomy & Reliability Initiative)<br>
 **Branch:** `feat/commercial-api-hardening`<br>
 **Target Environments:** Python 3.11+ / 3.14 (Linux x86_64 Ubuntu 24.04, Windows 11)<br>
-**Verification Baseline:** 165 passing automated tests across 17 test modules, 0 warnings, clean Ruff, clean Git whitespace<br>
+**Verification Baseline:** 177 passing automated tests across 18 test modules, 0 warnings, clean Ruff, clean Git whitespace<br>
 **Active Server Deployment:** HP ProLiant ML150 G6 Ubuntu Server (`10.0.0.190:8080`, commit `b8a7623`) [Untouched during this mission; pending deployment approval]<br>
 
 ---
@@ -34,6 +34,8 @@ Moltbook Alpha is a commercial market intelligence and quant API engineered for 
 |   |                                                                           |   |
 |   |   GET  /v1/health                 - Subsystem diagnostics & DB status     |   |
 |   |   GET  /metrics                   - Prometheus 0.0.4 metrics exposition   |   |
+|   |   GET  /v1/errors                 - Machine-readable error code registry  |   |
+|   |   GET  /v1/errors/:code           - Error code specification & retry rules|   |
 |   |   GET  /v1/account/quota          - Non-deducting credit & tier inspection|   |
 |   |   GET  /v1/payments/config        - Treasury wallet, assets, tiers        |   |
 |   |   POST /v1/payments/invoice       - Solana Pay invoice creation & secret  |   |
