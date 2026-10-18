@@ -1,0 +1,10 @@
+[Unit]
+Description=Moltbook Alpha Weekly Restore Integrity Test Timer (Sundays 04:00 UTC)
+
+[Timer]
+OnCalendar=Sun *-*-* 04:00:00 UTC
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target

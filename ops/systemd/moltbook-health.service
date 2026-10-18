@@ -1,0 +1,12 @@
+[Unit]
+Description=Moltbook Alpha Periodic Health Probe
+After=moltbook-alpha.service
+
+[Service]
+Type=oneshot
+User=moltbook-api
+Group=moltbook-api
+ExecStart=/opt/moltbook-alpha/current/ops/server/health_check.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=moltbook-health
