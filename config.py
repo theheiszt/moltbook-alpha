@@ -39,7 +39,16 @@ DATA_DIR = _resolve_data_dir()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 DB_PATH = DATA_DIR / "moltbook.db"
-REPORTS_DIR = Path(os.getenv("MOLTBOOK_REPORTS_DIR", str(BASE_DIR / "reports"))).resolve()
+def _resolve_reports_dir() -> Path:
+    env_reports = os.getenv("MOLTBOOK_REPORTS_DIR")
+    if env_reports:
+        return Path(env_reports).resolve()
+    if DATA_DIR != (BASE_DIR / "data").resolve():
+        return (DATA_DIR / "reports").resolve()
+    return (BASE_DIR / "reports").resolve()
+
+
+REPORTS_DIR = _resolve_reports_dir()
 INDEX_HTML_PATH = BASE_DIR / "index.html"
 PAYMENT_CONFIG_PATH = BASE_DIR / "payment_config.json"
 WITNESS_KEY_PATH = Path(os.getenv("WITNESS_KEY_PATH", str(DATA_DIR / "witness_ed25519.pem"))).resolve()
