@@ -139,9 +139,33 @@ DEFAULT_RATES: Dict[str, Dict[str, Any]] = {
 DEFAULT_TOPUP_PACKAGES: Dict[str, Dict[str, Any]] = {}
 
 
+# API Rate Limiting & Concurrency Defaults
+DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN = 60
+DEFAULT_RATE_LIMIT_BURST_CAPACITY = 5
+DEFAULT_RATE_LIMIT_MAX_CONCURRENT = 5
+DEFAULT_REQUEST_TIMEOUT_SECONDS = 30.0
+
+# Usage Warning Thresholds (50%, 80%, 90%, 95%)
+DEFAULT_QUOTA_WARNING_THRESHOLDS = (0.50, 0.80, 0.90, 0.95)
+
+
+def get_rate_limit_config() -> Dict[str, Any]:
+    sustained = int(os.getenv("RATE_LIMIT_SUSTAINED_PER_MIN", str(DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN)))
+    burst = int(os.getenv("RATE_LIMIT_BURST_CAPACITY", str(DEFAULT_RATE_LIMIT_BURST_CAPACITY)))
+    max_concurrent = int(os.getenv("RATE_LIMIT_MAX_CONCURRENT", str(DEFAULT_RATE_LIMIT_MAX_CONCURRENT)))
+    timeout = float(os.getenv("REQUEST_TIMEOUT_SECONDS", str(DEFAULT_REQUEST_TIMEOUT_SECONDS)))
+    return {
+        "sustained_per_min": sustained,
+        "burst_capacity": burst,
+        "max_concurrent": max_concurrent,
+        "request_timeout_seconds": timeout,
+    }
+
+
 class ConfigError(Exception):
     """Raised when configuration is invalid or missing required production settings."""
     pass
+
 
 
 def load_payment_config() -> Dict[str, Any]:

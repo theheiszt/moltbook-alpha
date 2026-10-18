@@ -18,7 +18,9 @@ class ErrorCode(str, Enum):
     PAYMENT_REQUIRED = "PAYMENT_REQUIRED"
     CREDITS_EXHAUSTED = "CREDITS_EXHAUSTED"
     ENTITLEMENT_EXPIRED = "ENTITLEMENT_EXPIRED"
+    ENTITLEMENT_EXHAUSTED = "ENTITLEMENT_EXHAUSTED"
     RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED"
+    RATE_LIMITED = "RATE_LIMITED"
     VALIDATION_ERROR = "VALIDATION_ERROR"
     RESOURCE_NOT_FOUND = "RESOURCE_NOT_FOUND"
     UNBOUND_PAYMENT_REJECTED = "UNBOUND_PAYMENT_REJECTED"
@@ -93,6 +95,14 @@ ERROR_REGISTRY: Dict[str, ErrorDefinition] = {
         description="Returned when a 30-day Premium access window has elapsed.",
         docs_url=f"{DOCS_BASE_URL}#ENTITLEMENT_EXPIRED",
     ),
+    ErrorCode.ENTITLEMENT_EXHAUSTED.value: ErrorDefinition(
+        code=ErrorCode.ENTITLEMENT_EXHAUSTED,
+        status_code=402,
+        retryable=False,
+        default_message="Paid entitlement or credit quota has been exhausted.",
+        description="Returned when an API key has depleted all available query credits or 30-day allowance.",
+        docs_url=f"{DOCS_BASE_URL}#ENTITLEMENT_EXHAUSTED",
+    ),
     ErrorCode.RATE_LIMIT_EXCEEDED.value: ErrorDefinition(
         code=ErrorCode.RATE_LIMIT_EXCEEDED,
         status_code=429,
@@ -101,6 +111,15 @@ ERROR_REGISTRY: Dict[str, ErrorDefinition] = {
         description="Returned when client requests exceed sliding-window volume thresholds.",
         docs_url=f"{DOCS_BASE_URL}#RATE_LIMIT_EXCEEDED",
         default_retry_after=60,
+    ),
+    ErrorCode.RATE_LIMITED.value: ErrorDefinition(
+        code=ErrorCode.RATE_LIMITED,
+        status_code=429,
+        retryable=True,
+        default_message="Request rate exceeded.",
+        description="Returned when client requests exceed token-bucket rate limits or concurrency limits.",
+        docs_url=f"{DOCS_BASE_URL}#RATE_LIMITED",
+        default_retry_after=5,
     ),
     ErrorCode.VALIDATION_ERROR.value: ErrorDefinition(
         code=ErrorCode.VALIDATION_ERROR,
@@ -244,12 +263,22 @@ class ApiError(Exception):
         super().__init__(self.message)
 
 
+class ErrorSubModel(BaseModel):
+    code: str
+    message: str
+    retryable: bool
+    retry_after_seconds: Optional[int] = None
+    details: Optional[Dict[str, Any]] = None
+
+
 class ErrorResponseModel(BaseModel):
+    error: Optional[ErrorSubModel] = None
     code: str
     message: str
     details: Optional[Dict[str, Any]] = None
     retryable: bool
     retry_after: Optional[int] = None
+    retry_after_seconds: Optional[int] = None
     request_id: str
     docs_url: str
     detail: Any = Field(description="Legacy compatibility bridge field")
@@ -268,7 +297,8 @@ def format_error_payload(
 ) -> Dict[str, Any]:
     """
     Constructs the standard machine-readable JSON error payload, ensuring complete
-    backwards-compatibility via the `detail` bridge field.
+    backwards-compatibility via the `detail` bridge field while providing
+    the standardized `error` subobject structure.
     """
     defn = ERROR_REGISTRY.get(code)
     is_retryable = retryable if retryable is not None else (defn.retryable if defn else False)
@@ -283,12 +313,31 @@ def format_error_payload(
     else:
         eff_detail = message
 
+    # Map legacy codes to normalized codes in the standardized error subobject
+    standard_code = code
+    if code == ErrorCode.RATE_LIMIT_EXCEEDED.value:
+        standard_code = ErrorCode.RATE_LIMITED.value
+    elif code == ErrorCode.CREDITS_EXHAUSTED.value:
+        standard_code = ErrorCode.ENTITLEMENT_EXHAUSTED.value
+
+    # Build standardized machine-readable error subobject
+    error_obj: Dict[str, Any] = {
+        "code": standard_code,
+        "message": message,
+        "retryable": is_retryable,
+        "retry_after_seconds": eff_retry_after,
+    }
+    if details:
+        error_obj["details"] = details
+
     payload = {
+        "error": error_obj,
         "code": code,
         "message": message,
         "details": details,
         "retryable": is_retryable,
         "retry_after": eff_retry_after,
+        "retry_after_seconds": eff_retry_after,
         "request_id": request_id,
         "docs_url": eff_docs_url,
         "detail": eff_detail,

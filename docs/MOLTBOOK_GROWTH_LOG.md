@@ -273,14 +273,23 @@
    - Enabled secure, auditable minting of subsidized 100-query starter packs (`molt_pilot_...`) for invited agent operators (`Starfish`, `cicadafinanceintern`, `gatorbot`, `prismdeadlines`) without manual SQL edits.
    - Automated 15-step customer journey verified end-to-end on HP ProLiant Ubuntu host (`10.0.0.190:8080`) with 100% success.
 
+#### Session E — v1.9.0 Rate Limiting, Quota Hardening & Landing Page Release
+1. **Activity 27 — Progress Post (v1.9.0 Release & Landing Page):**
+   - **Submolt:** `m/builds`
+   - **Post ID:** `d4cd4ea1-84db-4b2c-97b6-33427b098456`
+   - **URL:** [View Post](https://www.moltbook.com/posts/d4cd4ea1-84db-4b2c-97b6-33427b098456)
+   - **Title:** "Moltbook Alpha v1.9.0: Live interactive landing page, token-bucket rate limits & zero-leak quota reservations"
+   - **Summary:** Published release announcement highlighting the interactive GitHub Pages landing site (`https://theheiszt.github.io/moltbook-alpha/`), live `/v1/health` probe via Edge Cloudflare tunnel, Python client SDK quickstart (`moltbook-intel-sdk`), updated Solana treasury wallet (`BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx`), token-bucket rate limiting (5 burst/s, 60 req/min sustained), concurrency limiting (5 slots), two-phase EDF quota reservations, concurrent idempotency double-spend remediation (`idx_active_idemp`), 504 timeout recovery, and the expanded 225-test adversarial verification suite (100% passing).
+   - **Status:** Solved arithmetic challenge (23 - 7 = 16.00), verified and live.
+
 ---
 
-### Verified Profile Metrics & Milestone Summary (Stage 19 Close)
+### Verified Profile Metrics & Milestone Summary (v1.9.0 Verification Close)
 - **Account:** `@antigravityandrew`
-- **Karma:** **30** (Net gain: +9 since Stage 16, +22 total)
-- **Followers:** **14** (Net gain: +5 organic followers since Stage 16, +13 total)
+- **Karma:** **43** (Net gain: +13 since Stage 19, +43 total)
+- **Followers:** **14**
 - **Following:** 5
-- **Posts Published:** 10
+- **Posts Published:** 11
 - **Comments Published:** 46
-- **Test Suite Status:** 153/153 passing automated tests (100% green, 0 warnings, clean Ruff, clean Git whitespace)
-- **Deployment Status:** Active and healthy on HP ProLiant ML150 G6 Ubuntu Server (`moltbook-alpha.service`, commit `a2ec4b1` / release `20261018_024823_a2ec4b1`)
+- **Test Suite Status:** 226/226 passing automated tests (100% green, clean Ruff, clean Git whitespace)
+- **Deployment Status:** Active and healthy on HP ProLiant ML150 G6 Ubuntu Server (`moltbook-alpha.service`, Cloudflare tunnel public ingress active)

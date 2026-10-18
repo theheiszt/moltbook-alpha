@@ -144,3 +144,97 @@ def test_sdk_offline_cryptographic_witness_verification(tmp_path):
     res_tamper = verify_witness_payload_offline(tampered, pub_key_b58)
     assert res_tamper["valid"] is False
     assert res_tamper["digest_matches"] is False
+
+
+def test_sdk_rate_limit_retry_with_backoff_and_jitter():
+    import io
+    import json
+    import urllib.error
+    import urllib.request
+    from unittest.mock import patch, MagicMock
+    from sdk.moltbook_intel import MoltbookIntelClient
+
+    client = MoltbookIntelClient(base_url="http://mock-api.test", api_key="molt_test_key", max_retries=2)
+
+    err_429_body = json.dumps({
+        "error": {
+            "code": "RATE_LIMITED",
+            "message": "Request rate exceeded.",
+            "retryable": True,
+            "retry_after_seconds": 1,
+        }
+    }).encode("utf-8")
+    mock_hdrs = {"Retry-After": "1", "X-Request-ID": "req_sdk_test"}
+    http_err_429 = urllib.error.HTTPError(
+        "http://mock-api.test/v1/briefing/latest",
+        429,
+        "Too Many Requests",
+        mock_hdrs,
+        io.BytesIO(err_429_body),
+    )
+
+    resp_200 = MagicMock()
+    resp_200.read.return_value = json.dumps({"success": True, "briefing_markdown": "Market Analysis"}).encode("utf-8")
+    resp_200.__enter__.return_value = resp_200
+
+    with patch("urllib.request.urlopen", side_effect=[http_err_429, resp_200]) as mock_open, \
+         patch("time.sleep") as mock_sleep:
+        data = client.get_latest_briefing()
+        assert data["success"] is True
+        assert mock_open.call_count == 2
+        assert mock_sleep.call_count == 1
+        sleep_dur = mock_sleep.call_args[0][0]
+        assert sleep_dur >= 1.0
+
+
+def test_sdk_entitlement_exhausted_halts_retries():
+    import io
+    import json
+    import urllib.error
+    from unittest.mock import patch
+    from sdk.moltbook_intel import MoltbookIntelClient, EntitlementExhaustedError
+
+    client = MoltbookIntelClient(base_url="http://mock-api.test", api_key="molt_test_key", max_retries=3)
+
+    err_402_body = json.dumps({
+        "error": {
+            "code": "ENTITLEMENT_EXHAUSTED",
+            "message": "Monthly entitlement exhausted.",
+            "retryable": False,
+        }
+    }).encode("utf-8")
+    http_err_402 = urllib.error.HTTPError(
+        "http://mock-api.test/v1/briefing/latest",
+        402,
+        "Payment Required",
+        {},
+        io.BytesIO(err_402_body),
+    )
+
+    with patch("urllib.request.urlopen", side_effect=http_err_402) as mock_open:
+        with pytest.raises(EntitlementExhaustedError) as exc_info:
+            client.get_latest_briefing()
+
+        # Crucial requirement: Must halt immediately without retrying
+        assert mock_open.call_count == 1
+        assert exc_info.value.code == "ENTITLEMENT_EXHAUSTED"
+        assert exc_info.value.retryable is False
+
+
+def test_sdk_idempotency_key_propagation():
+    import json
+    from unittest.mock import patch, MagicMock
+    from sdk.moltbook_intel import MoltbookIntelClient
+
+    client = MoltbookIntelClient(base_url="http://mock-api.test", api_key="molt_test_key")
+
+    resp_200 = MagicMock()
+    resp_200.read.return_value = json.dumps({"success": True}).encode("utf-8")
+    resp_200.__enter__.return_value = resp_200
+
+    with patch("urllib.request.urlopen", return_value=resp_200) as mock_open:
+        client.get_latest_briefing(idempotency_key="idemp_unique_xyz_789")
+        assert mock_open.call_count == 1
+        req_obj = mock_open.call_args[0][0]
+        header_keys = {k.lower(): v for k, v in req_obj.headers.items()}
+        assert header_keys.get("idempotency-key") == "idemp_unique_xyz_789"

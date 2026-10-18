@@ -8,6 +8,7 @@ import os
 import ipaddress
 import secrets
 import re
+import asyncio
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from fastapi import FastAPI, Header, HTTPException, Request, Response, status
@@ -38,6 +39,10 @@ from config import (
     load_payment_config,
     is_demo_keys_enabled,
     get_trusted_proxies,
+    DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN,
+    DEFAULT_RATE_LIMIT_BURST_CAPACITY,
+    DEFAULT_RATE_LIMIT_MAX_CONCURRENT,
+    DEFAULT_REQUEST_TIMEOUT_SECONDS,
 )
 from cryptographic_witness import WitnessManager, WitnessKeyManager
 from intel_engine import IntelEngine
@@ -48,7 +53,12 @@ from payment_verifier import (
     VerificationError,
     RPCError,
 )
-from rate_limiter import SlidingWindowRateLimiter, InFlightDeduplicator
+from rate_limiter import (
+    SlidingWindowRateLimiter,
+    InFlightDeduplicator,
+    TokenBucketRateLimiter,
+    ConcurrencyLimiter,
+)
 from metrics import (
     registry,
     record_payment,
@@ -121,6 +131,46 @@ async def metrics_middleware(request: Request, call_next):
         else:
             norm_endpoint = "unmatched_route"
         record_request(norm_endpoint, request.method, status_code)
+
+
+@app.middleware("http")
+async def timeout_and_rate_limit_middleware(request: Request, call_next):
+    req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+    try:
+        response = await asyncio.wait_for(call_next(request), timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        slot_id = getattr(request.state, "concurrency_slot_id", None)
+        rate_key = getattr(request.state, "concurrency_rate_key", None)
+        if slot_id and rate_key:
+            concurrency_limiter.release(slot_id, rate_key)
+            request.state.concurrency_slot_id = None
+
+        res_id = getattr(request.state, "quota_reservation_id", None)
+        if res_id:
+            storage.release_quota(res_id, reason="request_timeout_504")
+            request.state.quota_reservation_id = None
+
+        content = format_error_payload(
+            code="REQUEST_TIMEOUT",
+            message=f"Request execution timed out after {int(DEFAULT_REQUEST_TIMEOUT_SECONDS)} seconds.",
+            request_id=req_id,
+            status_code=504,
+            retryable=True,
+            retry_after=5,
+        )
+        return JSONResponse(status_code=504, content=content, headers={"X-Request-ID": req_id, "Retry-After": "5"})
+
+    # Attach standard rate limit headers
+    rl_limit = getattr(request.state, "rate_limit_limit", DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN)
+    rl_remaining = getattr(request.state, "rate_limit_remaining", None)
+    rl_reset = getattr(request.state, "rate_limit_reset", 0)
+
+    response.headers["X-RateLimit-Limit"] = str(rl_limit)
+    if rl_remaining is not None:
+        response.headers["X-RateLimit-Remaining"] = str(max(0, int(rl_remaining)))
+    response.headers["X-RateLimit-Reset"] = str(max(0, int(rl_reset)))
+
+    return response
 
 
 @app.exception_handler(ApiError)
@@ -283,9 +333,18 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content=content, headers=headers)
 
 
-# Initialize storage, rate limiter, deduplicator, cryptographic state witness manager, and intel engine
+# Initialize storage, rate limiters, deduplicator, cryptographic state witness manager, and intel engine
 storage = StorageManager(DB_PATH)
 rate_limiter = SlidingWindowRateLimiter()
+token_bucket_limiter = TokenBucketRateLimiter(
+    default_capacity=DEFAULT_RATE_LIMIT_BURST_CAPACITY,
+    default_refill_per_min=DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN,
+    storage=storage,
+)
+concurrency_limiter = ConcurrencyLimiter(
+    default_max_concurrent=DEFAULT_RATE_LIMIT_MAX_CONCURRENT,
+    storage=storage,
+)
 in_flight_deduplicator = InFlightDeduplicator()
 witness_key_manager = WitnessKeyManager(WITNESS_KEY_PATH)
 witness_manager = WitnessManager(storage, witness_key_manager)
@@ -933,7 +992,8 @@ def handle_payment_webhook(
         )
 
     sig = req.transaction_signature.strip()
-    verifier = SolanaPaymentVerifier()
+    cfg = load_payment_config()
+    verifier = SolanaPaymentVerifier(max_age_seconds=cfg.get("max_age_seconds", 1800))
 
     try:
         payment = in_flight_deduplicator.execute(
@@ -1151,6 +1211,11 @@ def get_account_quota(
     low_credits = credits_remaining < 5 and tier not in ("unlimited", "admin")
     is_expired = entitlement.get("status") == "expired"
 
+    k_hash = key_info["key_hash"]
+    rate_limit_key = f"key:{k_hash}"
+    remaining_tokens = token_bucket_limiter.get_remaining(rate_limit_key)
+    in_flight_count = concurrency_limiter.get_in_flight(rate_limit_key)
+
     res = {
         "success": True,
         "key_prefix": key_info.get("key_prefix"),
@@ -1161,6 +1226,15 @@ def get_account_quota(
         "low_credit_warning": low_credits,
         "entitlement": entitlement,
         "credit_lots": credit_lots,
+        "usage": quota_details.get("usage", {}),
+        "rate_limit_state": {
+            "sustained_limit_per_min": DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN,
+            "burst_capacity": DEFAULT_RATE_LIMIT_BURST_CAPACITY,
+            "max_concurrent": DEFAULT_RATE_LIMIT_MAX_CONCURRENT,
+            "remaining_tokens": round(remaining_tokens, 2),
+            "in_flight_requests": in_flight_count,
+            "retry_after_seconds": 0,
+        },
     }
 
     if low_credits or credits_remaining == 0 or is_expired:
@@ -1196,51 +1270,179 @@ def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None
         if auth_header.lower().startswith("bearer "):
             raw_key = auth_header[7:].strip()
 
+    if not raw_key:
+        cfg = load_payment_config()
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "error": "Payment Required",
+                "message": "Access requires an active API key or payment.",
+                "price": "Starter: $1 (50 queries), Pro: $5 (300 queries), Premium: $20 (10,000 queries / 30 days).",
+                "purchase_instructions": {
+                    "treasury_wallet": cfg["solana_treasury_wallet"],
+                    "rates": cfg["rates"],
+                    "topup_packages": cfg.get("topup_packages", {}),
+                    "verify_endpoint": "POST /v1/payments/verify-solana",
+                },
+            },
+        )
+
     req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
-    user_info = authenticate_and_deduct(raw_key, request_id=req_id)
+    k_hash = storage.hash_key(raw_key)
+    rate_key = f"key:{k_hash}"
+
+    # Token Bucket Rate Limiting (Burst 5, Sustained 60/min)
+    tb_allowed, tb_retry_after, tb_remaining = token_bucket_limiter.is_allowed(
+        rate_key,
+        capacity=DEFAULT_RATE_LIMIT_BURST_CAPACITY,
+        refill_per_min=DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN,
+    )
+    request.state.rate_limit_limit = DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN
+    request.state.rate_limit_remaining = tb_remaining
+    request.state.rate_limit_reset = tb_retry_after
+
+    if not tb_allowed:
+        record_rate_limit("/v1/briefing/latest")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Request rate exceeded. Please retry in {tb_retry_after} seconds.",
+            headers={
+                "Retry-After": str(tb_retry_after),
+                "X-RateLimit-Limit": str(DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN),
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": str(tb_retry_after),
+            },
+        )
+
+    # Concurrency Limiter (Max 5 concurrent requests)
+    slot_acquired, slot_id, _ = concurrency_limiter.acquire(
+        rate_key,
+        max_concurrent=DEFAULT_RATE_LIMIT_MAX_CONCURRENT,
+    )
+    if not slot_acquired:
+        record_rate_limit("/v1/briefing/latest")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Maximum concurrent requests reached (5). Please back off and retry.",
+            headers={"Retry-After": "1"},
+        )
+    request.state.concurrency_slot_id = slot_id
+    request.state.concurrency_rate_key = rate_key
+
+    # Two-Phase Quota Reservation with Idempotency Key
+    idempotency_key = request.headers.get("idempotency-key") or request.headers.get("x-idempotency-key")
+    res_info, state = storage.reserve_quota(raw_key, idempotency_key=idempotency_key, request_id=req_id)
+    if res_info and res_info.get("reservation_id") and state == "ok":
+        request.state.quota_reservation_id = res_info["reservation_id"]
+
+    if state == "idempotent_replay":
+        concurrency_limiter.release(slot_id, rate_key)
+        request.state.concurrency_slot_id = None
+        if res_info.get("cached_response"):
+            return res_info["cached_response"]
+
+    if state == "in_flight":
+        concurrency_limiter.release(slot_id, rate_key)
+        request.state.concurrency_slot_id = None
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="A request with this idempotency key is currently in flight. Please retry shortly.",
+            headers={"Retry-After": "1"},
+        )
+
+    if state == "invalid":
+        concurrency_limiter.release(slot_id, rate_key)
+        request.state.concurrency_slot_id = None
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid API key. Submit payment to /v1/payments/verify-solana or contact administrator.",
+        )
+    if state == "revoked":
+        concurrency_limiter.release(slot_id, rate_key)
+        request.state.concurrency_slot_id = None
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="API key has been revoked.",
+        )
+    if state == "entitlement_expired":
+        concurrency_limiter.release(slot_id, rate_key)
+        request.state.concurrency_slot_id = None
+        cfg = load_payment_config()
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "error": "Entitlement Expired",
+                "message": "Premium entitlement has expired. Renew your Premium subscription to continue spending credits.",
+                "purchase_instructions": {
+                    "treasury_wallet": cfg["solana_treasury_wallet"],
+                    "rates": cfg["rates"],
+                    "topup_packages": cfg.get("topup_packages", {}),
+                    "verify_endpoint": "POST /v1/payments/verify-solana",
+                },
+            },
+        )
+    if state == "exhausted":
+        concurrency_limiter.release(slot_id, rate_key)
+        request.state.concurrency_slot_id = None
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Key credits exhausted. Top up your balance via Solana USDC.",
+        )
+
     latest_path = REPORTS_DIR / "latest_briefing.md"
-    if not latest_path.exists():
-        raise HTTPException(status_code=404, detail="No briefing generated yet.")
 
     try:
+        if not latest_path.exists():
+            raise HTTPException(status_code=404, detail="No briefing generated yet.")
+
         with open(latest_path, "r", encoding="utf-8") as f:
             content = f.read()
+
+        witness_id = None
+        if res_info and res_info.get("key_hash"):
+            try:
+                w = witness_manager.create_witness(
+                    action="QUERY_DEDUCTED",
+                    actor=res_info.get("key_prefix", "unknown"),
+                    key_hash=res_info.get("key_hash"),
+                    lot_id=res_info.get("lot_id"),
+                    pre_balance=(res_info.get("credits") or 0) + 1,
+                    credit_delta=-1,
+                    post_balance=res_info.get("credits"),
+                    request_id=req_id,
+                )
+                witness_id = w["witness_id"]
+            except Exception:
+                pass
+
+        res = {
+            "success": True,
+            "user_tier": res_info.get("tier"),
+            "credits_remaining": res_info.get("credits"),
+            "briefing_markdown": content,
+        }
+        if witness_id:
+            res["state_witness_id"] = witness_id
+
+        # Settle quota upon successful response construction
+        if res_info and res_info.get("reservation_id") and state == "ok":
+            storage.settle_quota(res_info["reservation_id"], response_payload=res)
+            request.state.quota_reservation_id = None
+
+        return res
+    except HTTPException:
+        if res_info and res_info.get("reservation_id") and state == "ok":
+            storage.release_quota(res_info["reservation_id"], reason="http_exception")
+            request.state.quota_reservation_id = None
+        raise
     except Exception as e:
-        if user_info.get("key_hash") and user_info.get("lot_id"):
-            storage.refund_credit(
-                key_hash=user_info["key_hash"],
-                lot_id=user_info["lot_id"],
-                request_id=req_id,
-                reason=f"briefing_read_error: {e}"
-            )
+        if res_info and res_info.get("reservation_id") and state == "ok":
+            storage.release_quota(res_info["reservation_id"], reason=f"briefing_error: {e}")
+            request.state.quota_reservation_id = None
         raise HTTPException(status_code=500, detail="Internal server error reading briefing.") from e
-
-    witness_id = None
-    if user_info.get("key_hash"):
-        try:
-            w = witness_manager.create_witness(
-                action="QUERY_DEDUCTED",
-                actor=user_info.get("key_prefix", "unknown"),
-                key_hash=user_info.get("key_hash"),
-                lot_id=user_info.get("lot_id"),
-                pre_balance=(user_info.get("credits") or 0) + 1,
-                credit_delta=-1,
-                post_balance=user_info.get("credits"),
-                request_id=req_id,
-            )
-            witness_id = w["witness_id"]
-        except Exception:
-            pass
-
-    res = {
-        "success": True,
-        "user_tier": user_info.get("tier"),
-        "credits_remaining": user_info.get("credits"),
-        "briefing_markdown": content,
-    }
-    if witness_id:
-        res["state_witness_id"] = witness_id
-    return res
+    finally:
+        concurrency_limiter.release(slot_id, rate_key)
+        request.state.concurrency_slot_id = None
 
 
 @app.get("/v1/errors")

@@ -6,6 +6,7 @@ DAG tool parameter planning, and cryptographic state witness verification.
 
 import json
 import time
+import random
 import urllib.request
 import urllib.error
 from typing import Dict, Any, Optional, List
@@ -28,12 +29,14 @@ class MoltbookIntelClient:
         timeout: float = 15.0,
         max_retries: int = 3,
         auto_retry: bool = True,
+        retry_deadline: float = 30.0,
     ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
         self.max_retries = max_retries
         self.auto_retry = auto_retry
+        self.retry_deadline = retry_deadline
         self._cached_server_pub_key: Optional[str] = None
 
     def _request(
@@ -43,6 +46,7 @@ class MoltbookIntelClient:
         payload: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
         auth_required: bool = False,
+        idempotency_key: Optional[str] = None,
     ) -> Dict[str, Any]:
         url = f"{self.base_url}{endpoint}"
         req_headers = {
@@ -60,11 +64,15 @@ class MoltbookIntelClient:
                 status_code=401,
             )
 
+        if idempotency_key:
+            req_headers["Idempotency-Key"] = idempotency_key
+
         if headers:
             req_headers.update(headers)
 
         data_bytes = json.dumps(payload).encode("utf-8") if payload is not None else None
         retries = 0
+        start_time = time.time()
 
         while True:
             try:
@@ -82,20 +90,51 @@ class MoltbookIntelClient:
                 except Exception:
                     err_json = {"code": f"HTTP_{e.code}", "message": err_body}
 
-                # Evaluate auto-retry
-                retryable = err_json.get("retryable", False)
-                retry_after = err_json.get("retry_after")
-                if self.auto_retry and retryable and retries < self.max_retries:
+                # On HTTP 402 (payment required / entitlement exhausted), stop retrying immediately
+                if e.code == 402:
+                    raise_for_error_payload(e.code, err_json, request_id=req_id)
+
+                # Evaluate auto-retry for transient errors and rate limiting
+                nested_err = err_json.get("error") if isinstance(err_json.get("error"), dict) else {}
+                retryable = err_json.get("retryable", nested_err.get("retryable", False))
+                header_retry_after = e.headers.get("Retry-After")
+                retry_after = (
+                    header_retry_after
+                    or err_json.get("retry_after")
+                    or err_json.get("retry_after_seconds")
+                    or nested_err.get("retry_after_seconds")
+                )
+
+                elapsed = time.time() - start_time
+                if self.auto_retry and retryable and retries < self.max_retries and elapsed < self.retry_deadline:
                     retries += 1
-                    sleep_time = float(retry_after) if retry_after else (1.5 ** retries)
-                    time.sleep(sleep_time)
+                    if retry_after is not None:
+                        try:
+                            base_sleep = float(retry_after)
+                        except (ValueError, TypeError):
+                            base_sleep = 1.0
+                        sleep_time = base_sleep + random.uniform(0.05, 0.25)
+                    else:
+                        base_backoff = min(15.0, 1.5 ** retries)
+                        sleep_time = random.uniform(0.5 * base_backoff, 1.5 * base_backoff)
+
+                    # Ensure we don't exceed the total retry deadline
+                    remaining_deadline = max(0.0, self.retry_deadline - (time.time() - start_time))
+                    if sleep_time > remaining_deadline:
+                        sleep_time = remaining_deadline
+
+                    if sleep_time > 0:
+                        time.sleep(sleep_time)
                     continue
 
                 raise_for_error_payload(e.code, err_json, request_id=req_id)
             except urllib.error.URLError as e:
-                if self.auto_retry and retries < self.max_retries:
+                elapsed = time.time() - start_time
+                if self.auto_retry and retries < self.max_retries and elapsed < self.retry_deadline:
                     retries += 1
-                    time.sleep(1.5 ** retries)
+                    base_backoff = min(15.0, 1.5 ** retries)
+                    sleep_time = random.uniform(0.5 * base_backoff, 1.5 * base_backoff)
+                    time.sleep(sleep_time)
                     continue
                 raise MoltbookApiError(
                     code="NETWORK_ERROR",
@@ -133,12 +172,12 @@ class MoltbookIntelClient:
         return ToolDAGResolver(graph)
 
     # Market Intelligence
-    def get_latest_briefing(self) -> Dict[str, Any]:
+    def get_latest_briefing(self, idempotency_key: Optional[str] = None) -> Dict[str, Any]:
         """
         Retrieves the latest synthesized market intelligence briefing and state witness.
-        Deducts 1 credit from account.
+        Deducts 1 credit from account unless an idempotent retry is recognized.
         """
-        return self._request("/v1/intel/latest", auth_required=True)
+        return self._request("/v1/intel/latest", auth_required=True, idempotency_key=idempotency_key)
 
     def get_signals(
         self,

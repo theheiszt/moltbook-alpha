@@ -11,6 +11,7 @@ import base64
 import secrets
 import threading
 import time
+import json
 from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -87,7 +88,7 @@ class StorageManager:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path).resolve()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._cached_active_count: Optional[int] = None
         self._cached_active_count_time: float = 0.0
         self._mock_time: Optional[datetime] = None
@@ -232,6 +233,54 @@ class StorageManager:
                     CREATE INDEX IF NOT EXISTS idx_lots_expires ON credit_lots(expires_at);
                     CREATE INDEX IF NOT EXISTS idx_ledger_key ON credit_ledger_events(key_hash);
                     CREATE INDEX IF NOT EXISTS idx_ledger_lot ON credit_ledger_events(lot_id);
+
+                    CREATE TABLE IF NOT EXISTS rate_limit_tokens (
+                        key TEXT PRIMARY KEY,
+                        tokens REAL NOT NULL,
+                        last_refill REAL NOT NULL
+                    );
+
+                    CREATE TABLE IF NOT EXISTS rate_limit_concurrency (
+                        slot_id TEXT PRIMARY KEY,
+                        key TEXT NOT NULL,
+                        acquired_at REAL NOT NULL,
+                        expires_at REAL NOT NULL
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_concurrency_key ON rate_limit_concurrency(key);
+                    CREATE INDEX IF NOT EXISTS idx_concurrency_exp ON rate_limit_concurrency(expires_at);
+
+                    CREATE TABLE IF NOT EXISTS quota_reservations (
+                        reservation_id TEXT PRIMARY KEY,
+                        key_hash TEXT NOT NULL,
+                        idempotency_key TEXT,
+                        lot_id TEXT NOT NULL,
+                        credits INTEGER NOT NULL DEFAULT 1,
+                        status TEXT NOT NULL DEFAULT 'reserved',
+                        request_id TEXT,
+                        created_at TEXT NOT NULL,
+                        expires_at TEXT NOT NULL,
+                        settled_at TEXT,
+                        released_at TEXT,
+                        release_reason TEXT,
+                        response_cache TEXT,
+                        FOREIGN KEY(key_hash) REFERENCES api_keys(key_hash),
+                        FOREIGN KEY(lot_id) REFERENCES credit_lots(lot_id)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_reservations_key ON quota_reservations(key_hash);
+                    CREATE INDEX IF NOT EXISTS idx_reservations_status ON quota_reservations(status);
+                    CREATE INDEX IF NOT EXISTS idx_reservations_idemp ON quota_reservations(key_hash, idempotency_key);
+                    CREATE INDEX IF NOT EXISTS idx_reservations_expires ON quota_reservations(expires_at);
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_active_idemp ON quota_reservations(key_hash, idempotency_key) WHERE idempotency_key IS NOT NULL AND status IN ('reserved', 'settled');
+
+                    CREATE TABLE IF NOT EXISTS quota_threshold_alerts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        key_hash TEXT NOT NULL,
+                        threshold REAL NOT NULL,
+                        triggered_at TEXT NOT NULL,
+                        UNIQUE(key_hash, threshold),
+                        FOREIGN KEY(key_hash) REFERENCES api_keys(key_hash)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_threshold_alerts_key ON quota_threshold_alerts(key_hash);
                 """)
 
                 cur = conn.cursor()
@@ -432,6 +481,153 @@ class StorageManager:
             "expires_at": exp_iso,
         }
 
+    def _authenticate_and_deduct_conn(
+        self,
+        conn: sqlite3.Connection,
+        k_hash: str,
+        request_id: Optional[str] = None,
+    ) -> Tuple[Optional[Dict[str, Any]], str]:
+        self._expire_overdue_lots_and_entitlements(conn)
+
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT key_hash, key_prefix, tier, credits, is_active FROM api_keys WHERE key_hash = ?",
+            (k_hash,)
+        )
+        row = cur.fetchone()
+        if not row:
+            return None, "invalid"
+
+        if row["is_active"] != 1:
+            return None, "revoked"
+
+        tier = row["tier"]
+        current_credits = row["credits"]
+
+        if tier in ("admin",):
+            return {
+                "key_prefix": row["key_prefix"],
+                "tier": tier,
+                "credits": current_credits,
+                "key_hash": k_hash,
+                "lot_id": None,
+                "request_id": request_id,
+            }, "ok"
+
+        now_iso = self.get_now_iso()
+
+        # Check customer entitlement status
+        cur.execute(
+            """
+            SELECT entitlement_id, tier, status, expires_at
+            FROM customer_entitlements
+            WHERE key_hash = ?
+            ORDER BY activated_at DESC LIMIT 1
+            """,
+            (k_hash,)
+        )
+        ent = cur.fetchone()
+        if ent:
+            if ent["status"] != "active" or (ent["expires_at"] and ent["expires_at"] < now_iso):
+                return {
+                    "key_prefix": row["key_prefix"],
+                    "tier": tier,
+                    "credits": current_credits,
+                    "key_hash": k_hash,
+                }, "entitlement_expired"
+        elif tier in ("unlimited", "premium", "tier_unlimited", "tier_premium"):
+            return {
+                "key_prefix": row["key_prefix"],
+                "tier": tier,
+                "credits": current_credits,
+                "key_hash": k_hash,
+            }, "entitlement_expired"
+
+        if current_credits <= 0:
+            return {
+                "key_prefix": row["key_prefix"],
+                "tier": tier,
+                "credits": 0,
+                "key_hash": k_hash,
+            }, "exhausted"
+
+        # Find earliest-expiring active credit lot (EDF/FIFO)
+        cur.execute(
+            """
+            SELECT lot_id, lot_type, credits_remaining, expires_at
+            FROM credit_lots
+            WHERE key_hash = ? AND status = 'active' AND credits_remaining > 0
+              AND (expires_at IS NULL OR expires_at >= ?)
+            ORDER BY
+              CASE WHEN expires_at IS NULL THEN 1 ELSE 0 END ASC,
+              expires_at ASC,
+              created_at ASC
+            LIMIT 1
+            """,
+            (k_hash, now_iso)
+        )
+        chosen_lot = cur.fetchone()
+        if not chosen_lot:
+            return {
+                "key_prefix": row["key_prefix"],
+                "tier": tier,
+                "credits": 0,
+                "key_hash": k_hash,
+            }, "exhausted"
+
+        lot_id = chosen_lot["lot_id"]
+        new_lot_rem = chosen_lot["credits_remaining"] - 1
+        lot_status = "exhausted" if new_lot_rem == 0 else "active"
+
+        cur.execute(
+            """
+            UPDATE credit_lots
+            SET credits_remaining = ?, status = ?
+            WHERE lot_id = ? AND credits_remaining > 0
+            """,
+            (new_lot_rem, lot_status, lot_id)
+        )
+        if cur.rowcount == 0:
+            return {
+                "key_prefix": row["key_prefix"],
+                "tier": tier,
+                "credits": 0,
+                "key_hash": k_hash,
+            }, "exhausted"
+
+        cur.execute(
+            "UPDATE api_keys SET credits = credits - 1 WHERE key_hash = ? AND credits > 0",
+            (k_hash,)
+        )
+        if cur.rowcount == 0:
+            return {
+                "key_prefix": row["key_prefix"],
+                "tier": tier,
+                "credits": 0,
+                "key_hash": k_hash,
+            }, "exhausted"
+
+        new_total = current_credits - 1
+
+        # Record in ledger
+        cur.execute(
+            """
+            INSERT INTO credit_ledger_events (lot_id, key_hash, event_type, amount, balance_after, request_id, detail, created_at)
+            VALUES (?, ?, 'deduct', 1, ?, ?, ?, ?)
+            """,
+            (lot_id, k_hash, new_total, request_id, f"query_deduct_from_{lot_id}", now_iso)
+        )
+        self._check_and_record_quota_thresholds_conn(conn, k_hash)
+
+        return {
+            "key_prefix": row["key_prefix"],
+            "tier": tier,
+            "credits": new_total,
+            "key_hash": k_hash,
+            "lot_id": lot_id,
+            "request_id": request_id,
+        }, "ok"
+
     def authenticate_and_deduct(
         self,
         raw_key: str,
@@ -449,145 +645,357 @@ class StorageManager:
 
         with self._lock, self.connection() as conn:
             with conn:
-                self._expire_overdue_lots_and_entitlements(conn)
+                return self._authenticate_and_deduct_conn(conn, k_hash, request_id=request_id)
 
+    def reserve_quota(
+        self,
+        raw_key: str,
+        idempotency_key: Optional[str] = None,
+        request_id: Optional[str] = None,
+        ttl_seconds: int = 60,
+    ) -> Tuple[Optional[Dict[str, Any]], str]:
+        """
+        Atomically checks remaining quota and reserves 1 credit against the earliest-expiring
+        active credit lot (EDF).
+        Supports idempotency: If an idempotency_key is provided:
+          - If a settled reservation exists, returns (cached_info, "idempotent_replay") without burning credits.
+          - If an active in-flight reservation exists, returns (info, "in_flight").
+        Returns:
+            Tuple[Optional[Dict[str, Any]], str]: (reservation_record, status_code)
+            status_code: 'ok', 'idempotent_replay', 'in_flight', 'invalid', 'revoked', 'exhausted', 'entitlement_expired'
+        """
+        if not raw_key:
+            return None, "invalid"
+
+        k_hash = self.hash_key(raw_key)
+        now = self.get_now()
+        now_iso = now.isoformat()
+        expires_at_iso = (now + timedelta(seconds=ttl_seconds)).isoformat()
+        clean_idemp = idempotency_key.strip() if idempotency_key else None
+
+        with self._lock:
+            # Check existing reservations for idempotency replay or in-flight requests
+            if clean_idemp:
+                with self.connection() as conn:
+                    with conn:
+                        self._reap_expired_reservations_conn(conn)
+                        cur = conn.cursor()
+                        cur.execute(
+                            """
+                            SELECT reservation_id, lot_id, status, response_cache, created_at, expires_at
+                            FROM quota_reservations
+                            WHERE key_hash = ? AND idempotency_key = ?
+                            ORDER BY created_at DESC LIMIT 1
+                            """,
+                            (k_hash, clean_idemp)
+                        )
+                        existing_res = cur.fetchone()
+                        if existing_res:
+                            st = existing_res["status"]
+                            if st == "settled":
+                                cached_payload = None
+                                if existing_res["response_cache"]:
+                                    try:
+                                        cached_payload = json.loads(existing_res["response_cache"])
+                                    except Exception:
+                                        pass
+                                return {
+                                    "reservation_id": existing_res["reservation_id"],
+                                    "key_hash": k_hash,
+                                    "lot_id": existing_res["lot_id"],
+                                    "idempotency_key": clean_idemp,
+                                    "cached_response": cached_payload,
+                                }, "idempotent_replay"
+                            elif st == "reserved" and existing_res["expires_at"] > now_iso:
+                                return {
+                                    "reservation_id": existing_res["reservation_id"],
+                                    "key_hash": k_hash,
+                                    "lot_id": existing_res["lot_id"],
+                                    "idempotency_key": clean_idemp,
+                                }, "in_flight"
+
+            # Delegate validation and atomic EDF deduction to authenticate_and_deduct
+            user_info, state = self.authenticate_and_deduct(raw_key, request_id=request_id)
+            if state != "ok":
+                return user_info, state
+
+            tier = user_info.get("tier")
+            if tier in ("admin",):
+                return {
+                    "reservation_id": f"res_admin_{secrets.token_hex(8)}",
+                    "idempotency_key": clean_idemp,
+                    **user_info,
+                }, "ok"
+
+            reservation_id = f"res_{secrets.token_hex(12)}"
+            lot_id = user_info.get("lot_id")
+
+            try:
+                with self.connection() as conn:
+                    with conn:
+                        cur = conn.cursor()
+                        cur.execute(
+                            """
+                            INSERT INTO quota_reservations (
+                                reservation_id, key_hash, idempotency_key, lot_id, credits,
+                                status, request_id, created_at, expires_at
+                            ) VALUES (?, ?, ?, ?, 1, 'reserved', ?, ?, ?)
+                            """,
+                            (reservation_id, k_hash, clean_idemp, lot_id, request_id, now_iso, expires_at_iso)
+                        )
+            except sqlite3.IntegrityError:
+                # Concurrently reserved by another process with same (key_hash, idempotency_key)
+                if lot_id:
+                    self.refund_credit(k_hash, lot_id, request_id=request_id, reason="concurrent_idempotency_conflict")
+                return {
+                    "key_hash": k_hash,
+                    "idempotency_key": clean_idemp,
+                }, "in_flight"
+
+            return {
+                "reservation_id": reservation_id,
+                "idempotency_key": clean_idemp,
+                **user_info,
+            }, "ok"
+
+    def settle_quota(self, reservation_id: str, response_payload: Optional[Dict[str, Any]] = None) -> bool:
+        """
+        Settles an active quota reservation upon successful endpoint execution.
+        Saves optional cached response payload for idempotency replay and evaluates warning thresholds.
+        """
+        now_iso = self.get_now_iso()
+        cache_str = json.dumps(response_payload) if response_payload is not None else None
+
+        with self._lock, self.connection() as conn:
+            with conn:
                 cur = conn.cursor()
                 cur.execute(
-                    "SELECT key_hash, key_prefix, tier, credits, is_active FROM api_keys WHERE key_hash = ?",
-                    (k_hash,)
+                    """
+                    UPDATE quota_reservations
+                    SET status = 'settled', settled_at = ?, response_cache = ?
+                    WHERE reservation_id = ? AND status = 'reserved'
+                    """,
+                    (now_iso, cache_str, reservation_id)
                 )
-                row = cur.fetchone()
-                if not row:
-                    return None, "invalid"
+                settled = cur.rowcount > 0
+                if settled:
+                    cur.execute("SELECT key_hash FROM quota_reservations WHERE reservation_id = ?", (reservation_id,))
+                    row = cur.fetchone()
+                    if row:
+                        self._check_and_record_quota_thresholds_conn(conn, row["key_hash"])
+                return settled
 
-                if row["is_active"] != 1:
-                    return None, "revoked"
+    def release_quota(self, reservation_id: str, reason: str = "") -> bool:
+        """
+        Releases an active quota reservation, restoring the credit back to the credit lot
+        and API key balance. Used on request failure, cancellation, or timeout.
+        """
+        now_iso = self.get_now_iso()
 
-                tier = row["tier"]
-                current_credits = row["credits"]
+        with self._lock, self.connection() as conn:
+            with conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT reservation_id, key_hash, lot_id, credits, status, request_id FROM quota_reservations WHERE reservation_id = ?",
+                    (reservation_id,)
+                )
+                res = cur.fetchone()
+                if not res or res["status"] != "reserved":
+                    return False
 
-                if tier in ("admin",):
-                    return {
-                        "key_prefix": row["key_prefix"],
-                        "tier": tier,
-                        "credits": current_credits,
-                        "key_hash": k_hash,
-                        "lot_id": None,
-                        "request_id": request_id,
-                    }, "ok"
+                k_hash = res["key_hash"]
+                lot_id = res["lot_id"]
+                credits_to_restore = res["credits"]
+                req_id = res["request_id"]
 
-                now_iso = self.get_now_iso()
-
-                # Check customer entitlement status
                 cur.execute(
                     """
-                    SELECT entitlement_id, tier, status, expires_at
-                    FROM customer_entitlements
-                    WHERE key_hash = ?
-                    ORDER BY activated_at DESC LIMIT 1
+                    UPDATE quota_reservations
+                    SET status = 'released', released_at = ?, release_reason = ?
+                    WHERE reservation_id = ? AND status = 'reserved'
                     """,
-                    (k_hash,)
+                    (now_iso, reason or "released_on_error", reservation_id)
                 )
-                ent = cur.fetchone()
-                if ent:
-                    if ent["status"] != "active" or (ent["expires_at"] and ent["expires_at"] < now_iso):
-                        return {
-                            "key_prefix": row["key_prefix"],
-                            "tier": tier,
-                            "credits": current_credits,
-                            "key_hash": k_hash,
-                        }, "entitlement_expired"
-                elif tier in ("unlimited", "premium", "tier_unlimited", "tier_premium"):
-                    return {
-                        "key_prefix": row["key_prefix"],
-                        "tier": tier,
-                        "credits": current_credits,
-                        "key_hash": k_hash,
-                    }, "entitlement_expired"
+                if cur.rowcount == 0:
+                    return False
 
-                if current_credits <= 0:
-                    return {
-                        "key_prefix": row["key_prefix"],
-                        "tier": tier,
-                        "credits": 0,
-                        "key_hash": k_hash,
-                    }, "exhausted"
-
-                # Find earliest-expiring active credit lot (EDF/FIFO)
-                cur.execute(
-                    """
-                    SELECT lot_id, lot_type, credits_remaining, expires_at
-                    FROM credit_lots
-                    WHERE key_hash = ? AND status = 'active' AND credits_remaining > 0
-                      AND (expires_at IS NULL OR expires_at >= ?)
-                    ORDER BY
-                      CASE WHEN expires_at IS NULL THEN 1 ELSE 0 END ASC,
-                      expires_at ASC,
-                      created_at ASC
-                    LIMIT 1
-                    """,
-                    (k_hash, now_iso)
-                )
-                chosen_lot = cur.fetchone()
-                if not chosen_lot:
-                    return {
-                        "key_prefix": row["key_prefix"],
-                        "tier": tier,
-                        "credits": 0,
-                        "key_hash": k_hash,
-                    }, "exhausted"
-
-                lot_id = chosen_lot["lot_id"]
-                new_lot_rem = chosen_lot["credits_remaining"] - 1
-                lot_status = "exhausted" if new_lot_rem == 0 else "active"
-
+                # Restore lot
                 cur.execute(
                     """
                     UPDATE credit_lots
-                    SET credits_remaining = ?, status = ?
-                    WHERE lot_id = ? AND credits_remaining > 0
+                    SET credits_remaining = credits_remaining + ?, status = 'active'
+                    WHERE lot_id = ?
                     """,
-                    (new_lot_rem, lot_status, lot_id)
+                    (credits_to_restore, lot_id)
                 )
-                if cur.rowcount == 0:
-                    return {
-                        "key_prefix": row["key_prefix"],
-                        "tier": tier,
-                        "credits": 0,
-                        "key_hash": k_hash,
-                    }, "exhausted"
 
+                # Restore api_keys
                 cur.execute(
-                    "UPDATE api_keys SET credits = credits - 1 WHERE key_hash = ? AND credits > 0",
-                    (k_hash,)
+                    "UPDATE api_keys SET credits = credits + ? WHERE key_hash = ?",
+                    (credits_to_restore, k_hash)
                 )
-                if cur.rowcount == 0:
-                    return {
-                        "key_prefix": row["key_prefix"],
-                        "tier": tier,
-                        "credits": 0,
-                        "key_hash": k_hash,
-                    }, "exhausted"
 
-                new_total = current_credits - 1
+                cur.execute("SELECT credits FROM api_keys WHERE key_hash = ?", (k_hash,))
+                new_bal = cur.fetchone()["credits"]
 
-                # Record in ledger
+                # Insert refund event into ledger so balance holds
                 cur.execute(
                     """
                     INSERT INTO credit_ledger_events (lot_id, key_hash, event_type, amount, balance_after, request_id, detail, created_at)
-                    VALUES (?, ?, 'deduct', 1, ?, ?, ?, ?)
+                    VALUES (?, ?, 'refund', ?, ?, ?, ?, ?)
                     """,
-                    (lot_id, k_hash, new_total, request_id, f"query_deduct_from_{lot_id}", now_iso)
+                    (lot_id, k_hash, credits_to_restore, new_bal, req_id, f"release_reservation_{reservation_id[:8]}_{reason}", now_iso)
                 )
+                return True
 
-                return {
-                    "key_prefix": row["key_prefix"],
-                    "tier": tier,
-                    "credits": new_total,
-                    "key_hash": k_hash,
-                    "lot_id": lot_id,
-                    "request_id": request_id,
-                }, "ok"
+    def reap_expired_reservations(self) -> int:
+        """
+        Reaps all abandoned or timed-out reservations where expires_at < now.
+        Restores credits safely to the active lot and API key.
+        """
+        with self._lock, self.connection() as conn:
+            with conn:
+                return self._reap_expired_reservations_conn(conn)
+
+    def _reap_expired_reservations_conn(self, conn: sqlite3.Connection) -> int:
+        now_iso = self.get_now_iso()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT reservation_id, key_hash, lot_id, credits, request_id
+            FROM quota_reservations
+            WHERE status = 'reserved' AND expires_at < ?
+            """,
+            (now_iso,)
+        )
+        expired_res = cur.fetchall()
+        reaped_count = 0
+
+        for r in expired_res:
+            res_id = r["reservation_id"]
+            k_hash = r["key_hash"]
+            lot_id = r["lot_id"]
+            creds = r["credits"]
+            req_id = r["request_id"]
+
+            cur.execute(
+                """
+                UPDATE quota_reservations
+                SET status = 'expired', released_at = ?, release_reason = 'reservation_ttl_expired'
+                WHERE reservation_id = ? AND status = 'reserved'
+                """,
+                (now_iso, res_id)
+            )
+            if cur.rowcount > 0:
+                cur.execute(
+                    "UPDATE credit_lots SET credits_remaining = credits_remaining + ?, status = 'active' WHERE lot_id = ?",
+                    (creds, lot_id)
+                )
+                cur.execute(
+                    "UPDATE api_keys SET credits = credits + ? WHERE key_hash = ?",
+                    (creds, k_hash)
+                )
+                cur.execute("SELECT credits FROM api_keys WHERE key_hash = ?", (k_hash,))
+                new_bal = cur.fetchone()["credits"]
+                cur.execute(
+                    """
+                    INSERT INTO credit_ledger_events (lot_id, key_hash, event_type, amount, balance_after, request_id, detail, created_at)
+                    VALUES (?, ?, 'refund', ?, ?, ?, 'reap_expired_reservation', ?)
+                    """,
+                    (lot_id, k_hash, creds, new_bal, req_id, now_iso)
+                )
+                reaped_count += 1
+
+        return reaped_count
+
+    def _check_and_record_quota_thresholds_conn(self, conn: sqlite3.Connection, key_hash: str) -> Optional[float]:
+        """
+        Evaluates consumption percentage against (0.50, 0.80, 0.90, 0.95).
+        Emits and records deduplicated threshold alerts in quota_threshold_alerts.
+        Returns the highest newly crossed threshold or None.
+        """
+        now_iso = self.get_now_iso()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT SUM(credits_granted) as total_granted, SUM(credits_remaining) as total_remaining
+            FROM credit_lots
+            WHERE key_hash = ? AND status IN ('active', 'exhausted')
+            """,
+            (key_hash,)
+        )
+        row = cur.fetchone()
+        if not row or not row["total_granted"]:
+            return None
+
+        total_granted = int(row["total_granted"])
+        total_remaining = int(row["total_remaining"] or 0)
+        total_consumed = total_granted - total_remaining
+
+        if total_granted <= 0:
+            return None
+
+        ratio = total_consumed / float(total_granted)
+        thresholds = (0.50, 0.80, 0.90, 0.95)
+        newly_crossed = None
+
+        for th in thresholds:
+            if ratio >= th:
+                cur.execute(
+                    "SELECT id FROM quota_threshold_alerts WHERE key_hash = ? AND threshold = ?",
+                    (key_hash, th)
+                )
+                if not cur.fetchone():
+                    cur.execute(
+                        "INSERT INTO quota_threshold_alerts (key_hash, threshold, triggered_at) VALUES (?, ?, ?)",
+                        (key_hash, th, now_iso)
+                    )
+                    newly_crossed = th
+                    cur.execute(
+                        "INSERT INTO audit_logs (event_type, detail, created_at) VALUES (?, ?, ?)",
+                        ("quota_warning_threshold_crossed", f"Key {key_hash[:12]} crossed {int(th*100)}% quota consumption ({total_consumed}/{total_granted})", now_iso)
+                    )
+
+        return newly_crossed
+
+    def get_usage_and_threshold_status(self, raw_key_or_hash: str) -> Dict[str, Any]:
+        """
+        Returns full usage visibility and threshold alerts for an API key.
+        """
+        k_hash = self.hash_key(raw_key_or_hash) if not (len(raw_key_or_hash) == 64 and all(c in "0123456789abcdef" for c in raw_key_or_hash.lower())) else raw_key_or_hash
+
+        with self._lock, self.connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT SUM(credits_granted) as total_granted, SUM(credits_remaining) as total_remaining
+                FROM credit_lots
+                WHERE key_hash = ? AND status IN ('active', 'exhausted')
+                """,
+                (k_hash,)
+            )
+            row = cur.fetchone()
+            total_granted = int(row["total_granted"]) if row and row["total_granted"] else 0
+            total_remaining = int(row["total_remaining"]) if row and row["total_remaining"] is not None else 0
+            total_consumed = max(0, total_granted - total_remaining)
+            percent = (total_consumed / float(total_granted) * 100.0) if total_granted > 0 else 0.0
+
+            cur.execute(
+                "SELECT threshold, triggered_at FROM quota_threshold_alerts WHERE key_hash = ? ORDER BY threshold ASC",
+                (k_hash,)
+            )
+            alerts = [{"threshold": r["threshold"], "triggered_at": r["triggered_at"]} for r in cur.fetchall()]
+            highest = alerts[-1]["threshold"] if alerts else None
+
+            return {
+                "quota_limit": total_granted,
+                "consumed": total_consumed,
+                "remaining": total_remaining,
+                "percent_consumed": round(percent, 1),
+                "warning_threshold_crossed": highest,
+                "active_alerts": alerts,
+                "configured_thresholds": [0.50, 0.80, 0.90, 0.95],
+            }
 
     def revoke_api_key(self, raw_key: str, reason: str = "") -> bool:
         """
@@ -1807,6 +2215,7 @@ class StorageManager:
                     """,
                     (tier, tier, exp_iso, credits, key_hash)
                 )
+                cur.execute("DELETE FROM quota_threshold_alerts WHERE key_hash = ?", (key_hash,))
                 new_balance = key_row["credits"] + credits
                 cur.execute(
                     """
@@ -1901,6 +2310,18 @@ class StorageManager:
                 )
                 lots = [dict(r) for r in cur.fetchall()]
 
+                total_granted = sum(lot["credits_granted"] for lot in lots)
+                total_remaining = sum(lot["credits_remaining"] for lot in lots)
+                total_consumed = max(0, total_granted - total_remaining)
+                percent_consumed = round((total_consumed / float(total_granted) * 100.0), 1) if total_granted > 0 else 0.0
+
+                cur.execute(
+                    "SELECT threshold, triggered_at FROM quota_threshold_alerts WHERE key_hash = ? ORDER BY threshold ASC",
+                    (k_hash,)
+                )
+                alerts = [{"threshold": r["threshold"], "triggered_at": r["triggered_at"]} for r in cur.fetchall()]
+                highest_alert = alerts[-1]["threshold"] if alerts else None
+
                 return {
                     "key_prefix": key_row["key_prefix"],
                     "key_hash": k_hash,
@@ -1915,6 +2336,15 @@ class StorageManager:
                         "days_remaining": days_remaining,
                     },
                     "credit_lots": lots,
+                    "usage": {
+                        "quota_limit": total_granted,
+                        "consumed": total_consumed,
+                        "remaining": total_remaining,
+                        "percent_consumed": percent_consumed,
+                        "warning_threshold_crossed": highest_alert,
+                        "active_alerts": alerts,
+                        "configured_thresholds": [0.50, 0.80, 0.90, 0.95],
+                    },
                 }
 
     def get_key_lots(self, key_hash: str) -> list[Dict[str, Any]]:
@@ -1965,11 +2395,14 @@ class StorageManager:
         granted + refunded - deducted - expired == current active remaining balance
         """
         with self._lock, self.connection() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT event_type, SUM(amount) as total
-                FROM credit_ledger_events
+            with conn:
+                self._expire_overdue_lots_and_entitlements(conn)
+                self._reap_expired_reservations_conn(conn)
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    SELECT event_type, SUM(amount) as total
+                    FROM credit_ledger_events
                 WHERE key_hash = ?
                 GROUP BY event_type
                 """,

@@ -1,10 +1,10 @@
 # Moltbook Alpha — Verified Project Status & Commercial Baseline
 
-**Document Version:** 1.7.0<br>
-**Audit Date:** 2026-10-18 (Client SDK, Intelligence Engine & Alpha Pilot Release)<br>
+**Document Version:** 1.9.0<br>
+**Audit Date:** 2026-10-18 (Rate Limiting, Quota Hardening & Agent Recovery Release)<br>
 **Branch:** `feat/commercial-api-hardening`<br>
 **Target Environments:** Python 3.11+ / 3.14 (Linux x86_64 Ubuntu 24.04, Windows 11)<br>
-**Verification Baseline:** 201 passing automated tests across 22 test modules, 0 warnings, clean Ruff, clean Git whitespace<br>
+**Verification Baseline:** 226 passing automated tests across 23 test modules, 0 warnings, clean Ruff, clean Git whitespace<br>
 **Active Server Deployment:** HP ProLiant ML150 G6 Ubuntu Server (`10.0.0.190:8080`, listening on `0.0.0.0:8080`) [Verified live and operational]<br>
 
 ---
@@ -105,6 +105,11 @@ System capabilities are classified across the Stage 19 operational dimensions:
 | **Administrative CLI (`cli.py`)** | **Implemented & Tested** | Provisions administrator and alpha pilot keys (`create-pilot-key`), inspects key status/quota (`inspect-key`), lists invoices (`list-invoices`), and revokes keys (`revoke-key`). Verified by `tests/test_audit_and_health.py`. |
 | **ProLiant Server Deployment** | **Deployed & Operational** | Running on Ubuntu 24.04.4 LTS (`10.0.0.190:8080`) as `moltbook-alpha.service` under unprivileged user `moltbook-api`. Listening on `0.0.0.0:8080`. Verified live over LAN with end-to-end autonomous agent workflow. |
 | **Production Payment Settlement on Mainnet** | **Operational & Live (Gate B)** | Cloudflare Tunnel live (`movement-enlarge-sites-dock.trycloudflare.com`). 3-node failover pool on mainnet-beta. Verified in `docs/GATE_B_VERIFICATION.md` and 201 automated tests. |
+| **Token Bucket Rate Limiting** | **Implemented & Tested** | Burst capacity 5, sustained refill 60/min (1 token/s) with cross-process SQLite WAL coordination (`rate_limit_tokens`) and fail-open/closed policies. Verified by `tests/test_rate_limiter.py` (12 tests). |
+| **Concurrency Limiter & 30s Timeout** | **Implemented & Tested** | In-flight execution slot tracker (max 5 concurrent per key) with automatic TTL reaping (`rate_limit_concurrency`) and 30s execution timeout middleware. Verified by `tests/test_rate_limiter.py`. |
+| **Two-Phase Quota Reservation & Idempotency** | **Implemented & Tested** | Atomic `reserve` -> `execute` -> `settle` / `release` prevents concurrent overspend. Idempotency replay returns cached payload without deducting credit. Verified by `tests/test_quota.py` (13 tests). |
+| **Standardized Error Taxonomy & Warning Alerts** | **Implemented & Tested** | Standardized `RATE_LIMITED` (429) vs `ENTITLEMENT_EXHAUSTED` (402), enriched `GET /v1/account/quota`, and deduplicated threshold alerts at 50%, 80%, 90%, 95%. Verified by `tests/test_error_handling.py` and `tests/test_quota.py`. |
+| **Agent SDK Graceful Recovery** | **Implemented & Tested** | Exponential backoff with random jitter on 429, immediate termination on 402, and idempotency key injection. Verified by `tests/test_sdk.py` (7 tests). |
 
 ---
 

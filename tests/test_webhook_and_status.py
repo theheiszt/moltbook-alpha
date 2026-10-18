@@ -4,6 +4,7 @@ and public payment status inspection.
 """
 
 import secrets
+import time
 from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 
@@ -22,7 +23,14 @@ def make_random_sig() -> str:
     return SAMPLE_BASE58_SIG[:80] + suffix
 
 
-def build_synthetic_tx(err=None, asset="USDC", amount_raw=1_000_000, recipient=TREASURY, signature=SAMPLE_BASE58_SIG):
+def build_synthetic_tx(
+    err=None,
+    asset="USDC",
+    amount_raw=1_000_000,
+    recipient=TREASURY,
+    signature=SAMPLE_BASE58_SIG,
+    block_time=None,
+):
     meta = {
         "err": err,
         "fee": 5000,
@@ -48,8 +56,10 @@ def build_synthetic_tx(err=None, asset="USDC", amount_raw=1_000_000, recipient=T
             "owner": recipient,
             "uiTokenAmount": {"amount": str(amount_raw), "decimals": 6, "uiAmount": amount_raw / 1_000_000},
         }]
+    if block_time is None:
+        block_time = int(time.time())
     return {
-        "blockTime": 1700000000,
+        "blockTime": block_time,
         "slot": 250000000,
         "meta": meta,
         "transaction": {
@@ -198,3 +208,20 @@ def test_status_endpoint_invalid_signature():
     client = TestClient(app)
     res = client.get("/v1/payments/status/not_valid_base58_too_short")
     assert res.status_code == 422
+
+
+def test_webhook_expired_transaction_rejected(monkeypatch):
+    sig = make_random_sig()
+    # 2 hours old (exceeds default max_age_seconds=1800)
+    old_time = int(time.time()) - 7200
+    tx = build_synthetic_tx(asset="USDC", amount_raw=1_000_000, signature=sig, block_time=old_time)
+    monkeypatch.setattr(SolanaPaymentVerifier, "fetch_transaction", MagicMock(return_value=tx))
+
+    client = TestClient(app)
+    res = client.post(
+        "/v1/payments/webhook",
+        json={"transaction_signature": sig, "target_tier": "tier_starter"},
+        headers={"X-Webhook-Secret": WEBHOOK_SECRET},
+    )
+    assert res.status_code == 400
+    assert "Transaction expired" in res.json()["detail"]

@@ -48,7 +48,7 @@ APP_ENV=production
 TRUSTED_PROXIES=127.0.0.1,::1
 
 # Solana Mainnet Treasury Wallet (MUST be cold or multisig wallet)
-SOLANA_TREASURY_WALLET=DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC
+SOLANA_TREASURY_WALLET=BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx
 
 # Upstream Solana RPC Failover Pool (Primary + Secondary nodes)
 SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=YOUR_PROD_KEY
@@ -229,7 +229,7 @@ PORT=8080
 TRUSTED_PROXIES=127.0.0.1,::1,173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22
 
 # Staging Treasury Wallet (Dedicated test wallet - ZERO mainnet production treasury funds)
-SOLANA_TREASURY_WALLET=DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC
+SOLANA_TREASURY_WALLET=BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx
 
 # Upstream RPC Failover Pool
 SOLANA_RPC_URL=https://api.mainnet-beta.solana.com

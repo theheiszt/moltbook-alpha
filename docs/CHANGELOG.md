@@ -2,6 +2,41 @@
 
 All notable changes to the Moltbook Alpha commercial API hardening will be documented in this file.
 
+## [1.9.0-rate-limiting-and-quota-hardening] - 2026-10-18 (`feat/commercial-api-hardening`)
+
+### API Rate Limiting, Quota Hardening & Agent Recovery
+- **Token Bucket Rate Limiting (`rate_limiter.py`):**
+  - Implemented token bucket rate limiter with configurable burst capacity (5 req) and sustained refill rate (60 req/min = 1 token/sec).
+  - Synchronized across multi-process and multi-worker environments via SQLite WAL (`rate_limit_tokens` table) with thread-safe in-memory fast path.
+  - Implemented configurable fail-open and fail-closed policies on storage connection failure.
+  - Added standard HTTP response headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`.
+- **Concurrency Limiting & Execution Timeout (`rate_limiter.py`, `api_server.py`):**
+  - Added `ConcurrencyLimiter` bounding active in-flight request slots to 5 per API key, tracked transactionally in SQLite (`rate_limit_concurrency` table).
+  - Added automatic stale slot reaping with TTL tracking.
+  - Added 30-second execution timeout guard middleware (`timeout_and_rate_limit_middleware`) with clean cancellation handling.
+- **Two-Phase Quota Reservation & Concurrency Safety (`storage.py`, `api_server.py`):**
+  - Implemented two-phase quota lifecycle: `reserve` -> `execute` -> `settle` / `release`.
+  - Atomic conditional checking and reservation against Earliest-Deadline-First (EDF) credit lots, guaranteeing available balance cannot go negative under concurrency.
+  - Safe reservation release on handler exception, client abort, or execution timeout, restoring credit to active lot and recording a `refund` ledger event.
+  - Integrated `Idempotency-Key` and `X-Idempotency-Key` support, storing settled response payloads in `quota_reservations.response_cache` to allow safe replay without double deduction.
+  - Added periodic reaper for abandoned or expired reservations.
+- **Machine-Readable Error Taxonomy Standardization (`errors.py`):**
+  - Standardized JSON error response payload: `{"error": {"code": ..., "message": ..., "retryable": ..., "retry_after_seconds": ...}}`.
+  - Introduced explicit distinction between short-term rate limiting (`RATE_LIMITED`, HTTP 429, retryable with `Retry-After`) and balance/entitlement exhaustion (`ENTITLEMENT_EXHAUSTED`, HTTP 402, non-retryable).
+  - Preserved 100% backward compatibility for legacy clients asserting top-level `code`, `detail`, and `message` fields.
+- **Usage Visibility & Proactive Threshold Alerts (`storage.py`, `api_server.py`):**
+  - Enriched `GET /v1/account/quota` with `usage` (quota limit, consumed, remaining, percent consumed, active alerts) and `rate_limit_state` (remaining tokens, burst capacity, in-flight count).
+  - Added threshold crossing detection engine with deduplicated alerts at 50%, 80%, 90%, and 95% consumption recorded in `quota_threshold_alerts`.
+- **Agent SDK Graceful Recovery (`sdk/moltbook_intel`):**
+  - Updated `MoltbookIntelClient` with jittered exponential backoff for HTTP 429 rate limit responses.
+  - Enforced immediate termination without retrying for HTTP 402 entitlement exhaustion.
+  - Added automatic idempotency key propagation across retries.
+  - Expanded SDK exception taxonomy with `EntitlementExhaustedError` and typed error code mappings.
+- **Documentation & Test Verification:**
+  - Published comprehensive architectural audit in `docs/API_RATE_LIMITING_AUDIT.md`.
+  - Published technical specification and verification matrix in `docs/API_RATE_LIMITING.md`.
+  - Expanded test suite from 202 to **226 automated tests** (0 failures, 100% pass rate across 23 test modules), including adversarial production-readiness verification and webhook freshness enforcement, with clean Ruff linting.
+
 ## [1.8.0-public-gateway-and-gate-b] - 2026-10-18 (`feat/commercial-api-hardening`)
 
 ### Public HTTPS Ingress (Cloudflare Tunnel), Multi-RPC Redundancy & Gate B Sign-off

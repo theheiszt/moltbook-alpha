@@ -76,7 +76,7 @@ MOLTBOOK_DATA_DIR=/var/lib/moltbook-alpha
 MOLTBOOK_HOST=127.0.0.1
 MOLTBOOK_PORT=8080
 SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
-SOLANA_TREASURY_WALLET=DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC
+SOLANA_TREASURY_WALLET=BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx
 ENABLE_DEMO_KEYS=false
 WEBHOOK_SECRET=moltbook_staging_webhook_secret_internal
 EOF

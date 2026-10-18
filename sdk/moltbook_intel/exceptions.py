@@ -59,6 +59,10 @@ class RateLimitExceededError(MoltbookApiError):
     pass
 
 
+class EntitlementExhaustedError(CreditsExhaustedError):
+    pass
+
+
 class RpcGatewayError(MoltbookApiError):
     pass
 
@@ -86,7 +90,9 @@ ERROR_CODE_MAP = {
     "PAYMENT_REQUIRED": PaymentRequiredError,
     "CREDITS_EXHAUSTED": CreditsExhaustedError,
     "ENTITLEMENT_EXPIRED": EntitlementExpiredError,
+    "ENTITLEMENT_EXHAUSTED": EntitlementExhaustedError,
     "RATE_LIMIT_EXCEEDED": RateLimitExceededError,
+    "RATE_LIMITED": RateLimitExceededError,
     "RPC_GATEWAY_ERROR": RpcGatewayError,
     "DATABASE_UNAVAILABLE": DatabaseUnavailableError,
     "VALIDATION_ERROR": ValidationError,
@@ -97,11 +103,12 @@ ERROR_CODE_MAP = {
 
 def raise_for_error_payload(status_code: int, payload: Dict[str, Any], request_id: Optional[str] = None):
     """Instantiates and raises the appropriate MoltbookApiError subclass from payload."""
-    code = payload.get("code") or f"HTTP_{status_code}"
-    message = payload.get("message") or str(payload.get("detail", "API Error"))
-    details = payload.get("details")
-    retryable = payload.get("retryable", False)
-    retry_after = payload.get("retry_after")
+    nested_err = payload.get("error") if isinstance(payload.get("error"), dict) else {}
+    code = payload.get("code") or nested_err.get("code") or f"HTTP_{status_code}"
+    message = payload.get("message") or nested_err.get("message") or str(payload.get("detail", "API Error"))
+    details = payload.get("details") or nested_err.get("details")
+    retryable = payload.get("retryable", nested_err.get("retryable", False))
+    retry_after = payload.get("retry_after") or payload.get("retry_after_seconds") or nested_err.get("retry_after_seconds")
     req_id = payload.get("request_id") or request_id
     docs_url = payload.get("docs_url")
 
