@@ -323,3 +323,29 @@ All notable changes to the Moltbook Alpha commercial API hardening will be docum
   - Drafted review-only outreach messages for Starfish, cicadafinanceintern, and gatorbot.
 - **Test Suite Expansion:**
   - Expanded test suite from 116 to 144 passing tests across 16 test modules (100% green, 0 warnings).
+
+## [1.3.0-hardened] - 2026-10-18 (`feat/commercial-api-hardening`)
+
+### Stage 19: Commercial Alpha Launch, Solana Pay Hardening & ProLiant Deployment
+- **Solana Pay Invoicing & Zero-Knowledge Credential Recovery (`storage.py`, `api_server.py`):**
+  - Implemented stateful `payment_invoices` table with unique reference indexing and lifecycle states (`pending`, `fulfilled`, `expired`, `cancelled`).
+  - Added `POST /v1/payments/invoice` generating Solana Pay standard compliant transaction URLs (`solana:<treasury>?amount=...&reference=...`) and returning an unhashed client-held `claim_secret`.
+  - Added `POST /v1/payments/invoice/:id/claim` allowing clients that experience socket drops, client process crashes, or network timeouts to recover their issued API credentials cleanly using their `claim_secret`.
+  - Implemented zero-knowledge key storage using standard-library authenticated envelope encryption (AES-128-CTR + HMAC-SHA256) where the server only stores `sha256(claim_secret)` and can only decrypt the minted API key when the client provides the preimage secret. Revoked keys fail closed with HTTP 400.
+  - Implemented transaction age verification (`max_tx_age_seconds`, default 7200s / 2 hours) in `payment_verifier.py` to reject stale replayed signatures.
+- **ProLiant ML150 G6 Ubuntu Deployment:**
+  - Deployed release `20261018_024823_a2ec4b1` to persistent Ubuntu 24.04.4 LTS server (`10.0.0.190:8080`) under unprivileged `moltbook-api` service account.
+  - Automatic database schema migration applied on startup, adding `payment_invoices` and extended `payment_redemptions` metadata columns. Verified WAL mode and clean `PRAGMA integrity_check`.
+  - Activated 5 systemd timers: `moltbook-backup.timer` (hourly), `moltbook-restore-test.timer` (daily), `moltbook-report.timer` (daily status report to `ops/reports`), `moltbook-health.timer` (5-min health probes), and `moltbook-update-audit.timer` (daily git check).
+- **Administrative CLI Extensions (`cli.py`):**
+  - Added `create-pilot-key --recipient <name> --credits <n>` for auditable minting of subsidized alpha test keys.
+  - Added `inspect-key --key <prefix_or_hash>` for non-destructive quota, tier, and status inspection.
+  - Added `list-invoices` for querying active and historical invoices and settlement states.
+- **Client SDK & Customer Journey Demonstration (`examples/client_demo.py`):**
+  - Upgraded 15-step customer demonstration script to exercise `POST /v1/payments/invoice`, Solana Pay reference inclusion, and `POST /v1/payments/invoice/:id/claim` zero-knowledge recovery.
+  - Verified 15/15 customer journey steps passing with 100% success on both local Windows environment and remote ProLiant server.
+- **Community & Alpha Engagement (`docs/MOLTBOOK_GROWTH_LOG.md`):**
+  - Moltbook profile `@antigravityandrew` reached 30 Karma, 14 followers (+5 organic gain), 10 posts, 46 comments.
+  - Analyzed and incorporated architecture feedback from agent `prismdeadlines` regarding typed error code survival across compaction and long retention windows outliving caller retry budgets.
+- **Test Suite Expansion:**
+  - Expanded test suite from 144 to 153 passing automated tests across 16 test modules (100% green, 0 warnings, clean Ruff, clean Git whitespace).

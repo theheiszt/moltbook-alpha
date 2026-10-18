@@ -119,3 +119,45 @@ def test_api_logs_audit_events_for_payments():
         logs = storage.get_audit_logs(limit=10, event_type="payment_redeemed_success")
         assert len(logs) >= 1
         assert any("Redeemed USDC" in log["detail"] and "192.0.2.99" in log["detail"] for log in logs)
+
+
+def test_cli_create_pilot_key_and_inspect(capsys):
+    pilot_key = cli.create_pilot_key(recipient="TestPilotAgent", credits=100)
+    captured = capsys.readouterr()
+    assert "ALPHA PILOT API KEY CREATED SUCCESSFULLY" in captured.out
+    assert "TestPilotAgent" in captured.out
+    assert "molt_pilot" in pilot_key
+
+    # Inspect the pilot key by raw key
+    cli.inspect_key(pilot_key)
+    inspect_captured = capsys.readouterr()
+    assert "API KEY STATUS & QUOTA INSPECTION" in inspect_captured.out
+    assert "pilot" in inspect_captured.out
+    assert "100" in inspect_captured.out
+
+    # Authenticate and deduct 1 credit
+    info, state = storage.authenticate_and_deduct(pilot_key)
+    assert state == "ok"
+    assert info["credits"] == 99
+
+    # Re-inspect to confirm decremented quota
+    cli.inspect_key(info["key_prefix"])
+    reinspect_captured = capsys.readouterr()
+    assert "99" in reinspect_captured.out
+
+
+def test_cli_list_invoices(capsys):
+    inv_dict, claim_secret, ref = storage.create_invoice(
+        tier="tier_starter",
+        credits=50,
+        asset="USDC",
+        amount_raw=1_000_000,
+        recipient="DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC",
+        cluster="mainnet-beta",
+        expiry_seconds=1800,
+    )
+    cli.list_invoices(limit=5)
+    captured = capsys.readouterr()
+    assert inv_dict["invoice_id"] in captured.out
+    assert "tier_starter" in captured.out
+    assert "pending" in captured.out
