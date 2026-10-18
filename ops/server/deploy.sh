@@ -77,8 +77,12 @@ fi
 
 # Ensure application code is owned by service user
 chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "$RELEASE_DIR"
-# Make application code read-only to prevent tampering by running process
+# Make application code readable and directories traversable
 chmod -R u=rwX,go=rX "$RELEASE_DIR"
+# Ensure operational scripts in ops/server are executable
+if [ -d "${RELEASE_DIR}/ops/server" ]; then
+    chmod +x "${RELEASE_DIR}/ops/server"/*.sh || true
+fi
 
 # 4. Save current target for rollback if needed
 PREVIOUS_RELEASE=""
@@ -101,7 +105,7 @@ if [ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]; then
     echo "[VERIFY] Running post-deployment health check..."
     sleep 2
     if [ -f "${CURRENT_LINK}/ops/server/health_check.sh" ]; then
-        if ! "${CURRENT_LINK}/ops/server/health_check.sh"; then
+        if ! bash "${CURRENT_LINK}/ops/server/health_check.sh"; then
             echo "[ALERT] Post-deployment health check FAILED!"
             if [ -n "$PREVIOUS_RELEASE" ] && [ -d "$PREVIOUS_RELEASE" ]; then
                 echo "[ROLLBACK] Reverting symlink to previous release: ${PREVIOUS_RELEASE}"
