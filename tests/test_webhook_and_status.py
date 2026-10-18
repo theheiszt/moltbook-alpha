@@ -11,7 +11,7 @@ from config import WEBHOOK_SECRET, CANONICAL_USDC_MINT
 from payment_verifier import SolanaPaymentVerifier, RPCError
 from api_server import app
 
-TREASURY = "DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC"
+TREASURY = "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx"
 OTHER_WALLET = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin"
 SAMPLE_BASE58_SIG = "5wHu1qwLq7Xg5WpS1Gv7nJ8cK3L9bM2rT4vN6pQ8sY1xZ3aB5cD7eF9gH2jK4mN6pQ8sY1xZ3aB5cD7eF9gH2jK4"
 

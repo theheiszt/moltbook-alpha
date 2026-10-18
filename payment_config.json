@@ -1,5 +1,5 @@
 {
-  "solana_treasury_wallet": "DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC",
+  "solana_treasury_wallet": "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx",
   "rpc_url": "https://api.mainnet-beta.solana.com",
   "fallback_rpc_urls": [
     "https://solana-rpc.publicnode.com",

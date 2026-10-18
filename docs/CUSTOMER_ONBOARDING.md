@@ -28,7 +28,7 @@ Payments are accepted in either **USDC** (canonical SPL token) or **SOL** (nativ
 
 ### Settlement Parameters
 - **Solana Cluster:** `mainnet-beta`
-- **Treasury Address:** `DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC`
+- **Treasury Address:** `BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx`
 - **Canonical USDC Mint:** `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` (Decimals: 6)
 - **Settlement Commitment:** `finalized` (maximum Solana confirmation tier; `confirmed` or `processed` transactions are rejected)
 - **Transaction Expiration:** Payments must be verified within 86,400 seconds (24 hours) of block generation.
@@ -66,9 +66,9 @@ curl -X POST http://127.0.0.1:8080/v1/payments/invoice \
   "asset": "USDC",
   "amount_raw": 1000000,
   "amount_formatted": "1.00 USDC",
-  "treasury_wallet": "DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC",
+  "treasury_wallet": "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx",
   "cluster": "mainnet-beta",
-  "solana_pay_url": "solana:DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC?amount=1.00&spl-token=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&reference=9pAHpjS8YKJBpj3dm7bXPDXxvjUfo6RNZZUYBGN2e5Bp&label=Moltbook+Alpha&message=tier_starter",
+  "solana_pay_url": "solana:BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx?amount=1.00&spl-token=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&reference=9pAHpjS8YKJBpj3dm7bXPDXxvjUfo6RNZZUYBGN2e5Bp&label=Moltbook+Alpha&message=tier_starter",
   "claim_secret": "sec_9c8d3e7d28fb3e1974bfd3a1b710e683aaef4732",
   "created_at": "2026-10-18T02:45:05+00:00",
   "expires_at": "2026-10-18T03:15:05+00:00"

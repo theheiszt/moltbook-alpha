@@ -104,7 +104,7 @@ def test_api_logs_audit_events_for_payments():
             amount_raw=1_000_000,
             tier="tier_starter",
             credits=50,
-            recipient="DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC",
+            recipient="BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx",
             reference=inv["reference"],
         )
 
@@ -152,7 +152,7 @@ def test_cli_list_invoices(capsys):
         credits=50,
         asset="USDC",
         amount_raw=1_000_000,
-        recipient="DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC",
+        recipient="BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx",
         cluster="mainnet-beta",
         expiry_seconds=1800,
     )

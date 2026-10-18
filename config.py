@@ -160,7 +160,7 @@ def load_payment_config() -> Dict[str, Any]:
 
     treasury_wallet = os.getenv(
         "SOLANA_TREASURY_WALLET",
-        config_data.get("solana_treasury_wallet", "DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC")
+        config_data.get("solana_treasury_wallet", "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx")
     ).strip()
 
     if not treasury_wallet:

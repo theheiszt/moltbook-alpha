@@ -132,7 +132,7 @@ def test_api_verify_solana_rate_limiting_triggers_429():
             amount_raw=1_000_000,
             tier="tier_starter",
             credits=50,
-            recipient="DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC",
+            recipient="BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx",
         )
 
         headers = {"x-forwarded-for": "198.51.100.42"}

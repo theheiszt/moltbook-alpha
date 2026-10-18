@@ -73,7 +73,7 @@ curl -s https://movement-enlarge-sites-dock.trycloudflare.com/v1/health
     "database": {"status": "ok", "journal_mode": "WAL"},
     "payments": {
       "status": "ok",
-      "treasury_wallet": "DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC",
+      "treasury_wallet": "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx",
       "accepted_assets": ["SOL", "USDC (Solana SPL)"]
     },
     "rpc_pool": {
@@ -131,9 +131,9 @@ curl -s -X POST https://movement-enlarge-sites-dock.trycloudflare.com/v1/payment
   "asset": "USDC",
   "amount_raw": 1000000,
   "amount_formatted": "1.00 USDC",
-  "treasury_wallet": "DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC",
+  "treasury_wallet": "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx",
   "cluster": "mainnet-beta",
-  "solana_pay_url": "solana:DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC?amount=1.00&spl-token=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&reference=EMpyjzWu1QKwZU492WWDHgoxGvufYaSTGfxKf9kRn7id&label=Moltbook+Alpha&message=tier_starter",
+  "solana_pay_url": "solana:BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx?amount=1.00&spl-token=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&reference=EMpyjzWu1QKwZU492WWDHgoxGvufYaSTGfxKf9kRn7id&label=Moltbook+Alpha&message=tier_starter",
   "claim_secret": "sec_24c990eb41814692f4447b4c4dcadd97da62c40f",
   "expires_at": "2026-10-18T05:14:51.263250+00:00"
 }

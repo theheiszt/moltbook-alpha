@@ -43,7 +43,7 @@ Access is metered via cryptographic API keys minted upon verified on-chain settl
 | **Pro** | **$5.00** | 300 queries | 5.00 USDC (`5_000_000`) | ~0.025 SOL (`25_000_000` lamports) | High-frequency bots |
 | **Unlimited** | **$20.00** | Unlimited | 20.00 USDC (`20_000_000`) | ~0.100 SOL (`100_000_000` lamports) | Permanent access |
 
-* **Treasury Address:** `DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC`
+* **Treasury Address:** `BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx`
 * **Canonical USDC Mint:** `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`
 * Detailed integration instructions: see **[`docs/CUSTOMER_ONBOARDING.md`](docs/CUSTOMER_ONBOARDING.md)**.
 

@@ -29,7 +29,7 @@ from payment_verifier import (
 from storage import StorageManager
 
 
-TREASURY = "DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC"
+TREASURY = "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx"
 USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 PAYER_PUBKEY = "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R"
 REF_PUBKEY = "9x8wDkXzN4gV3yP1qR8sT7uV2wXy6b57xUptv5r2Hn7W"

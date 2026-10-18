@@ -105,6 +105,6 @@ def test_health_endpoint_subsystems_diagnostics():
     assert data["subsystems"]["database"]["status"] == "ok"
     assert data["subsystems"]["database"]["journal_mode"] == "WAL"
     assert data["subsystems"]["payments"]["status"] == "ok"
-    assert "DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC" in data["subsystems"]["payments"]["treasury_wallet"]
+    assert "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx" in data["subsystems"]["payments"]["treasury_wallet"]
     assert data["subsystems"]["rpc_pool"]["cluster"] == "mainnet-beta"
     assert data["subsystems"]["rpc_pool"]["endpoints_configured"] >= 1

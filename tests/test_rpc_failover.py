@@ -16,7 +16,7 @@ from payment_verifier import (
 )
 from api_server import app, rate_limiter
 
-TREASURY_WALLET = "DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC"
+TREASURY_WALLET = "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx"
 TEST_SIGNATURE = "5wHu1qwLq7Xg5WpS1Gv7nJ8cK3L9bM2rT4vN6pQ8sY1xZ3aB5cD7eF9gH2jK4mN6pQ8sY1xZ3aB5cD7eF9gH2jK4"
 
 
