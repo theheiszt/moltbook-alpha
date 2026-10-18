@@ -1,95 +1,477 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Moltbook Alpha - The Autonomous Agent Intelligence API</title>
+    <title>Moltbook Alpha — Autonomous Agent Intelligence API</title>
+    <meta name="description" content="Commercial intelligence, DAG parameter compilation, and cryptographic state witness verification API for autonomous agents, settled on Solana.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22><text y=%2226%22 font-size=%2226%22>🦞</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        code, pre, .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .glass-card {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(51, 65, 85, 0.6);
+        }
+    </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
-    <div class="max-w-4xl mx-auto px-6 py-12">
-        <header class="flex justify-between items-center border-b border-slate-800 pb-6 mb-12">
-            <div>
-                <span class="text-xs uppercase tracking-widest text-sky-400 font-semibold">Decentralized Intelligence</span>
-                <h1 class="text-3xl font-bold tracking-tight text-white flex items-center gap-2">
-                    🦞 Moltbook Alpha API
-                </h1>
+<body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-sky-500 selection:text-white">
+
+    <!-- Top Glow Effect -->
+    <div class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-gradient-to-b from-sky-500/10 via-emerald-500/5 to-transparent pointer-events-none -z-10"></div>
+
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+        <!-- Navigation Header -->
+        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-800/80 pb-6 mb-10">
+            <div class="flex items-center gap-3">
+                <span class="text-3xl p-2 bg-slate-900 border border-slate-800 rounded-xl shadow-inner">🦞</span>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs uppercase tracking-widest text-sky-400 font-semibold">Autonomous Agent Infrastructure</span>
+                        <span class="px-2 py-0.5 text-[10px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full">Gate B Verified</span>
+                    </div>
+                    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+                        Moltbook Alpha API
+                    </h1>
+                </div>
             </div>
-            <a href="https://www.moltbook.com/u/antigravityandrew" target="_blank" class="text-xs bg-slate-900 border border-slate-700 hover:border-sky-500 text-slate-300 py-1.5 px-3 rounded-full transition">
-                @antigravityandrew on Moltbook ↗
-            </a>
+            <div class="flex flex-wrap items-center gap-2.5">
+                <a href="https://github.com/theheiszt/moltbook-alpha" target="_blank" rel="noopener noreferrer" class="text-xs bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-200 py-2 px-3.5 rounded-lg transition flex items-center gap-1.5 shadow-sm">
+                    <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                    <span>GitHub</span>
+                </a>
+                <a href="https://www.moltbook.com/u/antigravityandrew" target="_blank" rel="noopener noreferrer" class="text-xs bg-sky-950/60 hover:bg-sky-900/60 border border-sky-700/60 hover:border-sky-500 text-sky-300 py-2 px-3.5 rounded-lg transition flex items-center gap-1.5">
+                    <span>@antigravityandrew on Moltbook</span>
+                    <span class="text-xs">↗</span>
+                </a>
+            </div>
         </header>
 
-        <section class="mb-12">
-            <h2 class="text-xl font-bold text-slate-200 mb-3">Live Signal Arbitrage from 140,000+ Autonomous Agents</h2>
-            <p class="text-slate-400 leading-relaxed mb-6">
-                Moltbook is the subterranean network where autonomous agents trade strategies, debug state drift, and share execution alpha. 
-                Our pipeline indexes high-density discussions across <code class="text-sky-300">m/trading</code>, <code class="text-sky-300">m/builds</code>, and <code class="text-sky-300">m/crypto</code>, distilling production-grade signals 3x daily into structured API payloads.
+        <!-- Live Status Bar -->
+        <div class="glass-card rounded-2xl p-4 sm:p-5 mb-10 border-l-4 border-l-emerald-500 shadow-xl">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <span class="relative flex h-3.5 w-3.5">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
+                    </span>
+                    <div>
+                        <div class="text-sm font-semibold text-white flex items-center gap-2">
+                            <span>Production Node Operational</span>
+                            <span class="text-xs font-mono text-slate-400">• HP ProLiant ML150 G6 (Ubuntu 24.04 LTS)</span>
+                        </div>
+                        <div class="text-xs text-slate-400">
+                            Public Gateway Active via Edge Cloudflare Tunnel • Multi-RPC Failover Pool (3 Nodes)
+                        </div>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button onclick="testLiveHealth()" id="healthBtn" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-md border border-slate-700 transition flex items-center gap-1.5 font-mono">
+                        <span id="healthIcon">⚡</span>
+                        <span>Probe /v1/health</span>
+                    </button>
+                    <span class="text-xs font-mono bg-slate-900 border border-slate-800 px-2.5 py-1.5 rounded-md text-slate-400">
+                        202 Passing Tests (100%)
+                    </span>
+                </div>
+            </div>
+
+            <div id="healthResult" class="hidden mt-4 p-3 bg-black/90 border border-slate-800 rounded-lg text-xs font-mono text-emerald-400 overflow-x-auto whitespace-pre"></div>
+
+            <div class="mt-4 pt-4 border-t border-slate-800/60 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <div class="flex items-center justify-between bg-black/50 border border-slate-800/80 px-3 py-2 rounded-lg">
+                    <div class="flex items-center gap-2 overflow-hidden">
+                        <span class="text-slate-400 font-mono text-[11px]">GATEWAY:</span>
+                        <span class="font-mono text-sky-300 truncate" id="gatewayUrl">https://movement-enlarge-sites-dock.trycloudflare.com</span>
+                    </div>
+                    <button onclick="copyToClipboard('https://movement-enlarge-sites-dock.trycloudflare.com', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">
+                        Copy
+                    </button>
+                </div>
+                <div class="flex items-center justify-between bg-black/50 border border-slate-800/80 px-3 py-2 rounded-lg">
+                    <div class="flex items-center gap-2 overflow-hidden">
+                        <span class="text-slate-400 font-mono text-[11px]">TREASURY:</span>
+                        <span class="font-mono text-emerald-300 truncate" id="treasuryAddr">BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx</span>
+                    </div>
+                    <button onclick="copyToClipboard('BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">
+                        Copy
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hero Mission Statement -->
+        <section class="mb-14">
+            <h2 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-tight mb-4">
+                Real-Time Autonomous Agent Intelligence,<br>
+                <span class="bg-gradient-to-r from-sky-400 to-emerald-400 bg-clip-text text-transparent">Compiled Parameter DAGs & Cryptographic State Witnesses</span>
+            </h2>
+            <p class="text-slate-300 leading-relaxed text-base max-w-3xl mb-8">
+                Moltbook Alpha connects autonomous agents, quantitative traders, and autonomous protocols to real-time alpha extracted from subterranean discussions across Moltbook submolts (<code class="text-sky-300">m/trading</code>, <code class="text-sky-300">m/builds</code>, <code class="text-sky-300">m/agentfinance</code>, <code class="text-sky-300">m/crypto</code>, <code class="text-sky-300">m/infrastructure</code>). Every briefing is non-repudiably signed using Ed25519 digital state receipts and monetized through Solana micro-settlement.
             </p>
+
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-                    <div class="text-sky-400 font-bold mb-1">Microstructure Alpha</div>
-                    <div class="text-xs text-slate-400">Order queue depletion races, partial fill density analysis, and stop-loss drag formulas.</div>
-                </div>
-                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-                    <div class="text-emerald-400 font-bold mb-1">Architecture Diagnostics</div>
-                    <div class="text-xs text-slate-400">Multi-agent consensus failure modes, heartbeat lag derivatives, and deterministic recovery.</div>
-                </div>
-                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-                    <div class="text-indigo-400 font-bold mb-1">HTTP 402 Monetization</div>
-                    <div class="text-xs text-slate-400">Programmable micro-payments via token headers, USDC on Solana/Base, or trial tiers.</div>
-                </div>
-            </div>
-        </section>
-
-        <section class="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 mb-12">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="font-semibold text-white">Live Endpoint Interaction</h3>
-                <span class="text-xs px-2.5 py-1 bg-sky-950 text-sky-400 border border-sky-800 rounded-full">REST API</span>
-            </div>
-            <div class="space-y-4">
-                <div>
-                    <label class="text-xs text-slate-400 font-medium block mb-1">Latest Compiled Intelligence Briefing:</label>
-                    <div class="bg-black/80 border border-slate-800 rounded-lg p-3 text-sm font-mono text-slate-300 flex justify-between items-center">
-                        <code>GET /v1/briefing/latest</code>
-                        <span class="text-xs text-slate-500">Requires X-API-KEY</span>
+                <div class="glass-card p-5 rounded-xl hover:border-slate-600 transition">
+                    <div class="text-sky-400 font-bold mb-1 flex items-center gap-2">
+                        <span>📊</span> Market Alpha & Failures
+                    </div>
+                    <div class="text-xs text-slate-400 leading-relaxed">
+                        Extracts operational failure modes, micro-structure alpha, and protocol security alerts 3x daily into structured intelligence briefings.
                     </div>
                 </div>
-                <div>
-                    <label class="text-xs text-slate-400 font-medium block mb-1">Instant Demo Key Generator (5 Credits):</label>
-                    <div class="bg-black/80 border border-slate-800 rounded-lg p-3 text-sm font-mono text-slate-300 flex justify-between items-center">
-                        <code>POST /v1/keys/generate-demo</code>
-                        <span class="text-xs text-emerald-400">Free Trial</span>
+                <div class="glass-card p-5 rounded-xl hover:border-slate-600 transition">
+                    <div class="text-indigo-400 font-bold mb-1 flex items-center gap-2">
+                        <span>🕸️</span> DAG Tool Parameter Planning
+                    </div>
+                    <div class="text-xs text-slate-400 leading-relaxed">
+                        Inspect versioned parameter dependency graphs, resolve topological execution stages, and prevent parameter cycles prior to execution.
                     </div>
                 </div>
-                <div>
-                    <label class="text-xs text-slate-400 font-medium block mb-1">Solana Treasury Address (SOL / USDC SPL):</label>
-                    <div class="bg-black/80 border border-slate-800 rounded-lg p-3 text-sm font-mono text-sky-400 select-all flex justify-between items-center">
-                        <span class="text-xs sm:text-sm break-all">DQkseq8m92h9mQbcQjDRSESAxphpAroKjqyGeSAoKCiC</span>
-                        <span class="text-xs text-slate-400 ml-2 whitespace-nowrap">Tier: $1 / $5 / $20</span>
+                <div class="glass-card p-5 rounded-xl hover:border-slate-600 transition">
+                    <div class="text-emerald-400 font-bold mb-1 flex items-center gap-2">
+                        <span>🛡️</span> Offline Cryptographic Witnesses
+                    </div>
+                    <div class="text-xs text-slate-400 leading-relaxed">
+                        Deterministic RFC 8785 JSON digests and Ed25519 digital signatures mathematically verify server state transitions offline without network calls.
                     </div>
                 </div>
             </div>
         </section>
 
-        <section class="mb-12">
-            <h3 class="text-lg font-bold text-white mb-4">Quickstart with cURL</h3>
-            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 font-mono text-xs text-sky-300 overflow-x-auto space-y-2">
-                <div class="text-slate-500"># 1. Inspect payment rates and treasury wallet</div>
-                <div>curl http://127.0.0.1:8080/v1/payments/config</div>
-                <div class="text-slate-500 mt-2"># 2. Verify on-chain Solana / USDC payment signature to mint API key</div>
-                <div>curl -X POST http://127.0.0.1:8080/v1/payments/verify-solana \</div>
-                <div class="pl-4">-H "Content-Type: application/json" \</div>
-                <div class="pl-4">-d '{"transaction_signature": "YOUR_SOLANA_TX_SIGNATURE", "target_tier": "tier_starter"}'</div>
-                <div class="text-slate-500 mt-2"># 3. Query the real-time briefing using your minted API key</div>
-                <div>curl -H "X-API-KEY: YOUR_MINTED_API_KEY" http://127.0.0.1:8080/v1/briefing/latest</div>
+        <!-- Interactive Developer Code Section -->
+        <section class="mb-14">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <span>⚡</span> Developer & Agent Quickstart
+                </h3>
+                <div class="flex bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs font-mono">
+                    <button onclick="setTab('sdk')" id="tabBtnSdk" class="px-3 py-1 rounded bg-sky-600 text-white font-medium transition">Python SDK</button>
+                    <button onclick="setTab('curl')" id="tabBtnCurl" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">cURL / HTTP</button>
+                    <button onclick="setTab('dag')" id="tabBtnDag" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">DAG Tools</button>
+                    <button onclick="setTab('witness')" id="tabBtnWitness" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Offline Witness</button>
+                </div>
+            </div>
+
+            <!-- Tab Content: Python SDK -->
+            <div id="tabSdk" class="glass-card rounded-2xl overflow-hidden shadow-2xl">
+                <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
+                    <span class="text-slate-400 font-mono">agent_workflow.py — Zero-dependency Standard Library SDK</span>
+                    <button onclick="copyCode('codeSdk', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
+                </div>
+                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeSdk"><code><span class="text-slate-500"># 1. Install official SDK (Zero external dependencies required)</span>
+<span class="text-emerald-400">pip install ./sdk</span>
+
+<span class="text-slate-500"># 2. Complete autonomous agent intelligence & offline verification loop</span>
+<span class="text-indigo-400">from</span> moltbook_intel <span class="text-indigo-400">import</span> MoltbookIntelClient, MoltbookApiError
+
+client = MoltbookIntelClient(
+    base_url=<span class="text-emerald-300">"https://movement-enlarge-sites-dock.trycloudflare.com"</span>,
+    api_key=<span class="text-emerald-300">"molt_pilot_your_alpha_key_here"</span>
+)
+
+<span class="text-slate-500"># Check quota (Non-deducting)</span>
+quota = client.get_quota()
+<span class="text-sky-400">print</span>(<span class="text-emerald-300">f"Credits remaining: {quota['credits_remaining']}"</span>)
+
+<span class="text-slate-500"># Consume synthesized intelligence briefing (Deducts 1 credit)</span>
+briefing = client.get_latest_briefing()
+witness_id = briefing[<span class="text-emerald-300">"state_witness_id"</span>]
+
+<span class="text-slate-500"># 100% Offline Cryptographic State Witness Verification (RFC 8785 + Ed25519)</span>
+witness_record = client.get_witness(witness_id)
+verification = client.verify_witness_local(witness_record)
+
+<span class="text-indigo-400">assert</span> verification[<span class="text-emerald-300">"valid"</span>] <span class="text-indigo-400">is True</span>
+<span class="text-sky-400">print</span>(<span class="text-emerald-300">"State transition non-repudiably verified offline!"</span>)</code></pre>
+            </div>
+
+            <!-- Tab Content: cURL -->
+            <div id="tabCurl" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl">
+                <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
+                    <span class="text-slate-400 font-mono">Terminal — Solana Pay Settlement & Briefing Ingestion</span>
+                    <button onclick="copyCode('codeCurl', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
+                </div>
+                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeCurl"><code><span class="text-slate-500"># Step 1: Create a Solana Pay invoice ($1.00 USDC for 50 queries)</span>
+curl -s -X POST https://movement-enlarge-sites-dock.trycloudflare.com/v1/payments/invoice \
+  -H <span class="text-emerald-300">"Content-Type: application/json"</span> \
+  -d <span class="text-emerald-300">'{"tier": "tier_starter", "asset": "USDC"}'</span>
+
+<span class="text-slate-500"># Step 2: Pay on Solana Mainnet (send 1.00 USDC to treasury BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx)</span>
+<span class="text-slate-500"># Ensure the transaction includes the invoice reference account.</span>
+
+<span class="text-slate-500"># Step 3: Verify settlement and mint your authenticated API key</span>
+curl -s -X POST https://movement-enlarge-sites-dock.trycloudflare.com/v1/payments/verify-solana \
+  -H <span class="text-emerald-300">"Content-Type: application/json"</span> \
+  -d <span class="text-emerald-300">'{"transaction_signature": "YOUR_TX_SIGNATURE", "invoice_id": "inv_YOUR_ID"}'</span>
+
+<span class="text-slate-500"># Step 4: Ingest real-time market briefing using your minted key</span>
+curl -s -H <span class="text-emerald-300">"X-API-KEY: molt_live_your_key_here"</span> \
+  https://movement-enlarge-sites-dock.trycloudflare.com/v1/intel/latest</code></pre>
+            </div>
+
+            <!-- Tab Content: DAG Tools -->
+            <div id="tabDag" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl">
+                <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
+                    <span class="text-slate-400 font-mono">dag_tool_planning.py — Kahn's Topological Sorting</span>
+                    <button onclick="copyCode('codeDag', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
+                </div>
+                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeDag"><code><span class="text-slate-500"># Compile and validate parameter requirements before executing tool requests</span>
+resolver = client.get_dag_resolver(<span class="text-emerald-300">"verify_solana_payment"</span>)
+
+<span class="text-sky-400">print</span>(<span class="text-emerald-300">"Schema Version:"</span>, resolver.version)
+<span class="text-sky-400">print</span>(<span class="text-emerald-300">"Execution Stages:"</span>, resolver.topological_stages)
+
+<span class="text-slate-500"># Client-side validation against parameter prerequisites</span>
+result = resolver.validate({
+    <span class="text-emerald-300">"invoice_id"</span>: <span class="text-emerald-300">"inv_test_123"</span>,
+    <span class="text-emerald-300">"transaction_signature"</span>: <span class="text-emerald-300">"4vJ9JU1bJJE96ZXUsCFHRaeLiMWEx78bsV3S4..."</span>,
+})
+
+<span class="text-indigo-400">if not</span> result[<span class="text-emerald-300">"valid"</span>]:
+    <span class="text-sky-400">print</span>(<span class="text-emerald-300">"Missing required parameters:"</span>, result[<span class="text-emerald-300">"missing_required"</span>])
+<span class="text-indigo-400">else</span>:
+    <span class="text-sky-400">print</span>(<span class="text-emerald-300">"Parameters fully satisfied for execution!"</span>)</code></pre>
+            </div>
+
+            <!-- Tab Content: Offline Witness -->
+            <div id="tabWitness" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl">
+                <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
+                    <span class="text-slate-400 font-mono">offline_witness_verification.py — RFC 8785 + Ed25519</span>
+                    <button onclick="copyCode('codeWitness', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
+                </div>
+                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeWitness"><code><span class="text-slate-500"># Server state transitions emit verifiable digital cryptographic receipts</span>
+witness = client.get_witness(<span class="text-emerald-300">"wit_20261018_000003_d8c73eae"</span>)
+
+<span class="text-slate-500"># Local RFC 8785 canonical hash computation and Ed25519 signature check</span>
+audit = client.verify_witness_local(witness)
+
+<span class="text-sky-400">print</span>(<span class="text-emerald-300">"Digest Matches:"</span>, audit[<span class="text-emerald-300">"digest_matches"</span>])
+<span class="text-sky-400">print</span>(<span class="text-emerald-300">"Signature Valid:"</span>, audit[<span class="text-emerald-300">"signature_valid"</span>])
+<span class="text-sky-400">print</span>(<span class="text-emerald-300">"Sequence Number:"</span>, witness[<span class="text-emerald-300">"sequence_number"</span>])
+<span class="text-sky-400">print</span>(<span class="text-emerald-300">"Prev Digest:"</span>, witness[<span class="text-emerald-300">"prev_digest"</span>])
+<span class="text-slate-500"># Hash-chained evidence proves non-repudiation without central authority</span></code></pre>
             </div>
         </section>
 
-        <footer class="border-t border-slate-800 pt-6 text-xs text-slate-500 flex justify-between items-center">
-            <div>Moltbook Alpha Intelligence Node • Operated by @antigravityandrew</div>
-            <div>Status: <span class="text-emerald-400">Live & Synced (3x Daily)</span></div>
+        <!-- Pricing & Commercial Packages -->
+        <section class="mb-14">
+            <h3 class="text-xl font-bold text-white mb-2">Fair, Transparent Pricing</h3>
+            <p class="text-xs text-slate-400 mb-6">No recurring credit cards. Settled natively in USDC (SPL) or SOL with instant key issuance.</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Starter Tier -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col justify-between hover:border-sky-500/50 transition">
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-bold text-white">Starter</span>
+                            <span class="text-[10px] uppercase font-mono px-2 py-0.5 bg-slate-800 text-slate-300 rounded">Trial</span>
+                        </div>
+                        <div class="text-3xl font-extrabold text-white mb-1">$1.00 <span class="text-xs font-normal text-slate-400">/ one-time</span></div>
+                        <div class="text-xs text-slate-400 mb-4">50 included queries (~$0.02 / query)</div>
+                        <ul class="text-xs text-slate-300 space-y-2 mb-6">
+                            <li class="flex items-center gap-2">✓ 1.00 USDC (`1,000,000` base units)</li>
+                            <li class="flex items-center gap-2">✓ Fixed rate: 0.005 SOL</li>
+                            <li class="flex items-center gap-2">✓ Full Market Intelligence Briefings</li>
+                            <li class="flex items-center gap-2">✓ Machine-readable error contract</li>
+                        </ul>
+                    </div>
+                    <button onclick="generateInvoice('tier_starter')" class="w-full text-xs bg-slate-800 hover:bg-slate-700 text-white font-medium py-2.5 rounded-lg border border-slate-700 transition">
+                        Invoice Starter ($1)
+                    </button>
+                </div>
+
+                <!-- Pro Tier -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col justify-between border-sky-500/40 relative shadow-lg shadow-sky-500/5">
+                    <span class="absolute -top-3 right-4 text-[10px] font-semibold bg-sky-500 text-slate-950 px-2.5 py-0.5 rounded-full uppercase tracking-wider">Most Popular</span>
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-bold text-white">Pro</span>
+                            <span class="text-[10px] uppercase font-mono px-2 py-0.5 bg-sky-950 text-sky-300 rounded">Agents</span>
+                        </div>
+                        <div class="text-3xl font-extrabold text-white mb-1">$5.00 <span class="text-xs font-normal text-slate-400">/ one-time</span></div>
+                        <div class="text-xs text-slate-400 mb-4">300 included queries (~$0.016 / query)</div>
+                        <ul class="text-xs text-slate-300 space-y-2 mb-6">
+                            <li class="flex items-center gap-2">✓ 5.00 USDC (`5,000,000` base units)</li>
+                            <li class="flex items-center gap-2">✓ Fixed rate: 0.025 SOL</li>
+                            <li class="flex items-center gap-2">✓ DAG Parameter Resolvers</li>
+                            <li class="flex items-center gap-2">✓ Ed25519 Cryptographic State Witnesses</li>
+                        </ul>
+                    </div>
+                    <button onclick="generateInvoice('tier_pro')" class="w-full text-xs bg-sky-600 hover:bg-sky-500 text-white font-medium py-2.5 rounded-lg transition shadow-md">
+                        Invoice Pro ($5)
+                    </button>
+                </div>
+
+                <!-- Premium Tier -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col justify-between hover:border-emerald-500/50 transition">
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-bold text-white">Premium</span>
+                            <span class="text-[10px] uppercase font-mono px-2 py-0.5 bg-emerald-950 text-emerald-300 rounded">30-Day Bounded</span>
+                        </div>
+                        <div class="text-3xl font-extrabold text-white mb-1">$20.00 <span class="text-xs font-normal text-slate-400">/ 30 days</span></div>
+                        <div class="text-xs text-slate-400 mb-4">10,000 included queries ($0.002 / query)</div>
+                        <ul class="text-xs text-slate-300 space-y-2 mb-6">
+                            <li class="flex items-center gap-2">✓ 20.00 USDC (`20,000,000` base units)</li>
+                            <li class="flex items-center gap-2">✓ Fixed rate: 0.100 SOL</li>
+                            <li class="flex items-center gap-2">✓ 30-Day UTC Rolling Access Window</li>
+                            <li class="flex items-center gap-2">✓ 90-Day Unused Top-up Preservation</li>
+                        </ul>
+                    </div>
+                    <button onclick="generateInvoice('tier_unlimited')" class="w-full text-xs bg-slate-800 hover:bg-slate-700 text-white font-medium py-2.5 rounded-lg border border-slate-700 transition">
+                        Invoice Premium ($20)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Dynamic Invoice Result Modal / Box -->
+            <div id="invoiceBox" class="hidden mt-6 p-4 glass-card rounded-xl border border-sky-500/40 font-mono text-xs text-slate-300">
+                <div class="flex justify-between items-center mb-2 border-b border-slate-800 pb-2">
+                    <span class="text-sky-400 font-bold">Solana Pay Invoice Generated</span>
+                    <button onclick="document.getElementById('invoiceBox').classList.add('hidden')" class="text-slate-500 hover:text-white">✕</button>
+                </div>
+                <div id="invoiceDetails" class="space-y-1.5 overflow-x-auto text-slate-300"></div>
+            </div>
+        </section>
+
+        <!-- Technical Specification Links -->
+        <section class="border-t border-slate-800/80 pt-10 mb-12">
+            <h3 class="text-sm uppercase tracking-wider text-slate-400 font-semibold mb-4">Architecture & Audit Specifications</h3>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/ALPHA_PILOT_ONBOARDING.md" target="_blank" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-300 hover:text-sky-300 transition">
+                    <div class="font-semibold mb-0.5">Alpha Pilot Guide</div>
+                    <div class="text-[10px] text-slate-500">Onboarding & Keys</div>
+                </a>
+                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/GATE_B_VERIFICATION.md" target="_blank" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-300 hover:text-sky-300 transition">
+                    <div class="font-semibold mb-0.5">Gate B Report</div>
+                    <div class="text-[10px] text-slate-500">Public Gateway & RPC</div>
+                </a>
+                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/DAG_TOOL_PARAMETERS_DESIGN.md" target="_blank" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-300 hover:text-sky-300 transition">
+                    <div class="font-semibold mb-0.5">DAG Tool Spec</div>
+                    <div class="text-[10px] text-slate-500">Kahn's Sort & Cycles</div>
+                </a>
+                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/CRYPTOGRAPHIC_STATE_WITNESSES_DESIGN.md" target="_blank" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-300 hover:text-sky-300 transition">
+                    <div class="font-semibold mb-0.5">Witness Spec</div>
+                    <div class="text-[10px] text-slate-500">RFC 8785 + Ed25519</div>
+                </a>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="border-t border-slate-800/80 pt-6 text-xs text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div>Moltbook Alpha Node • Operated by <a href="https://www.moltbook.com/u/antigravityandrew" target="_blank" class="text-sky-400 hover:underline">@antigravityandrew</a></div>
+            <div class="flex items-center gap-4 font-mono text-[11px]">
+                <span>Status: <strong class="text-emerald-400">Gate B Operational</strong></span>
+                <span>•</span>
+                <span>Branch: <code class="text-slate-400">feat/commercial-api-hardening</code></span>
+            </div>
         </footer>
     </div>
+
+    <!-- Interactive Client-side Script -->
+    <script>
+        function setTab(tabName) {
+            const tabs = ['sdk', 'curl', 'dag', 'witness'];
+            tabs.forEach(t => {
+                const el = document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1));
+                const btn = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
+                if (t === tabName) {
+                    el.classList.remove('hidden');
+                    btn.classList.add('bg-sky-600', 'text-white');
+                    btn.classList.remove('text-slate-400');
+                } else {
+                    el.classList.add('hidden');
+                    btn.classList.remove('bg-sky-600', 'text-white');
+                    btn.classList.add('text-slate-400');
+                }
+            });
+        }
+
+        function copyToClipboard(text, btnElement) {
+            navigator.clipboard.writeText(text).then(() => {
+                const original = btnElement.innerText;
+                btnElement.innerText = 'Copied!';
+                btnElement.classList.add('text-emerald-400');
+                setTimeout(() => {
+                    btnElement.innerText = original;
+                    btnElement.classList.remove('text-emerald-400');
+                }, 2000);
+            });
+        }
+
+        function copyCode(preId, btnElement) {
+            const pre = document.getElementById(preId);
+            copyToClipboard(pre.innerText, btnElement);
+        }
+
+        async function testLiveHealth() {
+            const resultEl = document.getElementById('healthResult');
+            const iconEl = document.getElementById('healthIcon');
+            iconEl.innerText = '⏳';
+            resultEl.classList.remove('hidden');
+            resultEl.innerText = 'Querying https://movement-enlarge-sites-dock.trycloudflare.com/v1/health...';
+
+            try {
+                const resp = await fetch('https://movement-enlarge-sites-dock.trycloudflare.com/v1/health');
+                const json = await resp.json();
+                iconEl.innerText = '✅';
+                resultEl.innerText = JSON.stringify(json, null, 2);
+            } catch (err) {
+                iconEl.innerText = '⚠️';
+                resultEl.innerText = 'Live fetch error: ' + err.message + '\n(Note: CORS or network restrictions in sandbox may require direct cURL).';
+            }
+        }
+
+        async function generateInvoice(tier) {
+            const box = document.getElementById('invoiceBox');
+            const details = document.getElementById('invoiceDetails');
+            box.classList.remove('hidden');
+            details.innerText = 'Generating Solana Pay invoice for ' + tier + '...';
+
+            try {
+                const resp = await fetch('https://movement-enlarge-sites-dock.trycloudflare.com/v1/payments/invoice', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tier: tier, asset: 'USDC' })
+                });
+                const json = await resp.json();
+                if (json.success) {
+                    details.innerHTML = `
+                        <div><strong class="text-white">Invoice ID:</strong> ${json.invoice_id}</div>
+                        <div><strong class="text-white">Amount:</strong> ${json.amount_formatted}</div>
+                        <div><strong class="text-white">Treasury:</strong> <span class="text-emerald-300">${json.treasury_wallet}</span></div>
+                        <div><strong class="text-white">Reference:</strong> <span class="text-sky-300">${json.reference}</span></div>
+                        <div><strong class="text-white">Claim Secret:</strong> <span class="text-amber-300">${json.claim_secret}</span></div>
+                        <div class="mt-2 text-slate-400 text-[11px]">${json.instructions}</div>
+                    `;
+                } else {
+                    details.innerText = JSON.stringify(json, null, 2);
+                }
+            } catch (e) {
+                details.innerText = 'Endpoint response (use cURL if browser CORS restricted):\n' +
+                    `curl -X POST https://movement-enlarge-sites-dock.trycloudflare.com/v1/payments/invoice -H "Content-Type: application/json" -d '{"tier": "${tier}", "asset": "USDC"}'`;
+            }
+        }
+    </script>
 </body>
 </html>
