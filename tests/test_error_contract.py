@@ -13,21 +13,17 @@ import threading
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
-from api_server import app, storage, rate_limiter
+from api_server import app, storage
 from errors import (
     ErrorCode,
     OperationOutcome,
     RecoveryAction,
-    ERROR_REGISTRY,
 )
-from payment_verifier import VerifiedPayment, RPCError, VerificationError
+from payment_verifier import VerifiedPayment, RPCError
 from sdk.moltbook_intel.exceptions import (
     raise_for_error_payload,
     WrongAnswerError,
-    ChallengeExpiredError,
-    ChallengeConsumedError,
     ChallengeAlreadyAnsweredError,
-    ChallengeNotFoundError,
     DuplicatePaymentReuseError,
     RpcGatewayError,
 )
@@ -177,6 +173,81 @@ def test_challenge_not_found():
     assert data["error"]["retryable"] is False
     assert data["error"]["outcome"] == OperationOutcome.NOT_COMMITTED.value
     assert data["error"]["recovery"]["action"] == RecoveryAction.REQUEST_NEW_CHALLENGE.value
+
+
+def test_concurrent_challenge_verification_deterministic_result():
+    client = TestClient(app)
+
+    # 1. Concurrent valid answer submissions on the same challenge
+    ch = storage.create_verification_challenge(
+        challenge_type="arithmetic",
+        challenge_text="Calculate 50 plus 25 to verify.",
+        expected_answer="75.00",
+        expiry_seconds=120,
+    )
+    cid = ch["challenge_id"]
+
+    results = []
+    errors = []
+
+    def submit_answer():
+        try:
+            r = client.post("/v1/challenges/verify", json={"challenge_id": cid, "answer": "75.00"})
+            results.append((r.status_code, r.json()))
+        except Exception as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=submit_answer) for _ in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(errors) == 0
+    assert len(results) == 5
+
+    status_codes = [r[0] for r in results]
+    assert status_codes.count(200) == 1
+    assert status_codes.count(409) == 4
+
+    solved_proof = next(r[1]["proof_token"] for r in results if r[0] == 200)
+    for code, body in results:
+        if code == 409:
+            assert body["error"]["code"] == ErrorCode.CHALLENGE_ALREADY_ANSWERED.value
+            assert body["details"]["proof_token"] == solved_proof
+
+    # 2. Concurrent wrong answer submissions on a fresh challenge
+    ch2 = storage.create_verification_challenge(
+        challenge_type="arithmetic",
+        challenge_text="Calculate 10 plus 5 to verify.",
+        expected_answer="15.00",
+        expiry_seconds=120,
+    )
+    cid2 = ch2["challenge_id"]
+    results2 = []
+
+    def submit_wrong():
+        r = client.post("/v1/challenges/verify", json={"challenge_id": cid2, "answer": "999.00"})
+        results2.append((r.status_code, r.json()))
+
+    threads2 = [threading.Thread(target=submit_wrong) for _ in range(5)]
+    for t in threads2:
+        t.start()
+    for t in threads2:
+        t.join()
+
+    assert len(results2) == 5
+    codes2 = [r[0] for r in results2]
+    assert codes2.count(400) == 1
+    assert codes2.count(410) == 4
+    for code, body in results2:
+        if code == 400:
+            assert body["error"]["code"] == ErrorCode.WRONG_ANSWER.value
+            assert body["error"]["state_effect"] == "challenge_consumed"
+        elif code == 410:
+            assert body["error"]["code"] == ErrorCode.CHALLENGE_CONSUMED.value
+            assert body["error"]["state_effect"] == "challenge_consumed"
+
 
 
 # ==============================================================================
