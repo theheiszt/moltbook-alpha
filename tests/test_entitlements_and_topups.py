@@ -347,3 +347,79 @@ def test_payment_redemption_topup_and_renewal_flow():
         audit = storage.verify_ledger_balance(k_hash)
         assert audit["balanced"] is True
         assert audit["actual_lot_balance"] == 210
+
+
+def test_api_topup_invoice_requires_target_api_key():
+    client = TestClient(app)
+    # Attempting to create a top-up invoice without a target_api_key must fail
+    res = client.post(
+        "/v1/payments/invoice",
+        json={"target_tier": "topup_500", "asset": "USDC"},
+    )
+    assert res.status_code == 400
+    assert "target_api_key is required" in res.json()["detail"]
+
+
+def test_api_topup_end_to_end_invoice_and_fulfillment(monkeypatch):
+    import secrets
+    from payment_verifier import SolanaPaymentVerifier
+    from tests.test_payments import build_synthetic_solana_tx
+
+    client = TestClient(app)
+
+    # 1. Start with a Premium key
+    raw_key, record = api_storage.create_api_key(tier="premium", credits=10000)
+    k_hash = record["key_hash"]
+
+    # 2. Create invoice for topup_500
+    res_inv = client.post(
+        "/v1/payments/invoice",
+        json={
+            "target_tier": "topup_500",
+            "asset": "USDC",
+            "target_api_key": raw_key,
+        },
+    )
+    assert res_inv.status_code == 200
+    inv_data = res_inv.json()
+    assert inv_data["target_tier"] == "topup_500"
+    assert inv_data["credits"] == 500
+    assert inv_data["amount_raw"] == 8_000_000
+    inv_id = inv_data["invoice_id"]
+    ref = inv_data["reference"]
+
+    # 3. Simulate on-chain USDC payment of 8 USDC (8,000,000 units) with reference
+    b58_chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+    tx_sig = "".join(secrets.choice(b58_chars) for _ in range(88))
+    synthetic_tx = build_synthetic_solana_tx(
+        asset="USDC",
+        amount_raw=8_000_000,
+        signature=tx_sig,
+        reference=ref,
+    )
+    monkeypatch.setattr(SolanaPaymentVerifier, "fetch_transaction", lambda self, s: synthetic_tx)
+
+    # 4. Verify payment
+    res_verify = client.post(
+        "/v1/payments/verify-solana",
+        json={"transaction_signature": tx_sig, "invoice_id": inv_id},
+    )
+    assert res_verify.status_code == 200
+    v_data = res_verify.json()
+    assert v_data["success"] is True
+    assert v_data["status"] == "newly_minted"
+    assert v_data["tier"] == "topup_500"
+    assert v_data["credits"] == 10500  # 10,000 allowance + 500 topup
+
+    # 5. Verify quota details: 2 lots, total remaining = 10,500
+    quota = api_storage.get_key_quota_details(raw_key)
+    assert quota["credits_remaining"] == 10500
+    assert len(quota["credit_lots"]) == 2
+    topup_lot = [lot for lot in quota["credit_lots"] if lot["lot_type"] == "topup"][0]
+    assert topup_lot["credits_granted"] == 500
+    assert topup_lot["credits_remaining"] == 500
+
+    # 6. Verify ledger balance integrity
+    audit = api_storage.verify_ledger_balance(k_hash)
+    assert audit["balanced"] is True
+    assert audit["actual_lot_balance"] == 10500

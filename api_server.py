@@ -564,8 +564,9 @@ class CreateInvoiceInput(BaseModel):
     def validate_tier(cls, v: Optional[str]) -> str:
         t = (v or "tier_starter").strip()
         cfg = load_payment_config()
-        if t not in cfg["rates"]:
-            raise ValueError(f"Unknown target_tier '{t}'. Must be one of: {list(cfg['rates'].keys())}")
+        valid = list(cfg["rates"].keys()) + list(cfg.get("topup_packages", {}).keys())
+        if t not in valid:
+            raise ValueError(f"Unknown target_tier '{t}'. Must be one of: {valid}")
         return t
 
     @field_validator("asset")
@@ -634,9 +635,24 @@ def create_payment_invoice(req: CreateInvoiceInput, request: Request):
         )
 
     cfg = load_payment_config()
-    tier_info = cfg["rates"][req.target_tier]
-    credits = tier_info["credits"]
-    raw_amount = tier_info["usdc_units"] if req.asset == "USDC" else tier_info["sol_lamports"]
+    if req.target_tier in cfg.get("topup_packages", {}):
+        if not req.target_api_key:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A target_api_key is required when creating an invoice for a credit top-up package.",
+            )
+        pkg_info = cfg["topup_packages"][req.target_tier]
+        credits = pkg_info["credits"]
+        raw_amount = pkg_info["usdc_units"] if req.asset == "USDC" else pkg_info["sol_lamports"]
+    elif req.target_tier in cfg["rates"]:
+        tier_info = cfg["rates"][req.target_tier]
+        credits = tier_info["credits"]
+        raw_amount = tier_info["usdc_units"] if req.asset == "USDC" else tier_info["sol_lamports"]
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown target_tier '{req.target_tier}'.",
+        )
     ttl = cfg.get("invoice_ttl_seconds", 1800)
 
     target_key_hash = None
@@ -948,8 +964,9 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
 
     return {
         "success": True,
+        "status": redemption_result["status"],
         "message": redemption_result["message"],
-        "api_key": redemption_result["api_key"],
+        "api_key": redemption_result.get("api_key"),
         "key_prefix": redemption_result["key_prefix"],
         "credits": redemption_result["credits"],
         "tier": redemption_result["tier"],

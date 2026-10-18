@@ -136,7 +136,32 @@ DEFAULT_RATES: Dict[str, Dict[str, Any]] = {
     },
 }
 
-DEFAULT_TOPUP_PACKAGES: Dict[str, Dict[str, Any]] = {}
+DEFAULT_TOPUP_PACKAGES: Dict[str, Dict[str, Any]] = {
+    "topup_500": {
+        "display_name": "Credit Top-Up (500 queries / 90 days)",
+        "usd": 8.0,
+        "credits": 500,
+        "validity_days": 90,
+        "usdc_units": 8_000_000,
+        "sol_lamports": 40_000_000,
+    },
+    "topup_1500": {
+        "display_name": "Credit Top-Up (1,500 queries / 90 days)",
+        "usd": 20.0,
+        "credits": 1500,
+        "validity_days": 90,
+        "usdc_units": 20_000_000,
+        "sol_lamports": 100_000_000,
+    },
+    "topup_5000": {
+        "display_name": "Credit Top-Up (5,000 queries / 90 days)",
+        "usd": 50.0,
+        "credits": 5000,
+        "validity_days": 90,
+        "usdc_units": 50_000_000,
+        "sol_lamports": 250_000_000,
+    },
+}
 
 
 # API Rate Limiting & Concurrency Defaults

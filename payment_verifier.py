@@ -118,6 +118,7 @@ class SolanaPaymentVerifier:
         cfg = load_payment_config()
         self.treasury_wallet = (treasury_wallet or cfg["solana_treasury_wallet"]).strip()
         self.rates = rates or cfg["rates"]
+        self.topup_packages = cfg.get("topup_packages", {})
         self._custom_rpc_caller = rpc_caller
         self.cluster = cluster
         self.min_slot = min_slot
@@ -636,6 +637,16 @@ class SolanaPaymentVerifier:
         Orders tiers from highest to lowest.
         Client requested_tier can only be granted if the payment covers it.
         """
+        # 1. Resolve dynamic top-up packages if requested
+        if requested_tier and requested_tier in self.topup_packages:
+            pkg = self.topup_packages[requested_tier]
+            required = pkg["usdc_units"] if asset == "USDC" else pkg["sol_lamports"]
+            if amount_raw < required:
+                raise VerificationError(
+                    f"Received {amount_raw} {asset} units, which is below the required ({required}) for top-up package {requested_tier}."
+                )
+            return requested_tier, pkg["credits"]
+
         # Sort tiers by USD value descending
         sorted_tiers = sorted(
             self.rates.items(),

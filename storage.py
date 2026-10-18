@@ -1072,7 +1072,7 @@ class StorageManager:
 
                 try:
                     with conn:
-                        if effective_tier in ("topup", "credit_topup"):
+                        if effective_tier in ("topup", "credit_topup") or effective_tier.startswith("topup"):
                             exp_iso = (now + timedelta(days=90)).isoformat()
                             lot_id = f"lot_topup_{secrets.token_hex(12)}"
                             cur.execute(
@@ -1483,7 +1483,7 @@ class StorageManager:
 
                 try:
                     with conn:
-                        if effective_tier in ("topup", "credit_topup"):
+                        if effective_tier in ("topup", "credit_topup") or effective_tier.startswith("topup"):
                             exp_iso = (now + timedelta(days=90)).isoformat()
                             lot_id = f"lot_topup_{secrets.token_hex(12)}"
                             cur.execute(
