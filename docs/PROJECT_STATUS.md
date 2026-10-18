@@ -5,7 +5,7 @@
 **Branch:** `feat/commercial-api-hardening`<br>
 **Target Environments:** Python 3.11+ / 3.14 (Linux x86_64 Ubuntu 24.04, Windows 11)<br>
 **Verification Baseline:** 177 passing automated tests across 18 test modules, 0 warnings, clean Ruff, clean Git whitespace<br>
-**Active Server Deployment:** HP ProLiant ML150 G6 Ubuntu Server (`10.0.0.190:8080`, commit `b8a7623`) [Untouched during this mission; pending deployment approval]<br>
+**Active Server Deployment:** HP ProLiant ML150 G6 Ubuntu Server (`10.0.0.190:8080`, commit `477ef8a`, release `20261018_034044_477ef8a`) [Verified live and operational]<br>
 
 ---
 
