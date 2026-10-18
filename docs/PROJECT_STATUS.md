@@ -1,11 +1,11 @@
 # Moltbook Alpha — Verified Project Status & Commercial Baseline
 
-**Document Version:** 1.5.0<br>
-**Audit Date:** 2026-10-18 (Agent-Native Error Taxonomy & Reliability Initiative)<br>
+**Document Version:** 1.6.0<br>
+**Audit Date:** 2026-10-18 (DAG Tool Parameters & Cryptographic State Witnesses Release)<br>
 **Branch:** `feat/commercial-api-hardening`<br>
 **Target Environments:** Python 3.11+ / 3.14 (Linux x86_64 Ubuntu 24.04, Windows 11)<br>
-**Verification Baseline:** 177 passing automated tests across 18 test modules, 0 warnings, clean Ruff, clean Git whitespace<br>
-**Active Server Deployment:** HP ProLiant ML150 G6 Ubuntu Server (`10.0.0.190:8080`, commit `477ef8a`, release `20261018_034044_477ef8a`) [Verified live and operational]<br>
+**Verification Baseline:** 191 passing automated tests across 20 test modules, 0 warnings, clean Ruff, clean Git whitespace<br>
+**Active Server Deployment:** HP ProLiant ML150 G6 Ubuntu Server (`10.0.0.190:8080`, commit `8cd7a1f`, release `20261018_040400_8cd7a1f`) [Verified live and operational]<br>
 
 ---
 
@@ -36,6 +36,11 @@ Moltbook Alpha is a commercial market intelligence and quant API engineered for 
 |   |   GET  /metrics                   - Prometheus 0.0.4 metrics exposition   |   |
 |   |   GET  /v1/errors                 - Machine-readable error code registry  |   |
 |   |   GET  /v1/errors/:code           - Error code specification & retry rules|   |
+|   |   GET  /v1/tools                  - Tool catalog & parameter graph links  |   |
+|   |   GET  /v1/tools/:tool/parameter-graph - Compiled parameter DAG & stages  |   |
+|   |   GET  /v1/witnesses/public-keys  - Ed25519 signing public key discovery  |   |
+|   |   GET  /v1/witnesses/:id          - State witness audit receipt by ID     |   |
+|   |   POST /v1/witnesses/verify       - RFC 8785 canonical witness validation |   |
 |   |   GET  /v1/account/quota          - Non-deducting credit & tier inspection|   |
 |   |   GET  /v1/payments/config        - Treasury wallet, assets, tiers        |   |
 |   |   POST /v1/payments/invoice       - Solana Pay invoice creation & secret  |   |
@@ -92,8 +97,10 @@ System capabilities are classified across the Stage 19 operational dimensions:
 | **30-Day Premium Entitlements** | **Implemented & Tested** | 10,000 query allowance with strict 30-day cutoff, replacing legacy infinite models. Full backwards compatibility for `tier_unlimited`. Verified by `tests/test_entitlements_and_topups.py`. |
 | **90-Day Credit Top-Ups** | **Implemented & Tested** | Discrete, auditable lots in `credit_lots` with 90-day validity surviving Premium expiration, spendable only when an active entitlement exists. Verified by `tests/test_entitlements_and_topups.py`. |
 | **Earliest-Deadline-First (EDF) & Ledger Audit** | **Implemented & Tested** | Earliest-expiring credits consumed first; double-entry ledger invariant `granted + refunded - deducted - expired == remaining` enforced. Request failure refund path active. Verified by `tests/test_entitlements_and_topups.py`. |
+| **DAG Tool Parameters (`GET /v1/tools`)** | **Implemented & Tested** | Directed Acyclic Graph engine with topological execution stages, cycle detection, and condition predicates (`dag_tool_parameters.py`). Verified by `tests/test_dag_tool_parameters.py` (7 tests). |
+| **Cryptographic State Witnesses** | **Implemented & Tested** | RFC 8785 JSON canonicalization, Ed25519 digital signatures, monotonic nonces, and hash chaining per key (`cryptographic_witness.py`). Verification endpoint `POST /v1/witnesses/verify`. Verified by `tests/test_cryptographic_witness.py` (7 tests). |
 | **Administrative CLI (`cli.py`)** | **Implemented & Tested** | Provisions administrator and alpha pilot keys (`create-pilot-key`), inspects key status/quota (`inspect-key`), lists invoices (`list-invoices`), and revokes keys (`revoke-key`). Verified by `tests/test_audit_and_health.py`. |
-| **ProLiant Server Deployment** | **Deployed & Operational** | Running on Ubuntu 24.04.4 LTS (`10.0.0.190:8080`) as `moltbook-alpha.service` under unprivileged user `moltbook-api`. (Maintains commit `b8a7623`; new credit hardening remains local pending deployment approval). |
+| **ProLiant Server Deployment** | **Deployed & Operational** | Running on Ubuntu 24.04.4 LTS (`10.0.0.190:8080`) as `moltbook-alpha.service` under unprivileged user `moltbook-api`. Active release `20261018_040400_8cd7a1f` (commit `8cd7a1f`). Verified live via systemd and health probes. |
 | **Production Payment Settlement on Mainnet** | **Not Verified / Blocked** | Requires public TLS deployment, production RPC API keys (Helius/QuickNode), and explicit operator authorization before accepting real customer funds. |
 
 ---

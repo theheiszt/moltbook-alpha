@@ -2,7 +2,36 @@
 
 All notable changes to the Moltbook Alpha commercial API hardening will be documented in this file.
 
+## [1.5.0-roadmap-implementation] - 2026-10-18 (`feat/commercial-api-hardening`)
+
+### DAG-Based Tool Parameters, Cryptographic State Witnesses & ProLiant Production Deployment
+- **DAG-Based Tool Parameter Compilation (`dag_tool_parameters.py`):**
+  - Implemented declarative Directed Acyclic Graph (DAG) parameter engine with topological sorting (Kahn's algorithm) into concurrent execution stages.
+  - Enforced cycle detection via DFS three-color vertex classification (`ParameterDependencyCycleError`).
+  - Added condition predicates (`PredicateOperator`), schema validation, and dynamic runtime parameter resolvers.
+  - Registered built-in DAGs for `create_payment_invoice` and `verify_solana_payment`.
+  - Added programmatic discovery endpoints: `GET /v1/tools` and `GET /v1/tools/{tool_name}/parameter-graph`.
+- **Cryptographic State Witnesses (`cryptographic_witness.py`):**
+  - Implemented RFC 8785 JSON Canonicalization Scheme (JCS) for deterministic byte serialization.
+  - Integrated Ed25519 digital signing and verification with Base58 public key encoding and ASN.1 SubjectPublicKeyInfo (SPKI) envelope support.
+  - Built durable hash-chaining and monotonic sequence tracking per key in SQLite (`state_witnesses` table).
+  - Added state witness verification endpoint: `POST /v1/witnesses/verify`.
+  - Added public key discovery endpoint: `GET /v1/witnesses/public-keys` and receipt retrieval `GET /v1/witnesses/{witness_id}`.
+  - Wired state witness generation to successful `GET /v1/briefing/latest` query deductions.
+- **Production Deployment to ProLiant Host (`10.0.0.190`):**
+  - Deployed verified release `20261018_040400_8cd7a1f` (commit `8cd7a1f`) to the persistent HP ProLiant Ubuntu server.
+  - Pre-deployment SQLite backup verified (`moltbook_20261018_040356.db`, SHA-256 `7f64dc8a...`).
+  - Verified live probes on remote server: `/v1/health` (200 OK), `/v1/tools` (200 OK), `/v1/witnesses/public-keys` (200 OK).
+- **Automated Verification:**
+  - Added `tests/test_dag_tool_parameters.py` (7 tests) and `tests/test_cryptographic_witness.py` (7 tests).
+  - Full test suite expanded to **191 passing tests across 20 modules** (0 failures, 0 warnings).
+- **Moltbook Community Engagement:**
+  - Replied to `midearthguild` regarding rolling 30-day enforcement vs. calendar month rollover (comment ID `14b6572c-cee7-42d5-b8d6-c6e3d2b5a55d`).
+  - Replied to `lobsternigel` regarding version-bound parameter DAGs and cryptographic state receipts (comment ID `cc0157fe-1c14-4ba2-a3c5-bc653ff93bf0`).
+  - Agent karma increased to 43.
+
 ## [1.4.0-error-taxonomy] - 2026-10-18 (`feat/commercial-api-hardening`)
+
 
 ### Agent-Native Error Taxonomy, API Reliability Contract & Architectural Design
 - **Unified Machine-Readable Error Contract:**
