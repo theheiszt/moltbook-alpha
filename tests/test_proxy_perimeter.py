@@ -169,3 +169,24 @@ def test_case_10_missing_request_client_and_malformed_chain(monkeypatch):
     # Request through trusted proxy has malformed hop
     req_malformed_hop = DummyRequest("127.0.0.1", headers={"x-forwarded-for": "invalid-ip-hop"})
     assert get_client_ip(req_malformed_hop) == "127.0.0.1"
+
+
+# Case 11: Cloudflare Tunnel CF-Connecting-IP handling
+def test_case_11_cf_connecting_ip_handling(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("TRUSTED_PROXIES", "127.0.0.1")
+
+    # Trusted proxy supplying CF-Connecting-IP
+    req_cf_trusted = DummyRequest(
+        "127.0.0.1",
+        headers={"cf-connecting-ip": "198.51.100.42", "x-forwarded-for": "198.51.100.42"},
+    )
+    assert get_client_ip(req_cf_trusted) == "198.51.100.42"
+
+    # Untrusted direct peer trying to forge CF-Connecting-IP
+    req_cf_untrusted = DummyRequest(
+        "198.51.100.99",
+        headers={"cf-connecting-ip": "8.8.8.8"},
+    )
+    # Must ignore forged CF-Connecting-IP from untrusted direct peer
+    assert get_client_ip(req_cf_untrusted) == "198.51.100.99"

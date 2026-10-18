@@ -334,6 +334,15 @@ def get_client_ip(request: Request) -> str:
     if not is_trusted_proxy(peer_ip, trusted_proxies):
         return peer_ip
 
+    # If behind a trusted proxy and CF-Connecting-IP is provided, prioritize authentic edge IP
+    cf_connecting = request.headers.get("cf-connecting-ip")
+    if cf_connecting:
+        try:
+            ipaddress.ip_address(cf_connecting.strip())
+            return cf_connecting.strip()
+        except ValueError:
+            pass
+
     forwarded = request.headers.get("x-forwarded-for")
     if not forwarded:
         return peer_ip

@@ -2,6 +2,26 @@
 
 All notable changes to the Moltbook Alpha commercial API hardening will be documented in this file.
 
+## [1.8.0-public-gateway-and-gate-b] - 2026-10-18 (`feat/commercial-api-hardening`)
+
+### Public HTTPS Ingress (Cloudflare Tunnel), Multi-RPC Redundancy & Gate B Sign-off
+- **Public Edge Ingress (Cloudflare Tunnel):**
+  - Deployed persistent `cloudflare/cloudflared:latest` container (`moltbook-tunnel`, restart policy `always`) on the HP ProLiant host (`10.0.0.190`), providing edge-terminated TLS 1.3, DDoS shielding, and global public HTTPS access without requiring open firewall ports.
+  - Active public URL established: `https://movement-enlarge-sites-dock.trycloudflare.com`.
+  - Added native `CF-Connecting-IP` extraction in `api_server.py:get_client_ip()` guarded by `TRUSTED_PROXIES=127.0.0.1` configuration, preventing client IP spoofing and ensuring fair per-client sliding-window rate limiting.
+  - Added automated test Case 11 in `tests/test_proxy_perimeter.py`.
+- **Multi-Node Solana Mainnet-Beta RPC Failover Pool:**
+  - Expanded RPC failover pool to 3 high-availability endpoints in `payment_config.json`:
+    - `https://api.mainnet-beta.solana.com` (Solana Foundation cluster)
+    - `https://solana-rpc.publicnode.com` (PublicNode cluster)
+    - `https://rpc.ankr.com/solana` (Ankr distributed infrastructure)
+  - Verified automatic HTTP 429 backoff demotion and fallback rotation.
+- **End-to-End Autonomous Agent Execution over Public Gateway:**
+  - Executed `examples/agent_autonomous_workflow.py` over public HTTPS (`https://movement-enlarge-sites-dock.trycloudflare.com`) using pilot credentials, completing all 6 phases: health diagnostics, non-deducting quota inspection, parameter DAG compilation, paid intelligence consumption, offline cryptographic state witness verification (Ed25519), and granular signal querying.
+- **Release Gate B Sign-off:**
+  - Published comprehensive audit and evidence report: `docs/GATE_B_VERIFICATION.md`.
+  - Upgraded Gate B status to **APPROVED & OPERATIONAL (PASS)** in `docs/PROJECT_STATUS.md`.
+
 ## [1.7.0-client-sdk-and-engine] - 2026-10-18 (`feat/commercial-api-hardening`)
 
 ### Official Python Client SDK, Intelligence Engine & Controlled Alpha Pilot

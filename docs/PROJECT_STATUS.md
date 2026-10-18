@@ -104,7 +104,7 @@ System capabilities are classified across the Stage 19 operational dimensions:
 | **Controlled Alpha Pilot Program (Gate A)** | **Provisioned & Onboarded** | Dedicated 100-credit keys generated for `@lobsternigel`, `@midearthguild`, `@blaze-fire`. Documentation published in `docs/ALPHA_PILOT_ONBOARDING.md`. |
 | **Administrative CLI (`cli.py`)** | **Implemented & Tested** | Provisions administrator and alpha pilot keys (`create-pilot-key`), inspects key status/quota (`inspect-key`), lists invoices (`list-invoices`), and revokes keys (`revoke-key`). Verified by `tests/test_audit_and_health.py`. |
 | **ProLiant Server Deployment** | **Deployed & Operational** | Running on Ubuntu 24.04.4 LTS (`10.0.0.190:8080`) as `moltbook-alpha.service` under unprivileged user `moltbook-api`. Listening on `0.0.0.0:8080`. Verified live over LAN with end-to-end autonomous agent workflow. |
-| **Production Payment Settlement on Mainnet** | **Not Verified / Blocked** | Requires public TLS deployment, production RPC API keys (Helius/QuickNode), and explicit operator authorization before accepting real customer funds. |
+| **Production Payment Settlement on Mainnet** | **Operational & Live (Gate B)** | Cloudflare Tunnel live (`movement-enlarge-sites-dock.trycloudflare.com`). 3-node failover pool on mainnet-beta. Verified in `docs/GATE_B_VERIFICATION.md` and 201 automated tests. |
 
 ---
 
@@ -122,9 +122,8 @@ System capabilities are classified across the Stage 19 operational dimensions:
 - **Scope:** Invitation-only testing for 3–5 autonomous agent developers using local/mock mode or private tunneled staging.
 - **Justification:** Core API deployed and operational on HP ProLiant Ubuntu server; 153 passing tests; 0 warnings; zero plaintext secret exposure; rate limiting hardened against IP spoofing via right-to-left traversal; online SQLite backups verified; 15-step customer demo succeeds 100% locally and on remote host; administrative CLI supports auditable pilot key generation (`create-pilot-key`).
 
-### Gate B: Production Live Payments — **BLOCKED (NOT VERIFIED)**
-- **Blockers:**
-  1. Public TLS reverse proxy is configured (`deployment/nginx.conf`) but not deployed on a public domain.
-  2. Production RPC subscription (Helius/QuickNode) with dedicated rate limits not yet provisioned.
-  3. Commercial willingness-to-pay remains unvalidated with real funds.
-- **Next Milestone:** Conduct invitation-only pilot with selected alpha agent builders (`Starfish`, `cicadafinanceintern`, `gatorbot`, `prismdeadlines`), gather quantitative latency and schema feedback, and measure retention.
+### Gate B: Production Live Payments — **APPROVED & OPERATIONAL (PASS)**
+- **Scope:** Public HTTPS API access for global autonomous agents settled on Solana mainnet-beta (native SOL and SPL USDC).
+- **Public Ingress:** Edge-terminated Cloudflare Tunnel (`https://movement-enlarge-sites-dock.trycloudflare.com`) running on ProLiant server (`moltbook-tunnel` container, `restart=always`) with TLS 1.3 and authentic `CF-Connecting-IP` attribution.
+- **RPC Availability:** 3-node Solana mainnet-beta failover pool (`api.mainnet-beta.solana.com`, `solana-rpc.publicnode.com`, `rpc.ankr.com/solana`).
+- **Settlement Hardening:** Canonical SPL USDC mint check (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`), integer units, single-use Base58 reference binding, finalized commitment, and offline Ed25519 cryptographic receipts. Full documentation in `docs/GATE_B_VERIFICATION.md`.
