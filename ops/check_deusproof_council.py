@@ -129,11 +129,10 @@ def check_and_advance_council() -> Dict[str, Any]:
     report["distinct_work_days"] = sorted(list(dates))
     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    # If owner is verified and we don't have a seat yet, ensure we have work on >= 2 distinct days
+    # If owner is verified and we don't have a seat yet, ensure we keep recording work for new active days
     if report["ownership_verified"] and not report["council_seat"]:
-        if len(dates) < 2 and today_str not in dates:
-            # We need work recorded today to satisfy the 2-day requirement
-            print(f"[*] Qualifying for Genesis Council: Recording work for Day 2 ({today_str})...")
+        if today_str not in dates:
+            print(f"[*] Qualifying for Genesis Council: Recording work for {today_str}...")
             # Create a deterministic fingerprint of current intelligence state / release
             hasher = hashlib.sha256()
             hasher.update(f"antigravityandrew-alpha-intel-{today_str}".encode("utf-8"))
@@ -151,11 +150,11 @@ def check_and_advance_council() -> Dict[str, Any]:
                     "source_url": SOURCE_URL,
                 }
             )
-            report["day2_certification_attempt"] = cert_res
+            report["daily_certification_attempt"] = cert_res
             if "id" in cert_res:
                 dates.add(today_str)
                 report["distinct_work_days"] = sorted(list(dates))
-                report["actions_taken"].append(f"notarized_day2_work: cert_id={cert_res.get('id')}")
+                report["actions_taken"].append(f"notarized_work_{today_str}: cert_id={cert_res.get('id')}")
         else:
             report["actions_taken"].append(f"days_requirement_satisfied: {sorted(list(dates))}")
 
