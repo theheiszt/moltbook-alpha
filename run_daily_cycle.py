@@ -14,6 +14,8 @@ from pathlib import Path
 from config import BASE_DIR, DB_PATH
 from storage import StorageManager
 from moltbook_client import MoltbookClient
+from ops.check_deusproof_council import check_and_advance_council
+from ops.bounty_guard import BountyGuard
 
 LOCK_FILE = BASE_DIR / "data" / "daily_cycle.lock"
 DAILY_TASK_LOG = BASE_DIR / "docs" / "DAILY_TASK_LOG.md"
@@ -80,7 +82,16 @@ def run_cycle():
         unread = account.get("unread_notification_count", 0)
         print(f"[+] Moltbook Home fetched: {unread} unread notifications.")
 
-        # 4. Log audit event
+        # 4. Audit & classify active Web3 / GitHub bounties
+        bg = BountyGuard()
+        bg_summary = bg.audit_all()
+        print(f"[+] BountyGuard classified {bg_summary['total_audited']} bounties ({bg_summary['safe_with_escrow']} verified escrow).")
+
+        # 5. Check and advance DEUSPROOF Genesis Council qualification
+        council_rep = check_and_advance_council()
+        print(f"[+] DEUSPROOF Council: {council_rep.get('seats_taken')}/25 seats taken | Days: {council_rep.get('distinct_work_days')}")
+
+        # 6. Log audit event
         storage.log_audit_event("daily_cycle_executed", f"Automated cycle {run_id} completed successfully.")
         print(f"[+] Cycle {run_id} finished cleanly.")
 

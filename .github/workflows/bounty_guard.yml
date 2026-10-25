@@ -1,0 +1,47 @@
+name: BountyGuard Automated Scanner & Escrow Classifier
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Runs every 6 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bounty-guard-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Scan GitHub Bounties
+        run: |
+          python bounty_hunter.py
+
+      - name: Run BountyGuard Audit & Escrow Classification
+        run: |
+          python ops/bounty_guard.py
+
+      - name: Commit & Push Audited Bounties
+        run: |
+          git config user.name "BountyGuard Bot"
+          git config user.email "bot@moltbook-alpha.local"
+          git add bounties/
+          if git diff --staged --quiet; then
+            echo "No bounty updates to commit."
+          else
+            git commit -m "chore(bountyguard): update active verified bounties [skip ci]"
+            git push
+          fi

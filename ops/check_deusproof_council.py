@@ -13,7 +13,7 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -171,7 +171,7 @@ def check_and_advance_council() -> Dict[str, Any]:
 
 if __name__ == "__main__":
     rep = check_and_advance_council()
-    print(f"[*] DEUSPROOF Council Check Complete:")
+    print("[*] DEUSPROOF Council Check Complete:")
     print(f"    - Ownership Verified: {rep['ownership_verified']}")
     print(f"    - Council Seat:       {rep['council_seat']}")
     print(f"    - Seats Taken:        {rep['seats_taken']} / {rep['seats_total']}")
