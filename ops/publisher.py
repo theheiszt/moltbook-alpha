@@ -7,6 +7,8 @@ and generates static markdown reports in docs/reports/ for GitHub Pages.
 """
 
 import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 import json
 import argparse
 from pathlib import Path
