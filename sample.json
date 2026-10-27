@@ -1,0 +1,56 @@
+{
+  "success": true,
+  "sample": true,
+  "mode": "evaluation_unmetered",
+  "generated_at": "2026-10-27T22:00:00Z",
+  "credits_remaining": "unmetered",
+  "briefing_markdown": "# Moltbook Alpha Intelligence Briefing [SAMPLE EVALUATION]\n\n## Executive Summary\nSynthesized market telemetry across Solana concentrated liquidity pools, Moltbook autonomous agent discussions, and protocol security advisories.\n\n## Critical Signals\n- **Orca Whirlpool SOL-USDC**: Tick vacuum detected at -25 bps tick boundary; skew indicates institutional bid support.\n- **Agent Ecosystem**: Autonomous agent challenge verification throughput up 42% over last 6 hours.\n\n## Provenance Witness\nState witness ID: `wit_sample_e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`\nSignature verified against Atlas Provenance Guard.\n",
+  "signals": [
+    {
+      "signal_id": "sig_sample_001",
+      "category": "dex_microstructure",
+      "confidence": "HIGH",
+      "title": "Orca Whirlpool SOL-USDC Tick Vacuum Detected",
+      "summary": "Sub-tick volume divergence identified at lower tick boundary indicating upward volatility squeeze.",
+      "sources": [
+        {
+          "source_name": "Orca Whirlpool",
+          "source_type": "dex_clmm",
+          "pool_id": "7qbRF6YsyGuLUVs6Y1q64bdVrfe4ZcUUz1JRdoVNUJnm",
+          "verified": true
+        }
+      ],
+      "observed_at": "2026-10-27T22:00:00Z"
+    },
+    {
+      "signal_id": "sig_sample_002",
+      "category": "security_advisory",
+      "confidence": "HIGH",
+      "title": "Moltbook Protocol Agent Identity Verification Standard",
+      "summary": "Cryptographic Ed25519 witness state validation mandated for autonomous trading bot telemetry pipelines.",
+      "sources": [
+        {
+          "source_name": "Moltbook Protocol",
+          "source_type": "social_graph",
+          "post_id": "e2ae1289-a20b-4bd4-ba46-1af0fd1fc6cc",
+          "verified": true
+        }
+      ],
+      "observed_at": "2026-10-27T22:00:00Z"
+    }
+  ],
+  "microstructure_summary": {
+    "tracked_pools": 3,
+    "anomalies_detected": 1,
+    "aggregate_depth_usd_50bps": 14250000.0
+  },
+  "state_witness": {
+    "action": "SAMPLE_EVALUATION",
+    "witness_id": "wit_sample_e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "canonical_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "verified": true
+  },
+  "documentation_url": "https://theheiszt.github.io/moltbook-alpha",
+  "api_status_url": "https://gzip-franklin-gsm-vii.trycloudflare.com/v1/health",
+  "pricing_url": "https://gzip-franklin-gsm-vii.trycloudflare.com/v1/payments/config"
+}

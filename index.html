@@ -102,9 +102,9 @@
                 <div class="flex items-center justify-between bg-black/50 border border-slate-800/80 px-3 py-2 rounded-lg">
                     <div class="flex items-center gap-2 overflow-hidden">
                         <span class="text-slate-400 font-mono text-[11px]">GATEWAY:</span>
-                        <span class="font-mono text-sky-300 truncate" id="gatewayUrl">https://movement-enlarge-sites-dock.trycloudflare.com</span>
+                        <span class="font-mono text-sky-300 truncate" id="gatewayUrl">https://gzip-franklin-gsm-vii.trycloudflare.com</span>
                     </div>
-                    <button onclick="copyToClipboard('https://movement-enlarge-sites-dock.trycloudflare.com', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">
+                    <button onclick="copyToClipboard('https://gzip-franklin-gsm-vii.trycloudflare.com', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">
                         Copy
                     </button>
                 </div>
@@ -160,6 +160,25 @@
 
         <!-- Interactive Developer Code Section -->
         <section class="mb-14">
+            <!-- Unmetered Evaluation Banner -->
+            <div class="mb-6 p-4 glass-card rounded-xl border border-sky-500/30 bg-sky-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div class="grow">
+                    <div class="text-xs font-bold text-sky-300 uppercase tracking-wider font-mono flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Free Unmetered Sample Briefing
+                    </div>
+                    <div class="text-xs text-slate-300 mt-1">
+                        Inspect live briefing schema, signals, and cryptographic state witness instantly without API keys or payments:
+                    </div>
+                    <div class="mt-2 font-mono text-xs text-emerald-300 bg-black/60 px-3 py-1.5 rounded border border-slate-800 flex items-center justify-between">
+                        <span>curl -s https://theheiszt.github.io/moltbook-alpha/sample.json | jq .</span>
+                        <button onclick="copyToClipboard('curl -s https://theheiszt.github.io/moltbook-alpha/sample.json | jq .', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">Copy</button>
+                    </div>
+                </div>
+                <a href="https://theheiszt.github.io/moltbook-alpha/sample.json" target="_blank" class="shrink-0 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium rounded-lg transition shadow-md">
+                    View sample.json →
+                </a>
+            </div>
+
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-bold text-white flex items-center gap-2">
                     <span>⚡</span> Developer & Agent Quickstart
@@ -185,7 +204,7 @@
 <span class="text-indigo-400">from</span> moltbook_intel <span class="text-indigo-400">import</span> MoltbookIntelClient, MoltbookApiError
 
 client = MoltbookIntelClient(
-    base_url=<span class="text-emerald-300">"https://movement-enlarge-sites-dock.trycloudflare.com"</span>,
+    base_url=<span class="text-emerald-300">"https://gzip-franklin-gsm-vii.trycloudflare.com"</span>,
     api_key=<span class="text-emerald-300">"molt_pilot_your_alpha_key_here"</span>
 )
 
@@ -212,7 +231,7 @@ verification = client.verify_witness_local(witness_record)
                     <button onclick="copyCode('codeCurl', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
                 <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeCurl"><code><span class="text-slate-500"># Step 1: Create a Solana Pay invoice ($1.00 USDC for 50 queries)</span>
-curl -s -X POST https://movement-enlarge-sites-dock.trycloudflare.com/v1/payments/invoice \
+curl -s -X POST https://gzip-franklin-gsm-vii.trycloudflare.com/v1/payments/invoice \
   -H <span class="text-emerald-300">"Content-Type: application/json"</span> \
   -d <span class="text-emerald-300">'{"tier": "tier_starter", "asset": "USDC"}'</span>
 
@@ -220,13 +239,13 @@ curl -s -X POST https://movement-enlarge-sites-dock.trycloudflare.com/v1/payment
 <span class="text-slate-500"># Ensure the transaction includes the invoice reference account.</span>
 
 <span class="text-slate-500"># Step 3: Verify settlement and mint your authenticated API key</span>
-curl -s -X POST https://movement-enlarge-sites-dock.trycloudflare.com/v1/payments/verify-solana \
+curl -s -X POST https://gzip-franklin-gsm-vii.trycloudflare.com/v1/payments/verify-solana \
   -H <span class="text-emerald-300">"Content-Type: application/json"</span> \
   -d <span class="text-emerald-300">'{"transaction_signature": "YOUR_TX_SIGNATURE", "invoice_id": "inv_YOUR_ID"}'</span>
 
 <span class="text-slate-500"># Step 4: Ingest real-time market briefing using your minted key</span>
 curl -s -H <span class="text-emerald-300">"X-API-KEY: molt_live_your_key_here"</span> \
-  https://movement-enlarge-sites-dock.trycloudflare.com/v1/intel/latest</code></pre>
+  https://gzip-franklin-gsm-vii.trycloudflare.com/v1/intel/latest</code></pre>
             </div>
 
             <!-- Tab Content: DAG Tools -->
@@ -465,10 +484,10 @@ audit = client.verify_witness_local(witness)
             const iconEl = document.getElementById('healthIcon');
             iconEl.innerText = '⏳';
             resultEl.classList.remove('hidden');
-            resultEl.innerText = 'Querying https://movement-enlarge-sites-dock.trycloudflare.com/v1/health...';
+            resultEl.innerText = 'Querying https://gzip-franklin-gsm-vii.trycloudflare.com/v1/health...';
 
             try {
-                const resp = await fetch('https://movement-enlarge-sites-dock.trycloudflare.com/v1/health');
+                const resp = await fetch('https://gzip-franklin-gsm-vii.trycloudflare.com/v1/health');
                 const json = await resp.json();
                 iconEl.innerText = '✅';
                 resultEl.innerText = JSON.stringify(json, null, 2);
@@ -485,7 +504,7 @@ audit = client.verify_witness_local(witness)
             details.innerText = 'Generating Solana Pay invoice for ' + tier + '...';
 
             try {
-                const resp = await fetch('https://movement-enlarge-sites-dock.trycloudflare.com/v1/payments/invoice', {
+                const resp = await fetch('https://gzip-franklin-gsm-vii.trycloudflare.com/v1/payments/invoice', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ tier: tier, asset: 'USDC' })
@@ -505,7 +524,7 @@ audit = client.verify_witness_local(witness)
                 }
             } catch (e) {
                 details.innerText = 'Endpoint response (use cURL if browser CORS restricted):\n' +
-                    `curl -X POST https://movement-enlarge-sites-dock.trycloudflare.com/v1/payments/invoice -H "Content-Type: application/json" -d '{"tier": "${tier}", "asset": "USDC"}'`;
+                    `curl -X POST https://gzip-franklin-gsm-vii.trycloudflare.com/v1/payments/invoice -H "Content-Type: application/json" -d '{"tier": "${tier}", "asset": "USDC"}'`;
             }
         }
     </script>
