@@ -9,6 +9,8 @@ import ipaddress
 import secrets
 import re
 import asyncio
+import time
+import hashlib
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, status
@@ -48,12 +50,18 @@ from config import (
 )
 from cryptographic_witness import WitnessManager, WitnessKeyManager
 from intel_engine import IntelEngine
+from ops.trading.dex_microstructure import (
+    DEXMicrostructureEngine,
+    microstructure_broadcaster,
+)
 from storage import StorageManager, StorageError
 from payment_verifier import (
     SolanaPaymentVerifier,
     VerifyPaymentInput,
     VerificationError,
     RPCError,
+    NanoInvoicePaymentAdapter,
+    SolanaRefundDispatcher,
 )
 from rate_limiter import (
     SlidingWindowRateLimiter,
@@ -104,6 +112,8 @@ async def metrics_middleware(request: Request, call_next):
             norm_endpoint = "/v1/payments/invoice/:id/claim"
         elif endpoint.startswith("/v1/payments/invoice/"):
             norm_endpoint = "/v1/payments/invoice/:id"
+        elif endpoint.startswith("/v1/payments/refund/"):
+            norm_endpoint = "/v1/payments/refund/:unmatched_id"
         elif endpoint.startswith("/v1/errors/"):
             norm_endpoint = "/v1/errors/:code"
         elif endpoint.startswith("/v1/tools/") and endpoint.endswith("/parameter-graph"):
@@ -112,6 +122,12 @@ async def metrics_middleware(request: Request, call_next):
             norm_endpoint = "/v1/challenges/:id"
         elif endpoint.startswith("/v1/witnesses/") and endpoint not in {"/v1/witnesses/public-keys", "/v1/witnesses/verify"}:
             norm_endpoint = "/v1/witnesses/:id"
+        elif endpoint.startswith("/v1/intel/microstructure/") and endpoint != "/v1/intel/microstructure":
+            norm_endpoint = "/v1/intel/microstructure/:pool_id"
+        elif endpoint.startswith("/v1/webhooks/test/"):
+            norm_endpoint = "/v1/webhooks/test/:subscription_id"
+        elif endpoint.startswith("/v1/webhooks/") and endpoint != "/v1/webhooks":
+            norm_endpoint = "/v1/webhooks/:subscription_id"
         elif endpoint in {
             "/",
             "/metrics",
@@ -125,9 +141,14 @@ async def metrics_middleware(request: Request, call_next):
             "/v1/intel/latest",
             "/v1/intel/signals",
             "/v1/intel/refresh",
+            "/v1/intel/microstructure",
+            "/v1/webhooks",
+            "/v1/webhooks/subscribe",
             "/v1/payments/config",
             "/v1/payments/invoice",
             "/v1/payments/verify-solana",
+            "/v1/payments/verify-nano",
+            "/v1/payments/unmatched",
             "/v1/payments/webhook",
             "/v1/keys/generate-demo",
             "/v1/briefing/latest",
@@ -359,6 +380,64 @@ in_flight_deduplicator = InFlightDeduplicator()
 witness_key_manager = WitnessKeyManager(WITNESS_KEY_PATH)
 witness_manager = WitnessManager(storage, witness_key_manager)
 intel_engine = IntelEngine(storage)
+payment_cfg = load_payment_config()
+nano_adapter = NanoInvoicePaymentAdapter(
+    merchant_address=payment_cfg.get("nano_treasury_address", "nano_3moltbookintel111111111111111111111111111111111111111111111111")
+)
+refund_dispatcher = SolanaRefundDispatcher(
+    treasury_wallet=payment_cfg["solana_treasury_wallet"]
+)
+
+dex_microstructure = DEXMicrostructureEngine(broadcaster=microstructure_broadcaster)
+
+# Seed default baseline pools for Solana concentrated liquidity
+dex_microstructure.parse_raydium_clmm_pool(
+    pool_id="Raydium_SOL_USDC",
+    pair="SOL/USDC",
+    pool_state={
+        "current_tick": -15620,
+        "current_price": 101.50,
+        "ticks": [
+            {"tick": -15630, "price": 101.40, "liquidity_usd": 125000.0},
+            {"tick": -15625, "price": 101.45, "liquidity_usd": 185000.0},
+            {"tick": -15620, "price": 101.50, "liquidity_usd": 220000.0},
+            {"tick": -15615, "price": 101.55, "liquidity_usd": 195000.0},
+            {"tick": -15610, "price": 101.60, "liquidity_usd": 140000.0},
+        ],
+    },
+)
+
+dex_microstructure.parse_orca_whirlpool(
+    pool_id="Orca_SOL_USDC",
+    pair="SOL/USDC",
+    pool_state={
+        "tick_current_index": -15620,
+        "price": 101.52,
+        "ticks": [
+            {"index": -15630, "price": 101.42, "liquidity_net": 1200.0},
+            {"index": -15625, "price": 101.47, "liquidity_net": 1800.0},
+            {"index": -15620, "price": 101.52, "liquidity_net": 2100.0},
+            {"index": -15615, "price": 101.57, "liquidity_net": -1700.0},
+            {"index": -15610, "price": 101.62, "liquidity_net": -1300.0},
+        ],
+    },
+)
+
+dex_microstructure.parse_meteora_dlmm(
+    pool_id="Meteora_SOL_USDC",
+    pair="SOL/USDC",
+    pool_state={
+        "active_id": -15620,
+        "current_price": 101.49,
+        "bins": [
+            {"bin_id": -15630, "price": 101.39, "amount_x_usd": 60000.0, "amount_y_usd": 65000.0},
+            {"bin_id": -15625, "price": 101.44, "amount_x_usd": 90000.0, "amount_y_usd": 95000.0},
+            {"bin_id": -15620, "price": 101.49, "amount_x_usd": 110000.0, "amount_y_usd": 105000.0},
+            {"bin_id": -15615, "price": 101.54, "amount_x_usd": 95000.0, "amount_y_usd": 90000.0},
+            {"bin_id": -15610, "price": 101.59, "amount_x_usd": 70000.0, "amount_y_usd": 65000.0},
+        ],
+    },
+)
 
 
 # Run one-time legacy migration from api_keys.json if present (skipping any admin backdoors)
@@ -566,6 +645,8 @@ def get_prometheus_metrics(request: Request):
 class CreateInvoiceInput(BaseModel):
     target_tier: Optional[str] = "tier_starter"
     asset: Optional[str] = "USDC"
+    rail: Optional[str] = "solana"
+    cluster: Optional[str] = "mainnet-beta"
     expected_payer: Optional[str] = None
     target_api_key: Optional[str] = None
 
@@ -579,12 +660,28 @@ class CreateInvoiceInput(BaseModel):
             raise ValueError(f"Unknown target_tier '{t}'. Must be one of: {valid}")
         return t
 
+    @field_validator("rail")
+    @classmethod
+    def validate_rail(cls, v: Optional[str]) -> str:
+        r = (v or "solana").strip().lower()
+        if r not in ("solana", "nano"):
+            raise ValueError("Rail must be 'solana' or 'nano'.")
+        return r
+
+    @field_validator("cluster")
+    @classmethod
+    def validate_cluster(cls, v: Optional[str]) -> str:
+        c = (v or "mainnet-beta").strip().lower()
+        if c not in ("mainnet-beta", "devnet", "testnet", "nano-live"):
+            raise ValueError("Cluster must be 'mainnet-beta' or 'devnet'.")
+        return c
+
     @field_validator("asset")
     @classmethod
     def validate_asset(cls, v: Optional[str]) -> str:
         a = (v or "USDC").strip().upper()
-        if a not in ("USDC", "SOL"):
-            raise ValueError("Asset must be 'USDC' or 'SOL'.")
+        if a not in ("USDC", "SOL", "XNO", "NANO"):
+            raise ValueError("Asset must be 'USDC', 'SOL', or 'XNO'.")
         return a
 
     @field_validator("expected_payer")
@@ -593,8 +690,31 @@ class CreateInvoiceInput(BaseModel):
         if not v:
             return None
         s = v.strip()
-        if not (32 <= len(s) <= 44) or not BASE58_PATTERN.match(s):
-            raise ValueError("expected_payer must be valid base58 between 32 and 44 characters.")
+        # Accept Solana base58 or Nano address (nano_...)
+        if s.startswith("nano_") or ((32 <= len(s) <= 44) and BASE58_PATTERN.match(s)):
+            return s
+        raise ValueError("expected_payer must be valid base58 or nano_ address.")
+
+
+class VerifyNanoPaymentInput(BaseModel):
+    block_hash: str
+    invoice_id: str
+    claim_secret: str
+
+    @field_validator("block_hash")
+    @classmethod
+    def validate_hash(cls, v: str) -> str:
+        s = v.strip().lower()
+        if not re.match(r"^[0-9a-f]{64}$", s):
+            raise ValueError("Nano block_hash must be exactly 64 hexadecimal characters.")
+        return s
+
+    @field_validator("claim_secret")
+    @classmethod
+    def validate_secret(cls, v: str) -> str:
+        s = v.strip()
+        if not s.startswith("sec_") or len(s) < 20:
+            raise ValueError("Invalid claim_secret format. Must start with 'sec_'.")
         return s
 
 
@@ -615,18 +735,20 @@ def get_payment_details():
     cfg = load_payment_config()
     return {
         "success": True,
-        "treasury_wallet": cfg["solana_treasury_wallet"],
-        "accepted_assets": ["SOL", "USDC (Solana SPL)"],
+        "accepted_rails": ["solana", "nano"],
+        "solana_treasury_wallet": cfg["solana_treasury_wallet"],
+        "nano_treasury_address": cfg.get("nano_treasury_address", "nano_3moltbookintel111111111111111111111111111111111111111111111111"),
+        "accepted_assets": ["SOL", "USDC (Solana SPL)", "XNO (Nano Zero-Fee)"],
+        "supported_clusters": ["mainnet-beta", "devnet"],
         "pricing_tiers": cfg["rates"],
         "topup_packages": cfg.get("topup_packages", {}),
         "create_invoice_endpoint": "POST /v1/payments/invoice",
-        "verify_endpoint": "POST /v1/payments/verify-solana",
+        "verify_solana_endpoint": "POST /v1/payments/verify-solana",
+        "verify_nano_endpoint": "POST /v1/payments/verify-nano",
         "claim_endpoint": "POST /v1/payments/invoice/:invoice_id/claim",
-        "verification_guide": (
-            "1. Create an invoice via POST /v1/payments/invoice. "
-            "2. Send SOL/USDC to treasury_wallet with invoice reference account. "
-            "3. Submit signature and invoice_id to /v1/payments/verify-solana."
-        ),
+        "unmatched_payments_endpoint": "GET /v1/payments/unmatched",
+        "refund_endpoint": "POST /v1/payments/refund/:unmatched_id",
+        "refund_policy": "Automated refund minus network fee for unmatched, expired, or out-of-bounds transfers.",
     }
 
 
@@ -657,7 +779,12 @@ def create_payment_invoice(req: CreateInvoiceInput, request: Request):
     elif req.target_tier in cfg["rates"]:
         tier_info = cfg["rates"][req.target_tier]
         credits = tier_info["credits"]
-        raw_amount = tier_info["usdc_units"] if req.asset == "USDC" else tier_info["sol_lamports"]
+        if getattr(req, "rail", "solana") == "nano":
+            raw_amount = int(tier_info.get("nano_raw", int(tier_info["usd"] * 1e30)))
+        elif req.asset == "USDC":
+            raw_amount = tier_info["usdc_units"]
+        else:
+            raw_amount = tier_info["sol_lamports"]
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -672,16 +799,58 @@ def create_payment_invoice(req: CreateInvoiceInput, request: Request):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target API key not found.")
         target_key_hash = storage.hash_key(req.target_api_key)
 
+    target_rail = req.rail or "solana"
+    target_cluster = req.cluster or cfg.get("cluster", "mainnet-beta")
+    recipient_addr = nano_adapter.merchant_address if target_rail == "nano" else cfg["solana_treasury_wallet"]
+
+    if target_rail == "nano":
+        tier_usd = cfg["rates"][req.target_tier]["usd"] if req.target_tier in cfg["rates"] else 1.0
+        inv_record, claim_secret, reference = storage.create_invoice(
+            tier=req.target_tier,
+            credits=credits,
+            asset="XNO",
+            amount_raw=int(raw_amount),
+            recipient=recipient_addr,
+            cluster="nano-live",
+            expiry_seconds=ttl,
+            expected_payer=req.expected_payer,
+            target_key_hash=target_key_hash,
+            rail="nano",
+        )
+        nano_spec = nano_adapter.generate_nano_invoice(
+            invoice_id=inv_record["invoice_id"],
+            tier=req.target_tier,
+            amount_usd=tier_usd,
+            credits=credits,
+        )
+        return {
+            "success": True,
+            "invoice_id": inv_record["invoice_id"],
+            "rail": "nano",
+            "tier": inv_record["tier"],
+            "credits": inv_record["credits"],
+            "asset": "XNO",
+            "amount_raw": nano_spec["amount_raw"],
+            "amount_xno": nano_spec["amount_xno"],
+            "recipient": recipient_addr,
+            "merchant_address": recipient_addr,
+            "claim_secret": claim_secret,
+            "instructions": nano_spec["instructions"],
+            "expires_at": inv_record["expires_at"],
+            "verify_endpoint": "POST /v1/payments/verify-nano",
+        }
+
     inv_record, claim_secret, reference = storage.create_invoice(
         tier=req.target_tier,
         credits=credits,
         asset=req.asset,
         amount_raw=raw_amount,
-        recipient=cfg["solana_treasury_wallet"],
-        cluster=cfg.get("cluster", "mainnet-beta"),
+        recipient=recipient_addr,
+        cluster=target_cluster,
         expiry_seconds=ttl,
         expected_payer=req.expected_payer,
         target_key_hash=target_key_hash,
+        rail="solana",
     )
 
     if req.asset == "USDC":
@@ -1179,7 +1348,7 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
             outcome=OperationOutcome.NOT_COMMITTED,
             state_effect="none",
             recovery_action=RecoveryAction.CREATE_NEW_INVOICE,
-            message=f"Payment amount ({payment.amount_raw}) is below invoice required amount ({invoice['amount_raw']}).",
+            message=f"Payment amount ({payment.amount_raw}) is below the minimum invoice required amount ({invoice['amount_raw']}).",
         )
 
     # Atomic fulfillment and redemption
@@ -1250,6 +1419,186 @@ class WebhookPayload(BaseModel):
         if not BASE58_PATTERN.match(s):
             raise ValueError("Solana transaction signature must be valid base58.")
         return s
+
+
+@app.post("/v1/payments/verify-nano")
+def verify_nano_payment(req: VerifyNanoPaymentInput, request: Request):
+    """
+    Verifies zero-fee settlement on the Nano network.
+    Fulfills the invoice, credits the user account, and returns an Ed25519 witness receipt.
+    """
+    client_ip = get_client_ip(request)
+    allowed, retry_after = rate_limiter.is_allowed(f"verify_nano:{client_ip}", limit=30, window_seconds=60)
+    if not allowed:
+        record_rate_limit("/v1/payments/verify-nano")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many verification requests. Retry in {retry_after} seconds.",
+        )
+
+    invoice = storage.get_invoice(req.invoice_id)
+    if not invoice:
+        unm = storage.record_unmatched_payment(
+            rail="nano",
+            tx_signature=req.block_hash,
+            payer_wallet="unknown_nano_payer",
+            asset="XNO",
+            amount_raw=0,
+            expected_amount_raw=None,
+            reason="UNMATCHED_ORDER",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Invoice '{req.invoice_id}' not found. Recorded unmatched holding: {unm['unmatched_id']}",
+        )
+
+    if invoice["status"] == "fulfilled":
+        try:
+            recovered = storage.claim_invoice_credential(req.invoice_id, req.claim_secret)
+            return {
+                "success": True,
+                "api_key": recovered["api_key"],
+                "credits": recovered["credits"],
+                "tier": recovered["tier"],
+                "message": "Payment already verified. Retrieved existing API key.",
+            }
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Invoice already fulfilled.")
+
+    if invoice.get("rail") != "nano":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invoice '{req.invoice_id}' is on rail '{invoice.get('rail')}', not 'nano'.",
+        )
+
+    try:
+        settlement = nano_adapter.verify_settlement(
+            block_hash=req.block_hash,
+            expected_raw=int(invoice["amount_raw"]),
+        )
+    except Exception as e:
+        storage.record_unmatched_payment(
+            rail="nano",
+            tx_signature=req.block_hash,
+            payer_wallet="unknown_nano_payer",
+            asset="XNO",
+            amount_raw=int(invoice["amount_raw"]),
+            expected_amount_raw=int(invoice["amount_raw"]),
+            reason="SETTLEMENT_VERIFICATION_FAILED",
+        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    res = storage.fulfill_invoice_and_redeem(
+        invoice_id=req.invoice_id,
+        tx_signature=req.block_hash,
+        asset=invoice["asset"],
+        amount_raw=int(invoice["amount_raw"]),
+        tier=invoice["tier"],
+        credits_to_grant=invoice["credits"],
+        claim_secret=req.claim_secret,
+        payer=settlement.get("recipient", nano_adapter.merchant_address),
+    )
+
+    witness_id = None
+    if witness_manager:
+        try:
+            w = witness_manager.create_witness(
+                action="NANO_PAYMENT_VERIFIED",
+                actor="payment_system",
+                key_hash=storage.hash_key(res["api_key"]) if res.get("api_key") else None,
+                credit_delta=invoice["credits"],
+                post_balance=res.get("credits", invoice["credits"]),
+                request_id=getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}",
+                environmental_anchor={
+                    "rail": "nano",
+                    "block_hash": req.block_hash,
+                    "invoice_id": req.invoice_id,
+                },
+            )
+            witness_id = w.get("witness_id")
+        except Exception:
+            pass
+
+    return {
+        "success": True,
+        "api_key": res.get("api_key"),
+        "credits": res.get("credits", invoice["credits"]),
+        "tier": invoice["tier"],
+        "rail": "nano",
+        "block_hash": req.block_hash,
+        "state_witness_id": witness_id,
+    }
+
+
+@app.get("/v1/payments/unmatched")
+def get_unmatched_payments(
+    status_filter: Optional[str] = "HELD",
+    payer_wallet: Optional[str] = None,
+    limit: int = 50,
+):
+    """
+    Returns list of unmatched, underpaid, or expired payments currently held
+    awaiting automated or manual refund dispatch.
+    """
+    records = storage.list_unmatched_payments(
+        status=status_filter,
+        payer_wallet=payer_wallet,
+        limit=min(limit, 100),
+    )
+    return {
+        "count": len(records),
+        "status_filter": status_filter,
+        "unmatched_payments": records,
+    }
+
+
+@app.post("/v1/payments/refund/{unmatched_id}")
+def process_unmatched_refund(unmatched_id: str, request: Request):
+    """
+    Dispatches automated refund for an unmatched payment back to payer_wallet
+    minus the minimal network transaction fee.
+    """
+    record = storage.get_unmatched_payment(unmatched_id)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unmatched payment record '{unmatched_id}' not found.",
+        )
+    if record["status"] != "HELD":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Payment '{unmatched_id}' has already been processed with status '{record['status']}'.",
+        )
+
+    try:
+        dispatch_result = refund_dispatcher.dispatch_refund(record)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Refund dispatch failed: {e!s}",
+        )
+
+    storage.mark_unmatched_refunded(
+        unmatched_id=unmatched_id,
+        refund_tx_sig=dispatch_result["refund_tx_sig"],
+        refunded_amount_raw=dispatch_result["refund_amount_raw"],
+    )
+    storage.log_audit_event(
+        "payment_refund_dispatched",
+        f"Refund {dispatch_result['refund_amount_raw']} {record['asset']} dispatched for {unmatched_id} to {record['payer_wallet']}",
+    )
+
+    return {
+        "success": True,
+        "unmatched_id": unmatched_id,
+        "status": "REFUNDED",
+        "payer_wallet": record["payer_wallet"],
+        "asset": record["asset"],
+        "refund_amount_raw": dispatch_result["refund_amount_raw"],
+        "fee_deducted_raw": dispatch_result["fee_deducted_raw"],
+        "refund_tx_sig": dispatch_result["refund_tx_sig"],
+        "dispatched_at": dispatch_result["dispatched_at"],
+    }
 
 
 @app.post("/v1/payments/webhook")
@@ -1888,12 +2237,115 @@ def get_intel_signals(
     }
 
 
+@app.get("/v1/intel/microstructure")
+def get_intel_microstructure(
+    request: Request,
+    depth_bps: float = 50.0,
+):
+    """
+    Returns fleet-wide DEX microstructure intelligence, active orderbook depth,
+    and detected manipulation anomalies (tick vacuums, spoofed walls, fee volatility spikes)
+    across tracked Solana concentrated liquidity pools.
+    """
+    tracked_pools = dex_microstructure.get_tracked_pools()
+    pool_summaries = []
+    for pid in tracked_pools:
+        depth = dex_microstructure.get_latest_depth(pid)
+        if depth:
+            pool_summaries.append(depth.to_dict())
+
+    anomalies = dex_microstructure.get_active_anomalies(limit=25)
+    anomalies_data = [a.to_dict() for a in anomalies]
+
+    req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+    witness_id = None
+    if witness_manager:
+        try:
+            w = witness_manager.create_witness(
+                action="MICROSTRUCTURE_FLEET_QUERY",
+                actor="intel_engine_v1",
+                key_hash=hashlib.sha256(f"fleet_{len(tracked_pools)}".encode()).hexdigest(),
+                request_id=req_id,
+                environmental_anchor={
+                    "tracked_count": len(tracked_pools),
+                    "anomalies_count": len(anomalies),
+                    "depth_bps": depth_bps,
+                },
+            )
+            witness_id = w.get("witness_id")
+        except Exception:
+            pass
+
+    return {
+        "status": "anomalies_detected" if anomalies else "healthy",
+        "tracked_pool_count": len(tracked_pools),
+        "active_anomaly_count": len(anomalies),
+        "depth_bps": depth_bps,
+        "pools": pool_summaries,
+        "recent_anomalies": anomalies_data,
+        "state_witness_id": witness_id,
+        "timestamp_utc": time.time(),
+    }
+
+
+@app.get("/v1/intel/microstructure/{pool_id}")
+def get_pool_microstructure(
+    pool_id: str,
+    request: Request,
+    depth_bps: float = 50.0,
+):
+    """
+    Returns deep orderbook liquidity distribution, tick arrays, bid/ask depth,
+    imbalance ratio, and anomaly telemetry for a specific concentrated liquidity pool.
+    Binds the observation to a verifiable cryptographic state witness.
+    """
+    depth = dex_microstructure.get_latest_depth(pool_id)
+    if not depth:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"DEX pool '{pool_id}' is not tracked by the microstructure engine. Tracked: {dex_microstructure.get_tracked_pools()}",
+        )
+
+    pool_anomalies = [
+        a.to_dict()
+        for a in dex_microstructure.get_active_anomalies(limit=50)
+        if a.pool_id == pool_id
+    ]
+
+    req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+    witness_record = None
+    if witness_manager:
+        try:
+            witness_record = witness_manager.create_witness(
+                action="POOL_MICROSTRUCTURE_OBSERVED",
+                actor="dex_microstructure_engine",
+                key_hash=hashlib.sha256(pool_id.encode()).hexdigest(),
+                request_id=req_id,
+                environmental_anchor={
+                    "pool_id": pool_id,
+                    "protocol": depth.protocol.value,
+                    "current_price": depth.current_price,
+                    "imbalance_ratio": depth.imbalance_ratio,
+                    "bid_depth_usd": depth.bid_depth_usd,
+                    "ask_depth_usd": depth.ask_depth_usd,
+                },
+            )
+        except Exception:
+            pass
+
+    res = depth.to_dict()
+    res["raw_bins"] = depth.raw_bins
+    res["anomalies"] = pool_anomalies
+    res["state_witness"] = witness_record
+    return res
+
+
 @app.post("/v1/intel/refresh")
 def refresh_intelligence():
     """
     Triggers an immediate collection and synthesis cycle across all approved sources.
     """
-    stats = intel_engine.collect_all_sources()
+    stats = intel_engine.collect_all_sources(dex_microstructure=dex_microstructure)
     signals_count = intel_engine.extract_signals(limit_items=100)
     briefing = intel_engine.generate_briefing(witness_manager=witness_manager)
     return {
@@ -1903,6 +2355,220 @@ def refresh_intelligence():
         "briefing_id": briefing["briefing_id"],
         "state_witness_id": briefing["state_witness_id"],
     }
+
+
+class SubscribeWebhookInput(BaseModel):
+    target_url: str
+    secret_token: str
+    subscribed_events: List[str] = ["ANOMALY_ALERT"]
+    min_severity: str = "HIGH"
+
+    @field_validator("target_url")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        val = v.strip()
+        if not (val.startswith("http://") or val.startswith("https://")):
+            raise ValueError("target_url must begin with http:// or https://")
+        return val
+
+    @field_validator("secret_token")
+    @classmethod
+    def validate_secret(cls, v: str) -> str:
+        val = v.strip()
+        if len(val) < 8:
+            raise ValueError("secret_token must be at least 8 characters")
+        return val
+
+    @field_validator("min_severity")
+    @classmethod
+    def validate_severity(cls, v: str) -> str:
+        val = v.strip().upper()
+        if val not in ("LOW", "MEDIUM", "HIGH", "CRITICAL"):
+            raise ValueError("min_severity must be LOW, MEDIUM, HIGH, or CRITICAL")
+        return val
+
+
+@app.post("/v1/webhooks/subscribe", status_code=status.HTTP_201_CREATED)
+def subscribe_webhook(
+    sub_input: SubscribeWebhookInput,
+    request: Request,
+    x_api_key: Optional[str] = Header(None, alias="X-API-KEY"),
+):
+    """
+    Registers an automated HTTPS webhook subscription.
+    When a DEX microstructure anomaly occurs matching the event filter and minimum severity,
+    the event payload is signed with HMAC-SHA256 and pushed to target_url.
+    """
+    subscription = storage.create_webhook_subscription(
+        target_url=sub_input.target_url,
+        secret_token=sub_input.secret_token,
+        subscribed_events=sub_input.subscribed_events,
+        min_severity=sub_input.min_severity,
+    )
+    storage.log_audit_event(
+        "webhook_subscribed",
+        f"Registered webhook {subscription['subscription_id']} for events {sub_input.subscribed_events}",
+        ip_address=get_client_ip(request),
+    )
+    return subscription
+
+
+@app.get("/v1/webhooks")
+def list_webhooks(
+    active_only: bool = True,
+    x_api_key: Optional[str] = Header(None, alias="X-API-KEY"),
+):
+    """
+    Lists active webhook subscriptions with masked secret tokens.
+    """
+    subs = storage.list_webhook_subscriptions(active_only=active_only)
+    masked = []
+    for s in subs:
+        item = dict(s)
+        token = item.get("secret_token", "")
+        if len(token) <= 4:
+            item["secret_token"] = "****"
+        else:
+            item["secret_token"] = token[:2] + "****" + token[-2:]
+        masked.append(item)
+    return {
+        "count": len(masked),
+        "subscriptions": masked,
+    }
+
+
+@app.delete("/v1/webhooks/{subscription_id}")
+def delete_webhook(
+    subscription_id: str,
+    request: Request,
+    x_api_key: Optional[str] = Header(None, alias="X-API-KEY"),
+):
+    """
+    Deregisters a webhook callback subscription.
+    """
+    deleted = storage.delete_webhook_subscription(subscription_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Webhook subscription '{subscription_id}' not found.",
+        )
+    storage.log_audit_event(
+        "webhook_deleted",
+        f"Deleted webhook subscription {subscription_id}",
+        ip_address=get_client_ip(request),
+    )
+    return {
+        "status": "deleted",
+        "subscription_id": subscription_id,
+    }
+
+
+@app.post("/v1/webhooks/test/{subscription_id}")
+async def test_webhook(
+    subscription_id: str,
+    request: Request,
+    x_api_key: Optional[str] = Header(None, alias="X-API-KEY"),
+):
+    """
+    Dispatches a test ping payload signed with HMAC-SHA256 to verify webhook receiver connectivity.
+    """
+    sub = storage.get_webhook_subscription(subscription_id)
+    if not sub:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Webhook subscription '{subscription_id}' not found.",
+        )
+
+    test_data = {
+        "test": True,
+        "message": "Moltbook Alpha webhook test verification ping",
+        "subscription_id": subscription_id,
+        "subscribed_events": sub["subscribed_events"],
+        "min_severity": sub["min_severity"],
+        "timestamp": time.time(),
+    }
+    dispatch_result = await microstructure_broadcaster.dispatch_webhook(
+        target_url=sub["target_url"],
+        secret_token=sub["secret_token"],
+        event_type="TEST_PING",
+        data=test_data,
+        timeout_seconds=5.0,
+    )
+    storage.log_audit_event(
+        "webhook_tested",
+        f"Tested webhook {subscription_id} to {sub['target_url']}: success={dispatch_result['success']}",
+        ip_address=get_client_ip(request),
+    )
+    return {
+        "subscription_id": subscription_id,
+        "target_url": sub["target_url"],
+        "dispatch_result": dispatch_result,
+    }
+
+
+@app.websocket("/v1/ws/microstructure")
+async def websocket_microstructure_stream(
+    websocket: WebSocket,
+    api_key: Optional[str] = None,
+    token: Optional[str] = None,
+):
+    """
+    Ultra-low latency sub-100ms WebSocket stream delivering Concentrated Liquidity (CLMM)
+    orderbook tick depth deltas and manipulation alerts across Raydium, Orca, and Meteora.
+    Supports real-time pool subscriptions and ping/pong heartbeats.
+    """
+    await websocket.accept()
+    session_id = f"wsm_{secrets.token_hex(8)}"
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    # Register client with broadcaster
+    await microstructure_broadcaster.connect(websocket)
+
+    # Initial connection handshake
+    await websocket.send_json({
+        "type": "connected",
+        "session_id": session_id,
+        "tracked_pools": dex_microstructure.get_tracked_pools(),
+        "timestamp": now_iso,
+    })
+
+    try:
+        while True:
+            msg = await websocket.receive_json()
+            if not isinstance(msg, dict):
+                continue
+            msg_type = msg.get("type")
+            if msg_type == "ping":
+                await websocket.send_json({
+                    "type": "pong",
+                    "session_id": session_id,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+            elif msg_type == "subscribe":
+                pools = msg.get("pools")
+                if isinstance(pools, list):
+                    pools_list = [str(p) for p in pools]
+                    microstructure_broadcaster.set_subscriptions(websocket, pools_list)
+                else:
+                    microstructure_broadcaster.set_subscriptions(websocket, [])
+                await websocket.send_json({
+                    "type": "subscribed",
+                    "session_id": session_id,
+                    "pools": list(microstructure_broadcaster.get_subscriptions(websocket)),
+                })
+            elif msg_type == "unsubscribe":
+                microstructure_broadcaster.set_subscriptions(websocket, [])
+                await websocket.send_json({
+                    "type": "unsubscribed",
+                    "session_id": session_id,
+                })
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        microstructure_broadcaster.disconnect(websocket)
+        storage.log_audit_event("ws_microstructure_disconnected", f"Session {session_id} ended")
 
 
 @app.websocket("/v1/ws/alpha")

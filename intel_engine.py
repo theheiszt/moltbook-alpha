@@ -129,6 +129,10 @@ class IntelEngine:
                 "INSERT OR IGNORE INTO intel_sources (source_id, source_name, source_type, created_at) VALUES (?, ?, 'onchain_cluster', ?)",
                 ("solana_cluster_telemetry", "Solana Network RPC & Cluster Health Telemetry", now_iso)
             )
+            cur.execute(
+                "INSERT OR IGNORE INTO intel_sources (source_id, source_name, source_type, created_at) VALUES (?, ?, 'onchain_dex_microstructure', ?)",
+                ("onchain_dex_microstructure", "Solana DEX Concentrated Liquidity Microstructure Engine", now_iso)
+            )
             conn.commit()
 
     def _get_client(self) -> Optional[MoltbookClient]:
@@ -509,7 +513,100 @@ class IntelEngine:
 
         return 1
 
-    def collect_all_sources(self) -> Dict[str, int]:
+    def ingest_microstructure_anomalies(self, anomalies: List[Any]) -> int:
+        """
+        Ingests high-frequency Solana DEX microstructure anomalies (tick vacuums,
+        spoofed depth walls, fee volatility spikes) into intelligence items and
+        indexes them directly into actionable market_microstructure signals.
+        """
+        if not anomalies:
+            return 0
+
+        source_id = "onchain_dex_microstructure"
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        new_items_count = 0
+        with self.storage.connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT OR IGNORE INTO intel_sources (source_id, source_name, source_type, created_at) VALUES (?, ?, 'onchain_dex_microstructure', ?)",
+                (source_id, "Solana DEX Concentrated Liquidity Microstructure Engine", now_iso)
+            )
+
+            for anomaly in anomalies:
+                if hasattr(anomaly, "to_dict"):
+                    data = anomaly.to_dict()
+                    anomaly_type = anomaly.anomaly_type
+                    pool_id = anomaly.pool_id
+                    protocol = getattr(anomaly.protocol, "value", str(anomaly.protocol))
+                    severity = anomaly.severity
+                    confidence = anomaly.confidence_score
+                    evidence = anomaly.evidence_details
+                    detected_at = anomaly.detected_at
+                else:
+                    data = anomaly
+                    anomaly_type = data.get("anomaly_type", "ANOMALY")
+                    pool_id = data.get("pool_id", "unknown")
+                    protocol = data.get("protocol", "dex")
+                    severity = data.get("severity", "HIGH")
+                    confidence = float(data.get("confidence_score", 0.85))
+                    evidence = data.get("evidence_details", {})
+                    detected_at = float(data.get("detected_at", datetime.now(timezone.utc).timestamp()))
+
+                item_id = f"itm_micro_{pool_id[:8]}_{int(detected_at)}"
+                title = f"[DEX Microstructure] {anomaly_type} detected on {protocol} pool {pool_id[:12]}"
+                content = (
+                    f"Protocol: {protocol}\nPool: {pool_id}\nAnomaly: {anomaly_type}\n"
+                    f"Severity: {severity}\nConfidence: {confidence:.2f}\n"
+                    f"Evidence: {json.dumps(evidence, sort_keys=True)}"
+                )
+                content_hash = hashlib.sha256(f"{title}\n{content}".encode("utf-8")).hexdigest()
+
+                cur.execute("SELECT item_id FROM intel_items WHERE content_hash = ?", (content_hash,))
+                if cur.fetchone():
+                    continue
+
+                cur.execute("""
+                    INSERT INTO intel_items (
+                        item_id, source_id, content_hash, author, title, content,
+                        url, raw_metadata_json, published_at, ingested_at, engagement_score
+                    ) VALUES (?, ?, ?, 'dex_microstructure_engine', ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    item_id, source_id, content_hash, title, content,
+                    f"solana://pool/{pool_id}", json.dumps(data), now_iso, now_iso, 25
+                ))
+
+                signal_id = f"sig_micro_{item_id[4:]}"
+                headline = f"DEX Alert: {anomaly_type} on {protocol} {pool_id[:12]}"
+                summary = (
+                    f"Observed {anomaly_type} (severity: {severity}, confidence: {confidence:.2f}) "
+                    f"in pool {pool_id[:12]}. Evidence: {json.dumps(evidence, sort_keys=True)}"
+                )
+                requires_review = 1 if severity == "CRITICAL" else 0
+                remedy = "Auto-adjust execution slippage bounds or pause taker entries on affected pool."
+
+                cur.execute("""
+                    INSERT OR REPLACE INTO intel_signals (
+                        signal_id, item_id, category, headline, summary,
+                        confidence, requires_human_review, automated_remedy_available,
+                        remedy_description, created_at
+                    ) VALUES (?, ?, 'market_microstructure', ?, ?, ?, ?, 1, ?, ?)
+                """, (
+                    signal_id, item_id, headline, summary, severity,
+                    requires_review, remedy, now_iso
+                ))
+
+                new_items_count += 1
+
+            cur.execute(
+                "UPDATE intel_sources SET last_polled_at = ?, items_collected_count = items_collected_count + ? WHERE source_id = ?",
+                (now_iso, new_items_count, source_id)
+            )
+            conn.commit()
+
+        return new_items_count
+
+    def collect_all_sources(self, dex_microstructure: Optional[Any] = None) -> Dict[str, int]:
         """Runs end-to-end collection across all approved external and internal sources."""
         stats = {}
         for sub in APPROVED_SUBMOLTS:
@@ -519,6 +616,9 @@ class IntelEngine:
         stats["git_repository"] = self.ingest_git_history(limit=15)
         stats["onchain_dex"] = self.ingest_onchain_dex_telemetry()
         stats["solana_cluster"] = self.ingest_solana_cluster_telemetry()
+        if dex_microstructure and hasattr(dex_microstructure, "get_active_anomalies"):
+            anomalies = dex_microstructure.get_active_anomalies(limit=20)
+            stats["dex_microstructure"] = self.ingest_microstructure_anomalies(anomalies)
         return stats
 
     def extract_signals(self, limit_items: int = 100) -> int:
@@ -786,6 +886,7 @@ class IntelEngine:
             "volatility_expansion": [],
             "arbitrage_spread": [],
             "cluster_health": [],
+            "market_microstructure": [],
         }
         for s in signals:
             cat = s["category"]
@@ -864,7 +965,7 @@ class IntelEngine:
             "---",
             "\n## 5. Market Alpha & Agentic Finance Opportunities\n",
         ])
-        alpha_signals = by_cat["market_alpha"] + by_cat["liquidity_surge"] + by_cat["volatility_expansion"] + by_cat["arbitrage_spread"]
+        alpha_signals = by_cat["market_alpha"] + by_cat["liquidity_surge"] + by_cat["volatility_expansion"] + by_cat["arbitrage_spread"] + by_cat.get("market_microstructure", [])
         if not alpha_signals:
             md_lines.append("No high-confidence financial arbitrage signals in current block.\n")
         else:

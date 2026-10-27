@@ -101,7 +101,21 @@ DEFAULT_INVOICE_TTL_SECONDS = 1800  # 30 minutes
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "moltbook_webhook_secret_dev")
 
 # Default production-safe rates (USD values converted to integer micro-units)
+NANO_TREASURY_ADDRESS = os.getenv(
+    "NANO_TREASURY_ADDRESS",
+    "nano_3moltbookintel111111111111111111111111111111111111111111111111",
+)
+
 DEFAULT_RATES: Dict[str, Dict[str, Any]] = {
+    "tier_micro": {
+        "display_name": "Micro-Query (15 queries)",
+        "usd": 0.25,
+        "credits": 15,
+        "validity_days": None,
+        "usdc_units": 250_000,
+        "sol_lamports": 1_250_000,
+        "nano_raw": 250_000_000_000_000_000_000_000_000_000,
+    },
     "tier_starter": {
         "display_name": "Starter",
         "usd": 1.0,
@@ -243,7 +257,10 @@ def load_payment_config() -> Dict[str, Any]:
         rpc_endpoints = ["https://api.mainnet-beta.solana.com"]
 
     # Load and normalize rates with integer units
-    raw_rates = config_data.get("rates", DEFAULT_RATES)
+    merged_rates = dict(DEFAULT_RATES)
+    if "rates" in config_data and isinstance(config_data["rates"], dict):
+        merged_rates.update(config_data["rates"])
+    raw_rates = merged_rates
     rates: Dict[str, Dict[str, Any]] = {}
     for tier, r in raw_rates.items():
         usd_val = float(r.get("usd", 0.0))
@@ -290,6 +307,8 @@ def load_payment_config() -> Dict[str, Any]:
 
     return {
         "solana_treasury_wallet": treasury_wallet,
+        "nano_treasury_address": NANO_TREASURY_ADDRESS,
+        "accepted_rails": ["solana", "nano"],
         "rpc_url": rpc_endpoints[0],
         "rpc_endpoints": rpc_endpoints,
         "rates": rates,

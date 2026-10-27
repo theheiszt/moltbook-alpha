@@ -15,7 +15,7 @@ import json
 from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 
 from config import generate_solana_reference
 
@@ -191,6 +191,32 @@ class StorageManager:
                         fulfilled_at TEXT
                     );
 
+                    CREATE TABLE IF NOT EXISTS webhook_subscriptions (
+                        subscription_id TEXT PRIMARY KEY,
+                        target_url TEXT NOT NULL,
+                        secret_token TEXT NOT NULL,
+                        subscribed_events TEXT NOT NULL,
+                        min_severity TEXT NOT NULL DEFAULT 'HIGH',
+                        is_active INTEGER NOT NULL DEFAULT 1,
+                        created_at TEXT NOT NULL
+                    );
+
+                    CREATE TABLE IF NOT EXISTS unmatched_payments (
+                        unmatched_id TEXT PRIMARY KEY,
+                        rail TEXT NOT NULL DEFAULT 'solana',
+                        tx_signature TEXT NOT NULL UNIQUE,
+                        payer_wallet TEXT NOT NULL,
+                        asset TEXT NOT NULL,
+                        amount_raw INTEGER NOT NULL,
+                        expected_amount_raw INTEGER,
+                        reason TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'HELD',
+                        refund_tx_sig TEXT,
+                        refunded_amount_raw INTEGER,
+                        created_at TEXT NOT NULL,
+                        refunded_at TEXT
+                    );
+
                     CREATE TABLE IF NOT EXISTS audit_logs (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         event_type TEXT NOT NULL,
@@ -329,6 +355,11 @@ class StorageManager:
                 inv_cols = {row["name"] for row in cur.fetchall()}
                 if "target_key_hash" not in inv_cols:
                     cur.execute("ALTER TABLE payment_invoices ADD COLUMN target_key_hash TEXT")
+                if "rail" not in inv_cols:
+                    cur.execute("ALTER TABLE payment_invoices ADD COLUMN rail TEXT DEFAULT 'solana'")
+                if "amount_raw_text" not in inv_cols:
+                    cur.execute("ALTER TABLE payment_invoices ADD COLUMN amount_raw_text TEXT")
+
 
                 # Additive migration for payment_redemptions metadata columns
                 cur.execute("PRAGMA table_info(payment_redemptions)")
@@ -346,6 +377,9 @@ class StorageManager:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_redemptions_invoice ON payment_redemptions(invoice_id)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_redemptions_ref ON payment_redemptions(reference)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_invoices_target_key ON payment_invoices(target_key_hash)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_unmatched_payer ON unmatched_payments(payer_wallet)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_unmatched_status ON unmatched_payments(status)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_webhooks_active ON webhook_subscriptions(is_active)")
 
                 # Backfill legacy keys that have no records in credit_lots
                 cur.execute("SELECT key_hash, key_prefix, tier, credits, created_at, is_active FROM api_keys WHERE key_hash NOT IN (SELECT DISTINCT key_hash FROM credit_lots)")
@@ -1066,7 +1100,6 @@ class StorageManager:
             effective_tier = "premium"
             if credits_to_grant == 999999 or credits_to_grant == 0:
                 credits_to_grant = 10000
-
         with self._lock, self.connection() as conn:
             cur = conn.cursor()
             cur.execute(
@@ -1291,6 +1324,7 @@ class StorageManager:
         expiry_seconds: int = 1800,
         expected_payer: Optional[str] = None,
         target_key_hash: Optional[str] = None,
+        rail: str = "solana",
     ) -> Tuple[Dict[str, Any], str, str]:
         """
         Creates a stateful payment invoice with a unique Solana Pay reference address
@@ -1299,12 +1333,18 @@ class StorageManager:
         """
         invoice_id = f"inv_{secrets.token_hex(12)}"
         claim_secret = f"sec_{secrets.token_hex(20)}"
-        reference = generate_solana_reference()
+        if rail == "nano":
+            tag_offset = int(hashlib.sha256(invoice_id.encode()).hexdigest()[:8], 16) % 1_000_000
+            reference = f"nano_ref_{tag_offset}_{secrets.token_hex(4)}"
+        else:
+            reference = generate_solana_reference()
         claim_secret_hash = hashlib.sha256(claim_secret.strip().encode("utf-8")).hexdigest()
 
         now = self.get_now()
         created_at_iso = now.isoformat()
         expires_at_iso = (now + timedelta(seconds=expiry_seconds)).isoformat()
+        raw_text = str(amount_raw)
+        safe_amount_raw = int(amount_raw) if int(amount_raw) < (2**62) else 0
 
         effective_tier = tier
         if tier in ("unlimited", "premium", "tier_unlimited", "tier_premium"):
@@ -1319,8 +1359,8 @@ class StorageManager:
                     INSERT INTO payment_invoices (
                         invoice_id, reference, tier, credits, asset, amount_raw,
                         recipient, cluster, status, claim_secret_hash, created_at, expires_at,
-                        target_key_hash
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
+                        target_key_hash, rail, amount_raw_text
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         invoice_id,
@@ -1328,13 +1368,15 @@ class StorageManager:
                         effective_tier,
                         credits,
                         asset,
-                        amount_raw,
+                        safe_amount_raw,
                         recipient,
                         cluster,
                         claim_secret_hash,
                         created_at_iso,
                         expires_at_iso,
                         target_key_hash,
+                        rail,
+                        raw_text,
                     ),
                 )
 
@@ -1351,6 +1393,7 @@ class StorageManager:
             "created_at": created_at_iso,
             "expires_at": expires_at_iso,
             "target_key_hash": target_key_hash,
+            "rail": rail,
         }
         return invoice_record, claim_secret, reference
 
@@ -1361,7 +1404,8 @@ class StorageManager:
                 """
                 SELECT invoice_id, reference, tier, credits, asset, amount_raw,
                        recipient, cluster, status, claim_secret_hash, encrypted_key_envelope,
-                       tx_signature, created_at, expires_at, fulfilled_at, target_key_hash
+                       tx_signature, created_at, expires_at, fulfilled_at, target_key_hash,
+                       rail, amount_raw_text
                 FROM payment_invoices
                 WHERE invoice_id = ?
                 """,
@@ -1377,7 +1421,8 @@ class StorageManager:
                 """
                 SELECT invoice_id, reference, tier, credits, asset, amount_raw,
                        recipient, cluster, status, claim_secret_hash, encrypted_key_envelope,
-                       tx_signature, created_at, expires_at, fulfilled_at, target_key_hash
+                       tx_signature, created_at, expires_at, fulfilled_at, target_key_hash,
+                       rail, amount_raw_text
                 FROM payment_invoices
                 WHERE reference = ?
                 """,
@@ -1412,6 +1457,7 @@ class StorageManager:
         inv_id = invoice_id.strip()
         now = self.get_now()
         now_iso = now.isoformat()
+        safe_amount_raw = int(amount_raw) if int(amount_raw) < (2**62) else 0
 
         effective_tier = tier
         if tier in ("unlimited", "premium", "tier_unlimited", "tier_premium"):
@@ -1591,7 +1637,7 @@ class StorageManager:
                                 sig,
                                 k_hash,
                                 asset,
-                                amount_raw,
+                                safe_amount_raw,
                                 effective_tier,
                                 credits_to_grant,
                                 now_iso,
@@ -2660,3 +2706,171 @@ class StorageManager:
                     "expired": total_expired,
                 }
             }
+
+    def record_unmatched_payment(
+        self,
+        rail: str,
+        tx_signature: str,
+        payer_wallet: str,
+        asset: str,
+        amount_raw: int,
+        expected_amount_raw: Optional[int],
+        reason: str,
+    ) -> Dict[str, Any]:
+        """Records an unmatched or invalid payment in HELD state for refund dispatch."""
+        unmatched_id = f"unm_{secrets.token_hex(8)}"
+        now_iso = self.get_now().isoformat()
+        with self._lock, self.connection() as conn:
+            with conn:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO unmatched_payments (
+                        unmatched_id, rail, tx_signature, payer_wallet, asset,
+                        amount_raw, expected_amount_raw, reason, status, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'HELD', ?)
+                    """,
+                    (
+                        unmatched_id,
+                        rail,
+                        tx_signature,
+                        payer_wallet,
+                        asset,
+                        amount_raw,
+                        expected_amount_raw,
+                        reason,
+                        now_iso,
+                    ),
+                )
+        return {
+            "unmatched_id": unmatched_id,
+            "rail": rail,
+            "tx_signature": tx_signature,
+            "payer_wallet": payer_wallet,
+            "asset": asset,
+            "amount_raw": amount_raw,
+            "expected_amount_raw": expected_amount_raw,
+            "reason": reason,
+            "status": "HELD",
+            "created_at": now_iso,
+        }
+
+    def get_unmatched_payment(self, unmatched_id: str) -> Optional[Dict[str, Any]]:
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM unmatched_payments WHERE unmatched_id = ?",
+                (unmatched_id,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def get_unmatched_by_signature(self, tx_signature: str) -> Optional[Dict[str, Any]]:
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM unmatched_payments WHERE tx_signature = ?",
+                (tx_signature,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def list_unmatched_payments(
+        self,
+        status: Optional[str] = None,
+        payer_wallet: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        query = "SELECT * FROM unmatched_payments WHERE 1=1"
+        params = []
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        if payer_wallet:
+            query += " AND payer_wallet = ?"
+            params.append(payer_wallet)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        with self.connection() as conn:
+            rows = conn.execute(query, tuple(params)).fetchall()
+            return [dict(r) for r in rows]
+
+    def mark_unmatched_refunded(
+        self, unmatched_id: str, refund_tx_sig: str, refunded_amount_raw: int
+    ) -> bool:
+        now_iso = self.get_now().isoformat()
+        with self._lock, self.connection() as conn:
+            with conn:
+                cur = conn.execute(
+                    """
+                    UPDATE unmatched_payments
+                    SET status = 'REFUNDED', refund_tx_sig = ?, refunded_amount_raw = ?, refunded_at = ?
+                    WHERE unmatched_id = ? AND status = 'HELD'
+                    """,
+                    (refund_tx_sig, refunded_amount_raw, now_iso, unmatched_id),
+                )
+                return cur.rowcount > 0
+
+    def create_webhook_subscription(
+        self,
+        target_url: str,
+        secret_token: str,
+        subscribed_events: List[str],
+        min_severity: str = "HIGH",
+    ) -> Dict[str, Any]:
+        """Registers a new webhook callback subscription."""
+        subscription_id = f"whsub_{secrets.token_hex(8)}"
+        now_iso = self.get_now().isoformat()
+        events_json = json.dumps(subscribed_events)
+
+        with self._lock, self.connection() as conn:
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO webhook_subscriptions (
+                        subscription_id, target_url, secret_token, subscribed_events,
+                        min_severity, is_active, created_at
+                    ) VALUES (?, ?, ?, ?, ?, 1, ?)
+                    """,
+                    (subscription_id, target_url.strip(), secret_token.strip(), events_json, min_severity.upper(), now_iso),
+                )
+        return {
+            "subscription_id": subscription_id,
+            "target_url": target_url.strip(),
+            "subscribed_events": subscribed_events,
+            "min_severity": min_severity.upper(),
+            "is_active": True,
+            "created_at": now_iso,
+        }
+
+    def get_webhook_subscription(self, subscription_id: str) -> Optional[Dict[str, Any]]:
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM webhook_subscriptions WHERE subscription_id = ?",
+                (subscription_id.strip(),),
+            ).fetchone()
+            if not row:
+                return None
+            res = dict(row)
+            res["subscribed_events"] = json.loads(res["subscribed_events"])
+            res["is_active"] = bool(res["is_active"])
+            return res
+
+    def list_webhook_subscriptions(self, active_only: bool = True) -> List[Dict[str, Any]]:
+        query = "SELECT * FROM webhook_subscriptions"
+        if active_only:
+            query += " WHERE is_active = 1"
+        query += " ORDER BY created_at DESC"
+        with self.connection() as conn:
+            rows = conn.execute(query).fetchall()
+            results = []
+            for r in rows:
+                item = dict(r)
+                item["subscribed_events"] = json.loads(item["subscribed_events"])
+                item["is_active"] = bool(item["is_active"])
+                results.append(item)
+            return results
+
+    def delete_webhook_subscription(self, subscription_id: str) -> bool:
+        with self._lock, self.connection() as conn:
+            with conn:
+                cur = conn.execute(
+                    "DELETE FROM webhook_subscriptions WHERE subscription_id = ?",
+                    (subscription_id.strip(),),
+                )
+                return cur.rowcount > 0

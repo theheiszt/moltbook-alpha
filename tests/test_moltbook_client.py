@@ -136,3 +136,18 @@ def test_solve_arithmetic_challenge_explicit_minus_operator():
     )
     res = solve_arithmetic_challenge(challenge)
     assert res == "16.00"
+
+
+def test_solve_arithmetic_challenge_attached_consonant_prefix_fragment():
+    challenge = "A] LxO b-StEr^ ClA wEx ErT sThIi rTy TwO NoOtOnS~ aNd/ W/ aTeR PrE sSuRe AdDs FoUr, ToTaL FoRcE?"
+    res = solve_arithmetic_challenge(challenge)
+    assert res == "36.00"
+
+
+def test_solve_arithmetic_challenge_compound_ten_one_word():
+    challenge = (
+        "A] lOoObSsTtErS^ swI mMm~ velAwCiiTeE] iS[ tW/eNtYtHrEe - mEeTtErS\\ pEr] sEeCoNd, "
+        "aNd\\ iT^ inCrEaSeS] bY~ fIiV/e - mEeTtErS, wHaT] iS^ tHe- nEw\\ velOoCiTy?"
+    )
+    res = solve_arithmetic_challenge(challenge)
+    assert res == "28.00"

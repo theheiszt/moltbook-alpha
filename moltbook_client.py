@@ -28,6 +28,11 @@ TENS = {"twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "nin
 ONES = {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "thre"}
 SCALES = {"hundred", "thousand"}
 
+# Populate compound tens+ones (e.g. 'twentythree', 'thirtytwo')
+for _t in TENS:
+    for _o in ONES:
+        WORD_TO_NUMBER[_t + _o] = WORD_TO_NUMBER[_t] + WORD_TO_NUMBER[_o]
+
 
 def normalize_word(w: str) -> str:
     clean = re.sub(r"[^a-z]", "", w.lower())
@@ -37,9 +42,15 @@ def normalize_word(w: str) -> str:
     collapsed = re.sub(r"(.)\1+", r"\1", clean)
     if collapsed in WORD_TO_NUMBER:
         return collapsed
-    # Strip single leading noise consonant: e.g. 'qthree' -> 'three'
-    if len(clean) > 3 and clean[0] in "qxjz" and clean[1:] in WORD_TO_NUMBER:
-        return clean[1:]
+    # Strip single leading noise letter: e.g. 'qthree' -> 'three', 'sthirty' -> 'thirty'
+    for candidate in (clean, collapsed):
+        if len(candidate) > 3:
+            rem = candidate[1:]
+            if rem in WORD_TO_NUMBER:
+                return rem
+            rem_col = re.sub(r"(.)\1+", r"\1", rem)
+            if rem_col in WORD_TO_NUMBER:
+                return rem_col
     return clean
 
 
