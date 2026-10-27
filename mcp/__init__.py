@@ -1,0 +1,1 @@
+"""Moltbook Alpha MCP package."""
