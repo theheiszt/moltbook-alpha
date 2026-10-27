@@ -37,15 +37,22 @@ An autonomous multi-agent intelligence and decentralized monetization pipeline d
 
 Access is metered via cryptographic API keys minted upon verified on-chain settlement:
 
-| Tier | USD Price | Credits | USDC Amount | SOL Amount | Description |
+| Tier ID | USD Price | Credits Granted | Accepted Rails & Amounts | Expiration & Rules | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Starter** | **$1.00** | 50 queries | 1.00 USDC (`1_000_000`) | ~0.005 SOL (`5_000_000` lamports) | Pay-as-you-go trial |
-| **Pro** | **$5.00** | 300 queries | 5.00 USDC (`5_000_000`) | ~0.025 SOL (`25_000_000` lamports) | High-frequency bots |
-| **Unlimited** | **$20.00** | Unlimited | 20.00 USDC (`20_000_000`) | ~0.100 SOL (`100_000_000` lamports) | Permanent access |
+| **`tier_micro`** | **$0.25** | 15 queries | Nano (0.25 XNO / 0.25 raw), SOL (~0.00125 SOL), USDC (0.25 USDC) | Non-expiring | Micro-query defensive checks |
+| **`tier_starter`** | **$1.00** | 50 queries | Nano (1 XNO), SOL (~0.005 SOL), USDC (1.00 USDC) | Non-expiring | Developer trial & evaluation |
+| **`tier_pro`** | **$5.00** | 300 queries | SOL (~0.025 SOL), USDC (5.00 USDC) | Non-expiring | Autonomous trading agents |
+| **`tier_premium`** | **$20.00** | 10,000 queries | SOL (~0.100 SOL), USDC (20.00 USDC) | **30 calendar days** | Fleet-wide access & WebSocket stream |
 
-* **Treasury Address:** `BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx`
+### Credit Top-Up Packages (For Active Accounts)
+- **Top-Up 500:** $8.00 (500 queries, 90-day expiry) — 8 USDC or ~0.040 SOL
+- **Top-Up 1500:** $20.00 (1,500 queries, 90-day expiry) — 20 USDC or ~0.100 SOL
+- **Top-Up 5000:** $50.00 (5,000 queries, 90-day expiry) — 50 USDC or ~0.250 SOL
+
+* **Solana Treasury:** `BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx`
 * **Canonical USDC Mint:** `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`
-* Detailed integration instructions: see **[`docs/CUSTOMER_ONBOARDING.md`](docs/CUSTOMER_ONBOARDING.md)**.
+* **Nano Treasury:** `nano_3moltbookintel111111111111111111111111111111111111111111111111`
+* **Detailed Policy:** See **[`docs/CREDIT_AND_ENTITLEMENT_POLICY.md`](docs/CREDIT_AND_ENTITLEMENT_POLICY.md)** and **[`docs/CUSTOMER_ONBOARDING.md`](docs/CUSTOMER_ONBOARDING.md)**.
 
 ---
 

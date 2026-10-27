@@ -20,11 +20,19 @@ Key technical characteristics:
 
 Payments are accepted in either **USDC** (canonical SPL token) or **SOL** (native lamports). Tiers are server-authoritative and determined by net on-chain transfer to the official treasury.
 
-| Tier ID | USD Price | Credits Granted | Minimum USDC Transfer | Minimum SOL Transfer |
-| :--- | :--- | :--- | :--- | :--- |
-| `tier_starter` | **$1.00** | 50 queries | 1,000,000 micro-USDC (1.00 USDC) | 5,000,000 lamports (0.005 SOL) |
-| `tier_pro` | **$5.00** | 300 queries | 5,000,000 micro-USDC (5.00 USDC) | 25,000,000 lamports (0.025 SOL) |
-| `tier_unlimited` | **$20.00** | 999,999 (Unlimited) | 20,000,000 micro-USDC (20.00 USDC) | 100,000,000 lamports (0.100 SOL) |
+| Tier ID | USD Price | Credits Granted | Expiration / Validity | Minimum USDC Transfer | Minimum SOL Transfer | Nano (XNO) Amount |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `tier_micro` | **$0.25** | 15 queries | Non-expiring | 250,000 micro-USDC (0.25 USDC) | 1,250,000 lamports (0.00125 SOL) | 0.25 XNO (Tagged raw units) |
+| `tier_starter` | **$1.00** | 50 queries | Non-expiring | 1,000,000 micro-USDC (1.00 USDC) | 5,000,000 lamports (0.005 SOL) | 1.00 XNO (Tagged raw units) |
+| `tier_pro` | **$5.00** | 300 queries | Non-expiring | 5,000,000 micro-USDC (5.00 USDC) | 25,000,000 lamports (0.025 SOL) | N/A |
+| `tier_premium` | **$20.00** | 10,000 queries | **30 calendar days** | 20,000,000 micro-USDC (20.00 USDC) | 100,000,000 lamports (0.100 SOL) | N/A |
+
+*(Note: Legacy requests with `target_tier: "tier_unlimited"` are automatically aliased to `tier_premium`.)*
+
+### Dynamic Credit Top-Up Packages (For Active Keys)
+- `topup_500`: **$8.00** (500 queries, 90-day expiry) — 8.00 USDC / 0.040 SOL
+- `topup_1500`: **$20.00** (1,500 queries, 90-day expiry) — 20.00 USDC / 0.100 SOL
+- `topup_5000`: **$50.00** (5,000 queries, 90-day expiry) — 50.00 USDC / 0.250 SOL
 
 ### Settlement Parameters
 - **Solana Cluster:** `mainnet-beta`
@@ -168,7 +176,7 @@ curl -s http://127.0.0.1:8080/v1/briefing/latest \
 }
 ```
 
-Each successful request to `/v1/briefing/latest` decrements 1 credit until exhausted (unlimited tier keys never expire or decrement).
+Each successful request to `/v1/briefing/latest` decrements 1 credit until exhausted. For Premium accounts, queries decrement from the 10,000 query allowance until 30 days elapse or the quota is exhausted.
 
 ---
 

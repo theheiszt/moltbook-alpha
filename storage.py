@@ -336,6 +336,14 @@ class StorageManager:
                     );
                     CREATE INDEX IF NOT EXISTS idx_challenges_status ON verification_challenges(status);
                     CREATE INDEX IF NOT EXISTS idx_challenges_expires ON verification_challenges(expires_at);
+
+                    CREATE TABLE IF NOT EXISTS funnel_events (
+                        event_id TEXT PRIMARY KEY,
+                        event_name TEXT NOT NULL,
+                        timestamp_utc TEXT NOT NULL,
+                        properties_json TEXT NOT NULL
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_funnel_events_name_time ON funnel_events(event_name, timestamp_utc);
                 """)
 
                 cur = conn.cursor()
@@ -682,6 +690,25 @@ class StorageManager:
         )
         self._check_and_record_quota_thresholds_conn(conn, k_hash)
 
+        cur.execute(
+            "SELECT COUNT(*) as deduct_count FROM credit_ledger_events WHERE key_hash = ? AND event_type = 'deduct'",
+            (k_hash,),
+        )
+        d_row = cur.fetchone()
+        if d_row and d_row["deduct_count"] == 1:
+            self._record_funnel_event_conn(
+                conn,
+                "first_query",
+                {"key_hash": k_hash, "tier": tier},
+            )
+
+        if new_total == 0:
+            self._record_funnel_event_conn(
+                conn,
+                "quota_exhausted",
+                {"key_hash": k_hash, "tier": tier},
+            )
+
         return {
             "key_prefix": row["key_prefix"],
             "tier": tier,
@@ -1018,6 +1045,12 @@ class StorageManager:
                         "INSERT INTO audit_logs (event_type, detail, created_at) VALUES (?, ?, ?)",
                         ("quota_warning_threshold_crossed", f"Key {key_hash[:12]} crossed {int(th*100)}% quota consumption ({total_consumed}/{total_granted})", now_iso)
                     )
+                    if th == 0.80:
+                        self._record_funnel_event_conn(
+                            conn,
+                            "quota_warning",
+                            {"key_hash": key_hash, "threshold": 0.80},
+                        )
 
         return newly_crossed
 
@@ -1380,6 +1413,19 @@ class StorageManager:
                     ),
                 )
 
+                self._record_funnel_event_conn(
+                    conn,
+                    "invoice_created",
+                    {
+                        "invoice_id": invoice_id,
+                        "tier": effective_tier,
+                        "rail": rail,
+                        "asset": asset,
+                        "amount_raw": safe_amount_raw,
+                        "credits": credits,
+                    },
+                )
+
         invoice_record = {
             "invoice_id": invoice_id,
             "reference": reference,
@@ -1662,6 +1708,31 @@ class StorageManager:
                             raise sqlite3.IntegrityError("Invoice fulfillment conflict")
                         self._cached_active_count = None
 
+                        self._record_funnel_event_conn(
+                            conn,
+                            "payment_verified",
+                            {
+                                "invoice_id": inv_id,
+                                "tier": effective_tier,
+                                "asset": asset,
+                                "payer_wallet": payer,
+                                "credits_granted": credits_to_grant,
+                                "is_topup": True,
+                            },
+                        )
+                        if effective_tier in ("topup", "credit_topup") or effective_tier.startswith("topup"):
+                            self._record_funnel_event_conn(
+                                conn,
+                                "topup_purchased",
+                                {
+                                    "invoice_id": inv_id,
+                                    "tier": effective_tier,
+                                    "asset": asset,
+                                    "credits_granted": credits_to_grant,
+                                    "key_hash": k_hash,
+                                },
+                            )
+
                     return {
                         "status": "newly_minted",
                         "tx_signature": sig,
@@ -1780,6 +1851,28 @@ class StorageManager:
 
                     self._cached_active_count = None
 
+                    self._record_funnel_event_conn(
+                        conn,
+                        "payment_verified",
+                        {
+                            "invoice_id": inv_id,
+                            "tier": effective_tier,
+                            "asset": asset,
+                            "payer_wallet": payer,
+                            "credits_granted": credits_to_grant,
+                            "is_topup": False,
+                        },
+                    )
+                    self._record_funnel_event_conn(
+                        conn,
+                        "key_delivered",
+                        {
+                            "invoice_id": inv_id,
+                            "tier": effective_tier,
+                            "delivery_method": "immediate_fulfillment",
+                        },
+                    )
+
                 return {
                     "status": "newly_minted",
                     "tx_signature": sig,
@@ -1877,6 +1970,17 @@ class StorageManager:
                 raw_token = decrypt_key_envelope(envelope, sec)
             except Exception as e:
                 raise StorageError(f"Credential decryption failed: {e}") from e
+
+            with conn:
+                self._record_funnel_event_conn(
+                    conn,
+                    "key_delivered",
+                    {
+                        "invoice_id": inv_id,
+                        "tier": inv["tier"],
+                        "delivery_method": "claim_secret_recovery",
+                    },
+                )
 
             return {
                 "status": "recovered",
@@ -2231,6 +2335,136 @@ class StorageManager:
                     (limit,)
                 )
             return [dict(r) for r in cur.fetchall()]
+
+    def _record_funnel_event_conn(
+        self,
+        conn: sqlite3.Connection,
+        event_name: str,
+        properties: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        event_id = f"fnl_{secrets.token_hex(8)}"
+        now_iso = self.get_now_iso()
+        props = dict(properties or {})
+
+        sanitized: Dict[str, Any] = {}
+        for k, v in props.items():
+            if k in ("key", "api_key", "secret", "claim_secret", "ip", "client_ip", "ip_address"):
+                continue
+            if k in ("key_hash", "hash"):
+                sanitized[k] = str(v)[:8] + "..." if v else None
+                continue
+            if "wallet" in k or k in ("payer", "payer_wallet", "address"):
+                if isinstance(v, str) and len(v) > 8:
+                    sanitized[k] = f"{v[:4]}...{v[-4:]}"
+                else:
+                    sanitized[k] = v
+                continue
+            sanitized[k] = v
+
+        props_json = json.dumps(sanitized, sort_keys=True)
+        conn.execute(
+            """
+            INSERT INTO funnel_events (event_id, event_name, timestamp_utc, properties_json)
+            VALUES (?, ?, ?, ?)
+            """,
+            (event_id, event_name, now_iso, props_json),
+        )
+        return event_id
+
+    def record_funnel_event(
+        self,
+        event_name: str,
+        properties: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """
+        Records a privacy-conscious funnel conversion event.
+        Sanitizes properties to eliminate raw keys, hashes, IPs, and truncate wallet addresses.
+        """
+        with self._lock, self.connection() as conn:
+            with conn:
+                return self._record_funnel_event_conn(conn, event_name, properties)
+
+    def get_funnel_metrics(self, since_utc: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Aggregates conversion counts across funnel stages.
+        """
+        with self._lock, self.connection() as conn:
+            cur = conn.cursor()
+            if since_utc:
+                cur.execute(
+                    """
+                    SELECT event_name, COUNT(*) as cnt
+                    FROM funnel_events
+                    WHERE timestamp_utc >= ?
+                    GROUP BY event_name
+                    """,
+                    (since_utc,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT event_name, COUNT(*) as cnt
+                    FROM funnel_events
+                    GROUP BY event_name
+                    """
+                )
+            counts = {row["event_name"]: row["cnt"] for row in cur.fetchall()}
+
+        return {
+            "sample_viewed": counts.get("sample_viewed", 0),
+            "invoice_created": counts.get("invoice_created", 0),
+            "payment_verified": counts.get("payment_verified", 0),
+            "key_delivered": counts.get("key_delivered", 0),
+            "first_query": counts.get("first_query", 0),
+            "quota_warning": counts.get("quota_warning", 0),
+            "quota_exhausted": counts.get("quota_exhausted", 0),
+            "topup_purchased": counts.get("topup_purchased", 0),
+            "total_events": sum(counts.values()),
+        }
+
+    def get_funnel_events(
+        self,
+        limit: int = 100,
+        event_name: Optional[str] = None,
+    ) -> list[Dict[str, Any]]:
+        with self._lock, self.connection() as conn:
+            cur = conn.cursor()
+            if event_name:
+                cur.execute(
+                    """
+                    SELECT event_id, event_name, timestamp_utc, properties_json
+                    FROM funnel_events
+                    WHERE event_name = ?
+                    ORDER BY timestamp_utc DESC
+                    LIMIT ?
+                    """,
+                    (event_name, limit),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT event_id, event_name, timestamp_utc, properties_json
+                    FROM funnel_events
+                    ORDER BY timestamp_utc DESC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                )
+            results = []
+            for row in cur.fetchall():
+                props = {}
+                if row["properties_json"]:
+                    try:
+                        props = json.loads(row["properties_json"])
+                    except Exception:
+                        pass
+                results.append({
+                    "event_id": row["event_id"],
+                    "event_name": row["event_name"],
+                    "timestamp_utc": row["timestamp_utc"],
+                    "properties": props,
+                })
+            return results
 
     def revoke_key(self, key_prefix_or_hash: str) -> bool:
         """

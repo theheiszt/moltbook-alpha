@@ -140,3 +140,84 @@ The following unattended systemd timers are active and managed independently by 
 ssh -i "$env:USERPROFILE\.ssh\moltbook_proliant" user@10.0.0.190 "systemctl list-timers 'moltbook*'"
 ```
 
+
+
+---
+
+## 7. Cloudflare Named Tunnel Ingress Configuration (`cloudflared`)
+
+To provide persistent, enterprise-grade public ingress to the private ProLiant host (`10.0.0.190:8080`) without opening inbound router ports or using ephemeral quick tunnels (`trycloudflare.com`), a named Cloudflare Tunnel is deployed as a managed systemd service.
+
+### 7.1 Architecture & Security Properties
+- **Origin Service:** `http://127.0.0.1:8080` (Moltbook Alpha FastAPI backend).
+- **Outbound Only:** The daemon establishes outbound multiplexed QUIC/HTTP2 tunnels to Cloudflare edge edge servers. No inbound firewall rules, port forwarding, or public IPs required on the host.
+- **Edge Termination:** SSL/TLS is terminated at Cloudflare edge with automatic certificate rotation and DDoS/rate-limit shielding.
+- **Reconnection Resilience:** Automatic backoff and reconnection across network hiccups or host reboots.
+
+### 7.2 Installation & Setup Runbook
+
+#### Step 1: Install official `cloudflared` package on ProLiant
+```bash
+# Add Cloudflare GPG key and repository
+sudo mkdir -p --mode=0755 /usr/share/keyrings
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared bookworm main' | sudo tee /etc/apt/sources.list.d/cloudflared.list
+sudo apt-get update && sudo apt-get install -y cloudflared
+```
+
+#### Step 2: Authenticate and Create Named Tunnel
+```bash
+# Authorize against Cloudflare account
+cloudflared tunnel login
+
+# Create persistent named tunnel
+cloudflared tunnel create moltbook-alpha
+# Note the returned Tunnel-UUID
+```
+
+#### Step 3: Configure Ingress Rules (`/etc/cloudflared/config.yml`)
+```yaml
+tunnel: <TUNNEL_UUID>
+credentials-file: /etc/cloudflared/<TUNNEL_UUID>.json
+
+ingress:
+  - hostname: api.moltbook.xyz
+    service: http://127.0.0.1:8080
+    originRequest:
+      connectTimeout: 10s
+      noTLSVerify: false
+  - service: http_status:404
+```
+
+#### Step 4: Route DNS to Tunnel
+```bash
+cloudflared tunnel route dns moltbook-alpha api.moltbook.xyz
+```
+
+#### Step 5: Install & Start Systemd Service
+```bash
+# Register cloudflared as unattended systemd service
+sudo cloudflared service install
+
+# Enable and start service
+sudo systemctl daemon-reload
+sudo systemctl enable --now cloudflared
+```
+
+### 7.3 Remote Verification & Diagnostic Commands
+Run from operator workstation via SSH:
+
+```powershell
+# 1. Verify cloudflared systemd service status
+ssh -i "$env:USERPROFILE\.ssh\moltbook_proliant" user@10.0.0.190 "systemctl status cloudflared"
+
+# 2. Inspect tunnel connection logs
+ssh -i "$env:USERPROFILE\.ssh\moltbook_proliant" user@10.0.0.190 "journalctl -u cloudflared -n 30 --no-pager"
+
+# 3. Test local origin responsiveness
+ssh -i "$env:USERPROFILE\.ssh\moltbook_proliant" user@10.0.0.190 "curl -s http://127.0.0.1:8080/v1/health | jq ."
+
+# 4. Verify public ingress through Cloudflare edge
+curl -s https://api.moltbook.xyz/v1/health | jq .
+curl -s https://api.moltbook.xyz/v1/intel/sample | jq .
+```

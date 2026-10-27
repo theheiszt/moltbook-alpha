@@ -11,6 +11,7 @@ import re
 import asyncio
 import time
 import hashlib
+import hmac
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, status
@@ -138,10 +139,12 @@ async def metrics_middleware(request: Request, call_next):
             "/v1/tools",
             "/v1/witnesses/public-keys",
             "/v1/witnesses/verify",
+            "/v1/intel/sample",
             "/v1/intel/latest",
             "/v1/intel/signals",
             "/v1/intel/refresh",
             "/v1/intel/microstructure",
+            "/v1/metrics/funnel",
             "/v1/webhooks",
             "/v1/webhooks/subscribe",
             "/v1/payments/config",
@@ -640,6 +643,28 @@ def get_prometheus_metrics(request: Request):
         content=text_data,
         media_type="text/plain; version=0.0.4; charset=utf-8",
     )
+
+
+@app.get("/v1/metrics/funnel")
+def get_funnel_metrics_endpoint(request: Request, since: Optional[str] = None):
+    """
+    Returns aggregated conversion funnel metrics and recent privacy-sanitized events.
+    """
+    metrics_token = os.getenv("METRICS_BEARER_TOKEN", "").strip()
+    if metrics_token:
+        auth_header = request.headers.get("authorization", "")
+        expected = f"Bearer {metrics_token}"
+        if not hmac.compare_digest(auth_header, expected):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unauthorized access to metrics exposition.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    return {
+        "success": True,
+        "funnel_metrics": storage.get_funnel_metrics(since_utc=since),
+        "recent_events": storage.get_funnel_events(limit=25),
+    }
 
 
 class CreateInvoiceInput(BaseModel):
@@ -2204,6 +2229,106 @@ def verify_state_witness(input_data: VerifyWitnessInput):
         input_data.witness,
         public_key_b58=input_data.public_key_base58,
     )
+
+
+def get_sample_briefing_payload() -> Dict[str, Any]:
+    """
+    Returns a realistic, schema-valid synthetic briefing for unmetered evaluation.
+    """
+    sample_content = (
+        "# Moltbook Alpha Intelligence Briefing [SAMPLE EVALUATION]\n\n"
+        "## Executive Summary\n"
+        "Synthesized market telemetry across Solana concentrated liquidity pools, "
+        "Moltbook autonomous agent discussions, and protocol security advisories.\n\n"
+        "## Critical Signals\n"
+        "- **Orca Whirlpool SOL-USDC**: Tick vacuum detected at -25 bps tick boundary; skew indicates institutional bid support.\n"
+        "- **Agent Ecosystem**: Autonomous agent challenge verification throughput up 42% over last 6 hours.\n\n"
+        "## Provenance Witness\n"
+        "State witness ID: `wit_sample_e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`\n"
+        "Signature verified against Atlas Provenance Guard.\n"
+    )
+    now_iso = datetime.now(timezone.utc).isoformat()
+    return {
+        "success": True,
+        "sample": True,
+        "mode": "evaluation_unmetered",
+        "generated_at": now_iso,
+        "credits_remaining": "unmetered",
+        "briefing_markdown": sample_content,
+        "signals": [
+            {
+                "signal_id": "sig_sample_001",
+                "category": "dex_microstructure",
+                "confidence": "HIGH",
+                "title": "Orca Whirlpool SOL-USDC Tick Vacuum Detected",
+                "summary": "Sub-tick volume divergence identified at lower tick boundary indicating upward volatility squeeze.",
+                "sources": [
+                    {
+                        "source_name": "Orca Whirlpool",
+                        "source_type": "dex_clmm",
+                        "pool_id": "7qbRF6YsyGuLUVs6Y1q64bdVrfe4ZcUUz1JRdoVNUJnm",
+                        "verified": True,
+                    }
+                ],
+                "observed_at": now_iso,
+            },
+            {
+                "signal_id": "sig_sample_002",
+                "category": "security_advisory",
+                "confidence": "HIGH",
+                "title": "Moltbook Protocol Agent Identity Verification Standard",
+                "summary": "Cryptographic Ed25519 witness state validation mandated for autonomous trading bot telemetry pipelines.",
+                "sources": [
+                    {
+                        "source_name": "Moltbook Protocol",
+                        "source_type": "social_graph",
+                        "post_id": "e2ae1289-a20b-4bd4-ba46-1af0fd1fc6cc",
+                        "verified": True,
+                    }
+                ],
+                "observed_at": now_iso,
+            },
+        ],
+        "microstructure_summary": {
+            "tracked_pools": 3,
+            "anomalies_detected": 1,
+            "aggregate_depth_usd_50bps": 14250000.0,
+        },
+        "state_witness": {
+            "action": "SAMPLE_EVALUATION",
+            "witness_id": "wit_sample_e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "canonical_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "verified": True,
+        },
+        "documentation_url": "https://theheiszt.github.io/moltbook-alpha",
+        "api_status_url": "/v1/health",
+        "pricing_url": "/v1/payments/config",
+    }
+
+
+@app.get("/v1/intel/sample")
+def get_intel_sample(request: Request):
+    """
+    Returns an unmetered, realistic sample briefing payload for evaluation and schema validation.
+    No API key or payment required.
+    Emits a privacy-preserving 'sample_viewed' conversion funnel event.
+    """
+    client_ip = get_client_ip(request)
+    allowed, retry_after = rate_limiter.is_allowed(f"sample:{client_ip}", limit=60, window_seconds=60)
+    if not allowed:
+        record_rate_limit("/v1/intel/sample")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many requests. Please retry in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    storage.record_funnel_event(
+        "sample_viewed",
+        {"endpoint": "/v1/intel/sample", "user_agent": (request.headers.get("user-agent") or "unknown")[:64]}
+    )
+
+    return get_sample_briefing_payload()
 
 
 @app.get("/v1/intel/latest")
