@@ -87,9 +87,10 @@
         <div class="flex items-center bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl px-2.5 py-1 text-xs">
           <label for="refreshInterval" class="text-[var(--muted-foreground,#94a3b8)] mr-1.5 font-medium">Poll:</label>
           <select id="refreshInterval" onchange="onIntervalChange()" class="bg-transparent text-[var(--foreground,#f8fafc)] focus:outline-none cursor-pointer font-mono text-[11px]">
-            <option value="3000" class="bg-slate-900 text-white">3s</option>
-            <option value="5000" selected class="bg-slate-900 text-white">5s</option>
-            <option value="15000" class="bg-slate-900 text-white">15s</option>
+            <option value="5000" class="bg-slate-900 text-white">5s</option>
+            <option value="15000" selected class="bg-slate-900 text-white">15s</option>
+            <option value="30000" class="bg-slate-900 text-white">30s</option>
+            <option value="60000" class="bg-slate-900 text-white">60s</option>
             <option value="0" class="bg-slate-900 text-white">Manual</option>
           </select>
         </div>
@@ -734,13 +735,39 @@
       }
     }
 
-    function onIntervalChange() {
-      const ms = parseInt(document.getElementById("refreshInterval").value, 10);
-      if (pollTimer) clearInterval(pollTimer);
-      if (ms > 0 && adminToken) {
+    let isTabVisible = !document.hidden;
+
+    function restartPolling() {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+      if (!isTabVisible || !adminToken) return;
+      const selectEl = document.getElementById("refreshInterval");
+      const ms = selectEl ? parseInt(selectEl.value, 10) : 15000;
+      if (ms > 0) {
         pollTimer = setInterval(fetchMetrics, ms);
       }
     }
+
+    function onIntervalChange() {
+      restartPolling();
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      isTabVisible = !document.hidden;
+      if (isTabVisible) {
+        if (adminToken) {
+          fetchMetrics();
+          restartPolling();
+        }
+      } else {
+        if (pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+      }
+    });
 
     function formatTimeAgo(isoString) {
       if (!isoString) return "N/A";
@@ -787,7 +814,6 @@
       try {
         const url = `${currentBaseUrl}/v1/metrics/dashboard`;
         const resp = await fetch(url, {
-          cache: "no-store",
           headers: {
             "Accept": "application/json",
             "Authorization": "Bearer " + adminToken
