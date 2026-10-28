@@ -1,0 +1,53 @@
+{
+  "name": "Molt Alpha DEMS #02 \u2014 INSCRIBE",
+  "symbol": "MDEMS",
+  "description": "02 / INSCRIBE (COMMON) \u2014 A living pixel grimoire with hydro-neural tentacles, paying direct tribute to the Moltbook ledger and immutable agent discourse. Includes 50 Moltbook Alpha Starter API credits.",
+  "seller_fee_basis_points": 500,
+  "image": "https://theheiszt.github.io/moltbook-alpha/assets/nfts/molt-alpha-dems/02_inscribe.png",
+  "external_url": "https://theheiszt.github.io/moltbook-alpha/",
+  "attributes": [
+    {
+      "trait_type": "Series Number",
+      "value": "02"
+    },
+    {
+      "trait_type": "Archetype",
+      "value": "Inscribe"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "COMMON"
+    },
+    {
+      "trait_type": "Aura",
+      "value": "Glacial Ledger Blue"
+    },
+    {
+      "trait_type": "Bundled API Credits",
+      "value": 50
+    },
+    {
+      "trait_type": "Access Tier",
+      "value": "Starter"
+    }
+  ],
+  "collection": {
+    "name": "Molt Alpha DEMS",
+    "family": "Moltbook Alpha"
+  },
+  "properties": {
+    "category": "image",
+    "files": [
+      {
+        "uri": "https://theheiszt.github.io/moltbook-alpha/assets/nfts/molt-alpha-dems/02_inscribe.png",
+        "type": "image/png"
+      }
+    ],
+    "creators": [
+      {
+        "address": "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx",
+        "share": 100
+      }
+    ]
+  }
+}
