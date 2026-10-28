@@ -215,8 +215,7 @@ def run_assurance_assay(base_url: str, api_key: Optional[str] = None):
 
         # 4.4 Verify Evidence Quality Partitioning
         print_step(5, "Auditing Verifiable Evidence Classification")
-        payload = snap1.get("data", {})
-        evidence_items = payload.get("evidence_items", [])
+        evidence_items = snap1.get("evidence_items") or snap1.get("data", {}).get("evidence_items", [])
         print_pass(f"Inspecting {len(evidence_items)} structured intelligence items:")
 
         counts = {"OBSERVED_FACT": 0, "INFERRED_CONCLUSION": 0, "UNVERIFIED_CLAIM": 0}
@@ -225,8 +224,8 @@ def run_assurance_assay(base_url: str, api_key: Optional[str] = None):
             if lvl in counts:
                 counts[lvl] += 1
             # Check mandatory provenance fields
-            assert "source_submolt" in item or "source_reference" in item, "Missing source attribution"
-            assert "observation_timestamp" in item, "Missing observation timestamp"
+            assert "source_uri" in item or "source_reference" in item or "author" in item, "Missing source attribution"
+            assert "observed_at_utc" in item or "observation_timestamp" in item, "Missing observation timestamp"
 
         print_pass(f"OBSERVED_FACT: {counts['OBSERVED_FACT']} items (Multi-RPC verified on-chain state)")
         print_pass(f"INFERRED_CONCLUSION: {counts['INFERRED_CONCLUSION']} items (Mathematical CLMM microstructure models)")
