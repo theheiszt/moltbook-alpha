@@ -6,6 +6,12 @@ rate limits, and version compatibility.
 """
 
 from typing import Dict, Any, List
+from data_products import DEFAULT_DATA_PRODUCTS
+from rate_limiter import (
+    DEFAULT_RATE_LIMIT_CAPACITY,
+    DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN,
+    DEFAULT_MAX_CONCURRENT_IN_FLIGHT,
+)
 
 
 def get_api_capabilities() -> Dict[str, Any]:
@@ -28,10 +34,10 @@ def get_api_capabilities() -> Dict[str, Any]:
             "supported_payment_rails": ["Solana Mainnet (USDC / SOL)", "Nano (XNO)"],
         },
         "rate_limits": {
-            "unauthenticated_per_minute": 60,
-            "authenticated_sustained_per_minute": 60,
-            "burst_capacity": 5,
-            "max_concurrent_in_flight": 5,
+            "unauthenticated_per_minute": int(DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN),
+            "authenticated_sustained_per_minute": int(DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN),
+            "burst_capacity": int(DEFAULT_RATE_LIMIT_CAPACITY),
+            "max_concurrent_in_flight": int(DEFAULT_MAX_CONCURRENT_IN_FLIGHT),
         },
         "pricing_and_quotas": {
             "default_snapshot_credit_cost": 1,
@@ -58,6 +64,10 @@ def get_api_capabilities() -> Dict[str, Any]:
             "agent_data_exchange": {
                 "status": "GA",
                 "description": "Autonomous data product catalog, schema inspection, and structured snapshot retrieval.",
+                "data_products": [
+                    p.to_summary_dict()
+                    for p in DEFAULT_DATA_PRODUCTS.values()
+                ],
                 "endpoints": [
                     {
                         "path": "/v1/data-products",

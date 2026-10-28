@@ -588,6 +588,7 @@ class StorageManager:
         request_id: Optional[str] = None,
     ) -> Tuple[Optional[Dict[str, Any]], str]:
         self._expire_overdue_lots_and_entitlements(conn)
+        self._reap_expired_reservations_conn(conn)
 
         cur = conn.cursor()
         cur.execute(
@@ -2939,6 +2940,7 @@ class StorageManager:
         with self._lock, self.connection() as conn:
             with conn:
                 self._expire_overdue_lots_and_entitlements(conn)
+                self._reap_expired_reservations_conn(conn)
                 cur = conn.cursor()
                 cur.execute(
                     """

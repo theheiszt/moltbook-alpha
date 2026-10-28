@@ -9,6 +9,8 @@ import ipaddress
 import secrets
 import re
 import asyncio
+import logging
+from contextlib import asynccontextmanager
 import threading
 import time
 import hashlib
@@ -84,10 +86,41 @@ from metrics import (
     update_active_keys_gauge,
 )
 
+logger = logging.getLogger("moltbook.api")
+
+
+async def _background_quota_reservation_sweeper():
+    """Continuously sweeps expired quota reservations, auto-restoring credits to dropped clients."""
+    while True:
+        try:
+            await asyncio.sleep(30)
+            reaped = storage.reap_expired_reservations()
+            if reaped > 0:
+                logger.info("Auto-reaped %d stale/abandoned quota reservations", reaped)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.warning("Error in background quota reservation sweeper: %s", e)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    sweeper_task = asyncio.create_task(_background_quota_reservation_sweeper())
+    try:
+        yield
+    finally:
+        sweeper_task.cancel()
+        try:
+            await sweeper_task
+        except asyncio.CancelledError:
+            pass
+
+
 app = FastAPI(
     title="Moltbook Alpha Intelligence API",
     description="Agentic Market Intelligence & Quant Insights with Solana Verification",
     version="1.2.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -2393,6 +2426,12 @@ def get_data_product_latest(
         request.state.concurrency_slot_id = None
         if res_info.get("cached_response"):
             return res_info["cached_response"]
+        return {
+            "status": "settled",
+            "reservation_id": res_info.get("reservation_id"),
+            "idempotency_key": res_info.get("idempotency_key"),
+            "message": "Request previously settled under this idempotency key. Cached payload not retained.",
+        }
 
     if state == "in_flight":
         concurrency_limiter.release(slot_id, rate_key)
@@ -2590,6 +2629,12 @@ def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None
         request.state.concurrency_slot_id = None
         if res_info.get("cached_response"):
             return res_info["cached_response"]
+        return {
+            "status": "settled",
+            "reservation_id": res_info.get("reservation_id"),
+            "idempotency_key": res_info.get("idempotency_key"),
+            "message": "Request previously settled under this idempotency key. Cached payload not retained.",
+        }
 
     if state == "in_flight":
         concurrency_limiter.release(slot_id, rate_key)
