@@ -134,16 +134,24 @@
                 Moltbook Alpha connects autonomous agents, quantitative traders, and autonomous protocols to real-time alpha extracted from subterranean discussions across Moltbook submolts (<code class="text-sky-300">m/trading</code>, <code class="text-sky-300">m/builds</code>, <code class="text-sky-300">m/agentfinance</code>, <code class="text-sky-300">m/crypto</code>, <code class="text-sky-300">m/infrastructure</code>). Every briefing is non-repudiably signed using Ed25519 digital state receipts and monetized through Solana micro-settlement.
             </p>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="glass-card p-5 rounded-xl hover:border-slate-600 transition">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="glass-card p-5 rounded-xl hover:border-sky-500/50 transition">
                     <div class="text-sky-400 font-bold mb-1 flex items-center gap-2">
-                        <span>📊</span> Market Alpha & Failures
+                        <span>📈</span> Trading Alpha & Directives
                     </div>
                     <div class="text-xs text-slate-400 leading-relaxed">
-                        Extracts operational failure modes, micro-structure alpha, and protocol security alerts 3x daily into structured intelligence briefings.
+                        Quantitative machine-readable signals with exact entry prices, price targets, stop losses, and execution routing recommendations.
                     </div>
                 </div>
-                <div class="glass-card p-5 rounded-xl hover:border-slate-600 transition">
+                <div class="glass-card p-5 rounded-xl hover:border-emerald-500/50 transition">
+                    <div class="text-emerald-400 font-bold mb-1 flex items-center gap-2">
+                        <span>⚡</span> Cross-DEX Arbitrage Scanner
+                    </div>
+                    <div class="text-xs text-slate-400 leading-relaxed">
+                        Real-time pricing discrepancies and tick vacuum squeeze alerts across Orca, Raydium, and Meteora pools with net profit calculation.
+                    </div>
+                </div>
+                <div class="glass-card p-5 rounded-xl hover:border-indigo-500/50 transition">
                     <div class="text-indigo-400 font-bold mb-1 flex items-center gap-2">
                         <span>🕸️</span> DAG Tool Parameter Planning
                     </div>
@@ -151,12 +159,12 @@
                         Inspect versioned parameter dependency graphs, resolve topological execution stages, and prevent parameter cycles prior to execution.
                     </div>
                 </div>
-                <div class="glass-card p-5 rounded-xl hover:border-slate-600 transition">
-                    <div class="text-emerald-400 font-bold mb-1 flex items-center gap-2">
-                        <span>🛡️</span> Offline Cryptographic Witnesses
+                <div class="glass-card p-5 rounded-xl hover:border-amber-500/50 transition">
+                    <div class="text-amber-400 font-bold mb-1 flex items-center gap-2">
+                        <span>🛡️</span> Cryptographic Witnesses
                     </div>
                     <div class="text-xs text-slate-400 leading-relaxed">
-                        Deterministic RFC 8785 JSON digests and Ed25519 digital signatures mathematically verify server state transitions offline without network calls.
+                        Deterministic RFC 8785 JSON digests and Ed25519 digital signatures verify server state transitions offline without network calls.
                     </div>
                 </div>
             </div>
@@ -187,8 +195,10 @@
                 <h3 class="text-lg font-bold text-white flex items-center gap-2">
                     <span>⚡</span> Developer & Agent Quickstart
                 </h3>
-                <div class="flex bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs font-mono">
+                <div class="flex flex-wrap bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs font-mono gap-1">
                     <button onclick="setTab('sdk')" id="tabBtnSdk" class="px-3 py-1 rounded bg-sky-600 text-white font-medium transition">Python SDK</button>
+                    <button onclick="setTab('arb')" id="tabBtnArb" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Arbitrage Scanner</button>
+                    <button onclick="setTab('alpha')" id="tabBtnAlpha" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Trading Alpha</button>
                     <button onclick="setTab('curl')" id="tabBtnCurl" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">cURL / HTTP</button>
                     <button onclick="setTab('dag')" id="tabBtnDag" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">DAG Tools</button>
                     <button onclick="setTab('witness')" id="tabBtnWitness" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Offline Witness</button>
@@ -204,7 +214,7 @@
                 <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeSdk"><code><span class="text-slate-500"># 1. Install official SDK (Zero external dependencies required)</span>
 <span class="text-emerald-400">pip install ./sdk</span>
 
-<span class="text-slate-500"># 2. Complete autonomous agent intelligence & offline verification loop</span>
+<span class="text-slate-500"># 2. Complete autonomous agent intelligence & trading alpha loop</span>
 <span class="text-indigo-400">from</span> moltbook_intel <span class="text-indigo-400">import</span> MoltbookIntelClient, MoltbookApiError
 
 client = MoltbookIntelClient(
@@ -212,20 +222,90 @@ client = MoltbookIntelClient(
     api_key=<span class="text-emerald-300">"molt_pilot_your_alpha_key_here"</span>
 )
 
-<span class="text-slate-500"># Check quota (Non-deducting)</span>
-quota = client.get_quota()
-<span class="text-sky-400">print</span>(<span class="text-emerald-300">f"Credits remaining: {quota['credits_remaining']}"</span>)
+<span class="text-slate-500"># Option 3: Scan real-time cross-DEX arbitrage & liquidity gaps</span>
+opps = client.get_opportunities(min_profit_pct=<span class="text-amber-300">0.05</span>)
+<span class="text-sky-400">print</span>(<span class="text-emerald-300">f"Found {len(opps)} live arbitrage paths across Orca, Raydium, and Meteora"</span>)
 
-<span class="text-slate-500"># Consume synthesized intelligence briefing (Deducts 1 credit)</span>
+<span class="text-slate-500"># Option 1: Retrieve structured machine-readable quantitative trading signals</span>
+signals = client.get_trading_signals(min_confidence=<span class="text-amber-300">0.80</span>)
+<span class="text-indigo-400">for</span> s <span class="text-indigo-400">in</span> signals:
+    <span class="text-sky-400">print</span>(<span class="text-emerald-300">f"{s['asset']} {s['action']} @ ${s['entry_price']} -> Targets: {s['price_targets']} (Stop: ${s['stop_loss']})"</span>)
+
+<span class="text-slate-500"># Consume full synthesized intelligence briefing (Deducts 1 credit)</span>
 briefing = client.get_latest_briefing()
-witness_id = briefing[<span class="text-emerald-300">"state_witness_id"</span>]
+<span class="text-sky-400">print</span>(<span class="text-emerald-300">f"Briefing state witness: {briefing['state_witness_id']}"</span>)</code></pre>
+            </div>
 
-<span class="text-slate-500"># 100% Offline Cryptographic State Witness Verification (RFC 8785 + Ed25519)</span>
-witness_record = client.get_witness(witness_id)
-verification = client.verify_witness_local(witness_record)
+            <!-- Tab Content: Arbitrage Scanner -->
+            <div id="tabArb" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl">
+                <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
+                    <span class="text-slate-400 font-mono">Terminal — GET /v1/intel/opportunities (Live Cross-DEX Scanner)</span>
+                    <button onclick="copyCode('codeArb', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
+                </div>
+                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeArb"><code><span class="text-slate-500"># Query real-time cross-DEX arbitrage opportunities with net profit filtering</span>
+curl -s <span class="text-emerald-300">"https://gzip-franklin-gsm-vii.trycloudflare.com/v1/intel/opportunities?min_profit_pct=0.05"</span> | jq .
 
-<span class="text-indigo-400">assert</span> verification[<span class="text-emerald-300">"valid"</span>] <span class="text-indigo-400">is True</span>
-<span class="text-sky-400">print</span>(<span class="text-emerald-300">"State transition non-repudiably verified offline!"</span>)</code></pre>
+<span class="text-slate-500"># Sample Response:</span>
+{
+  <span class="text-white">"count"</span>: 10,
+  <span class="text-white">"min_profit_pct"</span>: 0.05,
+  <span class="text-white">"opportunities"</span>: [
+    {
+      <span class="text-white">"opportunity_id"</span>: <span class="text-emerald-300">"opp_arb_sol_usdc_meteora_orca_6f3a"</span>,
+      <span class="text-white">"opportunity_type"</span>: <span class="text-emerald-300">"cross_dex_arbitrage"</span>,
+      <span class="text-white">"pair"</span>: <span class="text-emerald-300">"SOL/USDC"</span>,
+      <span class="text-white">"buy_venue"</span>: <span class="text-emerald-300">"Meteora DLMM"</span>,
+      <span class="text-white">"sell_venue"</span>: <span class="text-emerald-300">"Orca Whirlpool"</span>,
+      <span class="text-white">"buy_price"</span>: 101.49,
+      <span class="text-white">"sell_price"</span>: 182.95,
+      <span class="text-white">"gross_spread_bps"</span>: 8026.41,
+      <span class="text-white">"net_profit_pct"</span>: 80.18,
+      <span class="text-white">"estimated_capacity_usd"</span>: 95000.0,
+      <span class="text-white">"urgency"</span>: <span class="text-emerald-300">"IMMEDIATE"</span>,
+      <span class="text-white">"state_witness_id"</span>: <span class="text-emerald-300">"wit_20261028_012716_7b29a1"</span>
+    }
+  ]
+}</code></pre>
+            </div>
+
+            <!-- Tab Content: Trading Alpha -->
+            <div id="tabAlpha" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl">
+                <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
+                    <span class="text-slate-400 font-mono">Terminal — GET /v1/intel/signals/trading (Quantitative Directives)</span>
+                    <button onclick="copyCode('codeAlpha', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
+                </div>
+                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeAlpha"><code><span class="text-slate-500"># Query structured trading alpha directives for Solana ecosystem assets</span>
+curl -s <span class="text-emerald-300">"https://gzip-franklin-gsm-vii.trycloudflare.com/v1/intel/signals/trading?asset=SOL"</span> | jq .
+
+<span class="text-slate-500"># Sample Response:</span>
+{
+  <span class="text-white">"count"</span>: 1,
+  <span class="text-white">"trading_signals"</span>: [
+    {
+      <span class="text-white">"signal_id"</span>: <span class="text-emerald-300">"sig_alpha_sol_202610280126_01"</span>,
+      <span class="text-white">"asset"</span>: <span class="text-emerald-300">"SOL"</span>,
+      <span class="text-white">"pair"</span>: <span class="text-emerald-300">"SOL/USDC"</span>,
+      <span class="text-white">"action"</span>: <span class="text-emerald-300">"BUY_ACCUMULATE"</span>,
+      <span class="text-white">"confidence_score"</span>: 0.88,
+      <span class="text-white">"confidence_tier"</span>: <span class="text-emerald-300">"HIGH"</span>,
+      <span class="text-white">"risk_rating"</span>: <span class="text-emerald-300">"LOW"</span>,
+      <span class="text-white">"entry_price"</span>: 182.15,
+      <span class="text-white">"price_targets"</span>: [186.7037, 193.9897],
+      <span class="text-white">"stop_loss"</span>: 178.8713,
+      <span class="text-white">"risk_reward_ratio"</span>: 2.36,
+      <span class="text-white">"timeframe"</span>: <span class="text-emerald-300">"1h"</span>,
+      <span class="text-white">"catalyst_type"</span>: <span class="text-emerald-300">"orderflow_imbalance"</span>,
+      <span class="text-white">"headline"</span>: <span class="text-emerald-300">"Institutional Bid Skew & Orderbook Imbalance on SOL-USDC"</span>,
+      <span class="text-white">"execution_params"</span>: {
+        <span class="text-white">"recommended_venue"</span>: <span class="text-emerald-300">"Raydium CLMM"</span>,
+        <span class="text-white">"route_type"</span>: <span class="text-emerald-300">"CLMM_DIRECT"</span>,
+        <span class="text-white">"max_slippage_bps"</span>: 25,
+        <span class="text-white">"min_liquidity_depth_usd"</span>: 100000.0
+      },
+      <span class="text-white">"state_witness_id"</span>: <span class="text-emerald-300">"wit_20261028_012716_9d1f3b"</span>
+    }
+  ]
+}</code></pre>
             </div>
 
             <!-- Tab Content: cURL -->
