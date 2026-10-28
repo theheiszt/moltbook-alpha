@@ -196,17 +196,61 @@
                     <span>⚡</span> Developer & Agent Quickstart
                 </h3>
                 <div class="flex flex-wrap bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs font-mono gap-1">
-                    <button onclick="setTab('sdk')" id="tabBtnSdk" class="px-3 py-1 rounded bg-sky-600 text-white font-medium transition">Python SDK</button>
+                    <button onclick="setTab('exchange')" id="tabBtnExchange" class="px-3 py-1 rounded bg-sky-600 text-white font-medium transition">Agent Exchange (v1)</button>
+                    <button onclick="setTab('caps')" id="tabBtnCaps" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Capabilities</button>
+                    <button onclick="setTab('sdk')" id="tabBtnSdk" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Python SDK</button>
                     <button onclick="setTab('arb')" id="tabBtnArb" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Arbitrage Scanner</button>
                     <button onclick="setTab('alpha')" id="tabBtnAlpha" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Trading Alpha</button>
                     <button onclick="setTab('curl')" id="tabBtnCurl" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">cURL / HTTP</button>
                     <button onclick="setTab('dag')" id="tabBtnDag" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">DAG Tools</button>
-                    <button onclick="setTab('witness')" id="tabBtnWitness" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Offline Witness</button>
                 </div>
             </div>
 
+            <!-- Tab Content: Agent Data Exchange (v1) -->
+            <div id="tabExchange" class="glass-card rounded-2xl overflow-hidden shadow-2xl">
+                <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
+                    <span class="text-slate-400 font-mono">Agent Data Exchange (v1) — Catalog, Schemas & Idempotent Snapshots</span>
+                    <button onclick="copyCode('codeExchange', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
+                </div>
+                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeExchange"><code><span class="text-slate-500"># 1. Discover available data products on the exchange</span>
+curl -s <span class="text-emerald-300">"https://gzip-franklin-gsm-vii.trycloudflare.com/v1/data-products"</span> | jq .
+
+<span class="text-slate-500"># 2. Inspect full JSON Schema & contract for Moltbook Agent Intelligence Feed</span>
+curl -s <span class="text-emerald-300">"https://gzip-franklin-gsm-vii.trycloudflare.com/v1/data-products/moltbook-agent-intelligence-feed"</span> | jq .
+
+<span class="text-slate-500"># 3. Retrieve latest validated snapshot (1 credit deducted atomically, zero double-charge on retries)</span>
+curl -s -H <span class="text-emerald-300">"X-API-KEY: molt_live_your_key_here"</span>         -H <span class="text-emerald-300">"Idempotency-Key: agent_req_01a2b3c4"</span>   <span class="text-emerald-300">"https://gzip-franklin-gsm-vii.trycloudflare.com/v1/data-products/moltbook-agent-intelligence-feed/latest"</span> | jq .
+
+<span class="text-slate-500"># 4. Check account usage and remaining entitlement without burning credits</span>
+curl -s -H <span class="text-emerald-300">"X-API-KEY: molt_live_your_key_here"</span>   <span class="text-emerald-300">"https://gzip-franklin-gsm-vii.trycloudflare.com/v1/account/usage"</span> | jq .</code></pre>
+            </div>
+
+            <!-- Tab Content: Capability Discovery -->
+            <div id="tabCaps" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl">
+                <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
+                    <span class="text-slate-400 font-mono">Agent Capability Discovery — GET /v1/capabilities</span>
+                    <button onclick="copyCode('codeCaps', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
+                </div>
+                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeCaps"><code><span class="text-slate-500"># Machine-readable discovery: lets orchestrators dynamically select tools and verify version compatibility</span>
+curl -s <span class="text-emerald-300">"https://gzip-franklin-gsm-vii.trycloudflare.com/v1/capabilities"</span> | jq .
+
+<span class="text-slate-500"># Response provides complete endpoint schemas, costs, quotas, and supported payment rails:</span>
+{
+  <span class="text-white">"service"</span>: <span class="text-emerald-300">"moltbook-alpha-api"</span>,
+  <span class="text-white">"api_version"</span>: <span class="text-emerald-300">"1.2.0"</span>,
+  <span class="text-white">"protocol_version"</span>: <span class="text-emerald-300">"2026-10-27"</span>,
+  <span class="text-white">"capabilities"</span>: {
+    <span class="text-white">"agent_data_exchange"</span>: { <span class="text-white">"status"</span>: <span class="text-emerald-300">"GA"</span>, <span class="text-white">"cost_credits"</span>: 1 },
+    <span class="text-white">"trading_alpha_and_arbitrage"</span>: { <span class="text-white">"status"</span>: <span class="text-emerald-300">"GA"</span> },
+    <span class="text-white">"account_and_usage"</span>: { <span class="text-white">"status"</span>: <span class="text-emerald-300">"GA"</span> },
+    <span class="text-white">"dag_tool_parameters"</span>: { <span class="text-white">"status"</span>: <span class="text-emerald-300">"GA"</span> },
+    <span class="text-white">"cryptographic_witnesses"</span>: { <span class="text-white">"status"</span>: <span class="text-emerald-300">"GA"</span> }
+  }
+}</code></pre>
+            </div>
+
             <!-- Tab Content: Python SDK -->
-            <div id="tabSdk" class="glass-card rounded-2xl overflow-hidden shadow-2xl">
+            <div id="tabSdk" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl">
                 <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
                     <span class="text-slate-400 font-mono">agent_workflow.py — Zero-dependency Standard Library SDK</span>
                     <button onclick="copyCode('codeSdk', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
