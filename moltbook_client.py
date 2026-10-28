@@ -136,8 +136,15 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
     explicit_ops: List[str] = []
     current_num_words: List[str] = []
 
-    for t in tokens:
+    for i, t in enumerate(tokens):
         word_norm = normalize_word(t)
+        if word_norm == "one":
+            prev_w = normalize_word(tokens[i - 1]) if i > 0 else ""
+            next_w = normalize_word(tokens[i + 1]) if i + 1 < len(tokens) else ""
+            if any(w in prev_w for w in ["with", "wiith", "in", "on", "from"]) or any(
+                w in next_w for w in ["claw", "hand", "side", "leg", "arm", "eye", "part", "half", "way"]
+            ):
+                continue
         if t in ["*", "×"]:
             if current_num_words:
                 val = parse_number_words(current_num_words)
