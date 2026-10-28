@@ -148,9 +148,56 @@ class MoltbookIntelClient:
         """Returns API health status, subsystem connectivity, and RPC health."""
         return self._request("/v1/health")
 
+    def get_capabilities(self) -> Dict[str, Any]:
+        """Inspects machine-readable capabilities, endpoints, quotas, schemas, and version compatibility."""
+        return self._request("/v1/capabilities")
+
     def get_quota(self) -> Dict[str, Any]:
         """Inspects account tier, remaining credits, and discrete credit lots without spending credits."""
         return self._request("/v1/account/quota", auth_required=True)
+
+    def get_usage(self) -> Dict[str, Any]:
+        """Comprehensive account usage, consumption metrics, active lots, and remaining entitlement report."""
+        return self._request("/v1/account/usage", auth_required=True)
+
+    # Agent Data Exchange (v1)
+    def list_data_products(self) -> List[Dict[str, Any]]:
+        """Lists available data products on the Agent Data Exchange including schemas and credit pricing."""
+        res = self._request("/v1/data-products")
+        return res.get("products", [])
+
+    def get_data_product(self, product_id: str) -> Dict[str, Any]:
+        """Inspects complete contract, JSON schemas, freshness, and pricing metadata for a specific data product."""
+        return self._request(f"/v1/data-products/{urllib.parse.quote(product_id)}")
+
+    def get_data_product_latest(
+        self,
+        product_id: str,
+        idempotency_key: Optional[str] = None,
+        min_profit_pct: Optional[float] = None,
+        pair: Optional[str] = None,
+        asset: Optional[str] = None,
+        min_confidence: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """
+        Retrieves the latest structured snapshot for a data product.
+        Deducts 1 credit atomically. Idempotent with idempotency_key.
+        """
+        params = []
+        if min_profit_pct is not None:
+            params.append(f"min_profit_pct={min_profit_pct}")
+        if pair is not None:
+            params.append(f"pair={urllib.parse.quote(pair)}")
+        if asset is not None:
+            params.append(f"asset={urllib.parse.quote(asset)}")
+        if min_confidence is not None:
+            params.append(f"min_confidence={min_confidence}")
+        qs = f"?{'&'.join(params)}" if params else ""
+        return self._request(
+            f"/v1/data-products/{urllib.parse.quote(product_id)}/latest{qs}",
+            auth_required=True,
+            idempotency_key=idempotency_key,
+        )
 
     def get_error_registry(self) -> Dict[str, Any]:
         """Returns machine-readable error taxonomy specification and retryability rules."""

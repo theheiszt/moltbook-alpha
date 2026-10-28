@@ -106,6 +106,67 @@ TOOLS_DEFINITION = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "get_api_capabilities",
+        "description": "Inspects the machine-readable capabilities, endpoints, schemas, quotas, and version compatibility of the Moltbook Alpha API.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "list_data_products",
+        "description": "Lists all available data products on the Agent Data Exchange including schemas, update frequencies, freshness, and credit costs.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "get_data_product_schema",
+        "description": "Inspects the complete JSON Schema, input requirements, freshness, and pricing metadata for a specific data product.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "product_id": {
+                    "type": "string",
+                    "description": "Identifier of the data product (e.g. 'moltbook-agent-intelligence-feed').",
+                },
+            },
+            "required": ["product_id"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "get_data_product_snapshot",
+        "description": "Retrieves the latest validated structured snapshot of a data product with atomic 1-credit settlement, idempotency, and cryptographic receipt.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "product_id": {
+                    "type": "string",
+                    "description": "Identifier of the data product to retrieve.",
+                },
+                "idempotency_key": {
+                    "type": "string",
+                    "description": "Optional client token preventing double charges on network retries.",
+                },
+            },
+            "required": ["product_id"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "get_account_usage",
+        "description": "Reports comprehensive account usage, remaining entitlement, active credit lots, and rate limits without spending credits.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    },
 ]
 
 
@@ -181,6 +242,24 @@ class MoltbookMCPServer:
                     asset=args.get("asset", "USDC"),
                 )
                 text = json.dumps(res, indent=2)
+            elif tool_name == "get_api_capabilities":
+                caps = self.client.get_capabilities()
+                text = json.dumps(caps, indent=2)
+            elif tool_name == "list_data_products":
+                prods = self.client.list_data_products()
+                text = json.dumps({"count": len(prods), "products": prods}, indent=2)
+            elif tool_name == "get_data_product_schema":
+                contract = self.client.get_data_product(args["product_id"])
+                text = json.dumps(contract, indent=2)
+            elif tool_name == "get_data_product_snapshot":
+                snap = self.client.get_data_product_latest(
+                    product_id=args["product_id"],
+                    idempotency_key=args.get("idempotency_key"),
+                )
+                text = json.dumps(snap, indent=2)
+            elif tool_name == "get_account_usage":
+                usage = self.client.get_usage()
+                text = json.dumps(usage, indent=2)
             else:
                 return {
                     "jsonrpc": "2.0",

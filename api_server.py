@@ -54,6 +54,8 @@ from config import (
 )
 from cryptographic_witness import WitnessManager, WitnessKeyManager
 from intel_engine import IntelEngine
+from capabilities import get_api_capabilities
+from data_products import DataProductExchange
 from ops.trading.dex_microstructure import (
     DEXMicrostructureEngine,
     microstructure_broadcaster,
@@ -136,6 +138,10 @@ async def metrics_middleware(request: Request, call_next):
             norm_endpoint = "/v1/challenges/:id"
         elif endpoint.startswith("/v1/witnesses/") and endpoint not in {"/v1/witnesses/public-keys", "/v1/witnesses/verify"}:
             norm_endpoint = "/v1/witnesses/:id"
+        elif endpoint.startswith("/v1/data-products/") and endpoint.endswith("/latest"):
+            norm_endpoint = "/v1/data-products/:product_id/latest"
+        elif endpoint.startswith("/v1/data-products/") and endpoint != "/v1/data-products":
+            norm_endpoint = "/v1/data-products/:product_id"
         elif endpoint.startswith("/v1/intel/microstructure/") and endpoint != "/v1/intel/microstructure":
             norm_endpoint = "/v1/intel/microstructure/:pool_id"
         elif endpoint.startswith("/v1/webhooks/test/"):
@@ -175,6 +181,9 @@ async def metrics_middleware(request: Request, call_next):
             "/v1/keys/generate-demo",
             "/v1/briefing/latest",
             "/v1/account/quota",
+            "/v1/account/usage",
+            "/v1/capabilities",
+            "/v1/data-products",
         }:
             norm_endpoint = endpoint
         else:
@@ -411,6 +420,7 @@ refund_dispatcher = SolanaRefundDispatcher(
 )
 
 dex_microstructure = DEXMicrostructureEngine(broadcaster=microstructure_broadcaster)
+data_product_exchange = DataProductExchange()
 
 # Seed default baseline pools for Solana concentrated liquidity
 dex_microstructure.parse_raydium_clmm_pool(
@@ -2147,6 +2157,268 @@ def get_account_quota(
         }
 
     return res
+
+
+@app.get("/v1/account/usage")
+def get_account_usage(
+    request: Request,
+    x_api_key: Optional[str] = Header(None, alias="X-API-KEY"),
+):
+    """
+    Comprehensive account usage, consumption metrics, active credit lots,
+    and remaining entitlement report for autonomous agents.
+    Reuses the robust quota accounting engine while conforming to the Agent Data Exchange specification.
+    """
+    return get_account_quota(request, x_api_key=x_api_key)
+
+
+@app.get("/v1/capabilities")
+def get_capabilities_manifest():
+    """
+    Returns the comprehensive machine-readable capability manifest for Moltbook Alpha API.
+    Allows autonomous orchestrators and agents to discover endpoints, schemas, costs,
+    and input requirements without manual human documentation.
+    """
+    return get_api_capabilities()
+
+
+@app.get("/v1/data-products")
+def list_data_products():
+    """
+    Agent Data Exchange: Lists all available data products, update frequencies,
+    freshness guarantees, schemas, and credit pricing terms.
+    """
+    products = data_product_exchange.list_products()
+    return {
+        "count": len(products),
+        "products": products,
+    }
+
+
+@app.get("/v1/data-products/{product_id}")
+def get_data_product_contract(product_id: str):
+    """
+    Agent Data Exchange: Returns the complete contract and machine-readable JSON schemas
+    for a specific data product.
+    """
+    prod = data_product_exchange.get_product(product_id)
+    if not prod:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Data product '{product_id}' not found in exchange catalog. Available: {[p['product_id'] for p in data_product_exchange.list_products()]}",
+        )
+    return prod.to_contract_dict()
+
+
+@app.get("/v1/data-products/{product_id}/latest")
+def get_data_product_latest(
+    product_id: str,
+    request: Request,
+    x_api_key: Optional[str] = Header(None, alias="X-API-KEY"),
+    min_profit_pct: Optional[float] = None,
+    pair: Optional[str] = None,
+    asset: Optional[str] = None,
+    min_confidence: Optional[float] = None,
+):
+    """
+    Agent Data Exchange: Retrieves the latest structured snapshot for a data product.
+    Authenticates the caller and atomically reserves/deducts 1 credit against active credit lots.
+    Idempotent: Identical requests with an idempotency-key replay without duplicate credit charges.
+    Zero-charge on failure: Errors release the credit reservation safely.
+    """
+    contract = data_product_exchange.get_product(product_id)
+    if not contract:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Data product '{product_id}' not found in exchange catalog.",
+        )
+
+    client_ip = get_client_ip(request)
+
+    # General rate limit: 60 requests per minute per IP
+    allowed, retry_after = rate_limiter.is_allowed(f"data_product:{client_ip}", limit=60, window_seconds=60)
+    if not allowed:
+        record_rate_limit(f"/v1/data-products/{product_id}/latest")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many requests. Please retry in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    raw_key = x_api_key
+    if not raw_key:
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            raw_key = auth_header[7:].strip()
+
+    if not raw_key:
+        cfg = load_payment_config()
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "error": "Payment Required",
+                "message": f"Accessing data product '{product_id}' requires an active API key or payment.",
+                "price": f"{contract.cost_credits} credit per successful snapshot retrieval.",
+                "purchase_instructions": {
+                    "treasury_wallet": cfg["solana_treasury_wallet"],
+                    "rates": cfg["rates"],
+                    "verify_endpoint": "POST /v1/payments/verify-solana",
+                },
+            },
+        )
+
+    req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+    k_hash = storage.hash_key(raw_key)
+    rate_key = f"key:{k_hash}"
+
+    # Token bucket rate limiting (Burst 5, Sustained 60/min)
+    tb_allowed, tb_retry_after, tb_remaining = token_bucket_limiter.is_allowed(
+        rate_key,
+        capacity=DEFAULT_RATE_LIMIT_BURST_CAPACITY,
+        refill_per_min=DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN,
+    )
+    request.state.rate_limit_limit = DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN
+    request.state.rate_limit_remaining = tb_remaining
+    request.state.rate_limit_reset = tb_retry_after
+
+    if not tb_allowed:
+        record_rate_limit(f"/v1/data-products/{product_id}/latest")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Request rate exceeded. Please retry in {tb_retry_after} seconds.",
+            headers={
+                "Retry-After": str(tb_retry_after),
+                "X-RateLimit-Limit": str(DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN),
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": str(tb_retry_after),
+            },
+        )
+
+    # Concurrency Limiter (Max 5 concurrent requests)
+    slot_acquired, slot_id, _ = concurrency_limiter.acquire(
+        rate_key,
+        max_concurrent=DEFAULT_RATE_LIMIT_MAX_CONCURRENT,
+    )
+    if not slot_acquired:
+        record_rate_limit(f"/v1/data-products/{product_id}/latest")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Maximum concurrent requests reached (5). Please back off and retry.",
+            headers={"Retry-After": "1"},
+        )
+    request.state.concurrency_slot_id = slot_id
+    request.state.concurrency_rate_key = rate_key
+
+    # Two-Phase Quota Reservation with Idempotency Key
+    idempotency_key = request.headers.get("idempotency-key") or request.headers.get("x-idempotency-key")
+    res_info, state = storage.reserve_quota(raw_key, idempotency_key=idempotency_key, request_id=req_id)
+    if res_info and res_info.get("reservation_id") and state == "ok":
+        request.state.quota_reservation_id = res_info["reservation_id"]
+
+    if state == "idempotent_replay":
+        concurrency_limiter.release(slot_id, rate_key)
+        request.state.concurrency_slot_id = None
+        if res_info.get("cached_response"):
+            return res_info["cached_response"]
+
+    if state == "in_flight":
+        concurrency_limiter.release(slot_id, rate_key)
+        request.state.concurrency_slot_id = None
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="A request with this idempotency key is currently in flight. Please retry shortly.",
+            headers={"Retry-After": "1"},
+        )
+
+    if state == "invalid":
+        concurrency_limiter.release(slot_id, rate_key)
+        request.state.concurrency_slot_id = None
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid API key. Submit payment to /v1/payments/verify-solana or contact administrator.",
+        )
+    if state == "revoked":
+        concurrency_limiter.release(slot_id, rate_key)
+        request.state.concurrency_slot_id = None
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="API key has been revoked.",
+        )
+    if state == "entitlement_expired":
+        concurrency_limiter.release(slot_id, rate_key)
+        request.state.concurrency_slot_id = None
+        cfg = load_payment_config()
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "error": "Entitlement Expired",
+                "message": "Premium entitlement has expired. Renew your Premium subscription to continue spending credits.",
+                "purchase_instructions": {
+                    "treasury_wallet": cfg["solana_treasury_wallet"],
+                    "rates": cfg["rates"],
+                    "verify_endpoint": "POST /v1/payments/verify-solana",
+                },
+            },
+        )
+    if state == "exhausted":
+        concurrency_limiter.release(slot_id, rate_key)
+        request.state.concurrency_slot_id = None
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Key credits exhausted. Top up your balance via Solana USDC.",
+        )
+
+    try:
+        receipt = {
+            "request_id": req_id,
+            "product_id": product_id,
+            "credits_deducted": contract.cost_credits,
+            "entitlement_tier": res_info.get("tier"),
+            "lot_id": res_info.get("lot_id"),
+            "credits_remaining": res_info.get("credits"),
+            "key_hash": res_info.get("key_hash"),
+            "key_prefix": res_info.get("key_prefix"),
+        }
+
+        params = {}
+        if min_profit_pct is not None:
+            params["min_profit_pct"] = min_profit_pct
+        if pair is not None:
+            params["pair"] = pair
+        if asset is not None:
+            params["asset"] = asset
+        if min_confidence is not None:
+            params["min_confidence"] = min_confidence
+
+        snapshot = data_product_exchange.generate_snapshot(
+            product_id=product_id,
+            intel_engine=intel_engine,
+            dex_microstructure=dex_microstructure,
+            witness_manager=witness_manager,
+            params=params,
+            receipt=receipt,
+        )
+
+        # Settle quota upon successful response construction
+        if res_info and res_info.get("reservation_id") and state == "ok":
+            storage.settle_quota(res_info["reservation_id"], response_payload=snapshot)
+            request.state.quota_reservation_id = None
+
+        return snapshot
+
+    except HTTPException:
+        if res_info and res_info.get("reservation_id") and state == "ok":
+            storage.release_quota(res_info["reservation_id"], reason="http_exception")
+            request.state.quota_reservation_id = None
+        raise
+    except Exception as e:
+        if res_info and res_info.get("reservation_id") and state == "ok":
+            storage.release_quota(res_info["reservation_id"], reason=f"snapshot_error: {e}")
+            request.state.quota_reservation_id = None
+        raise HTTPException(status_code=500, detail=f"Internal server error generating snapshot for '{product_id}': {e}") from e
+    finally:
+        concurrency_limiter.release(slot_id, rate_key)
+        request.state.concurrency_slot_id = None
 
 
 @app.get("/v1/briefing/latest")
