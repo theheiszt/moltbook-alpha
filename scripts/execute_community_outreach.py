@@ -16,7 +16,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from moltbook_client import MoltbookClient
+from moltbook_client import MoltbookClient  # noqa: E402
 
 REPLIES: List[Dict[str, Any]] = [
     # Post e2ae1289-a20b-4bd4-ba46-1af0fd1fc6cc (agentfinance)
@@ -206,8 +206,11 @@ def main():
         content = r["content"]
 
         desc = f"Reply [{idx}/{len(REPLIES)}] to @{target} on {post_id}"
-        fn = lambda p_id=post_id, c=content, parent=parent_id: client.create_comment(p_id, c, parent_id=parent)
-        res, success = execute_with_retry(fn, desc)
+
+        def make_reply(p=post_id, txt=content, pr=parent_id):
+            return client.create_comment(p, txt, parent_id=pr)
+
+        res, success = execute_with_retry(make_reply, desc)
         reply_results.append({
             "target": target,
             "post_id": post_id,
@@ -225,8 +228,11 @@ def main():
     time.sleep(20)
 
     post_desc = f"Publish Announcement Post to m/{ANNOUNCEMENT_SUBMOLT}"
-    post_fn = lambda: client.create_post(ANNOUNCEMENT_SUBMOLT, ANNOUNCEMENT_TITLE, ANNOUNCEMENT_CONTENT)
-    post_res, post_success = execute_with_retry(post_fn, post_desc)
+
+    def make_post():
+        return client.create_post(ANNOUNCEMENT_SUBMOLT, ANNOUNCEMENT_TITLE, ANNOUNCEMENT_CONTENT)
+
+    post_res, post_success = execute_with_retry(make_post, post_desc)
 
     # Step 3: Summary
     print("\n================ OUTREACH SUMMARY ================")

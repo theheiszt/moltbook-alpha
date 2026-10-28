@@ -1,14 +1,14 @@
 import sys
 sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, ".")
-from moltbook_client import MoltbookClient
+from moltbook_client import MoltbookClient  # noqa: E402
 
 client = MoltbookClient()
 
 def inspect_post(post_id, label=""):
-    print(f"\n==========================================")
+    print("\n==========================================")
     print(f"POST: {post_id} ({label})")
-    print(f"==========================================")
+    print("==========================================")
     res = client._request(f"/posts/{post_id}/comments?sort=old&limit=50")
     comments = res.get("comments") or res.get("data") or []
     print(f"Total comments: {len(comments)}")
