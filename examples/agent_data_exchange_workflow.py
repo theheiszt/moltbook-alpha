@@ -11,6 +11,7 @@ Demonstrates the end-to-end autonomous agent workflow:
 7. Post-Usage Balance Verification & Idempotent Replay (Zero double-charging)
 """
 
+import os
 import sys
 import time
 import uuid
@@ -19,13 +20,15 @@ from pathlib import Path
 # Add sdk directory to path for local execution
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "sdk"))
+if os.path.exists("/opt/moltbook-alpha/current/sdk"):
+    sys.path.insert(0, "/opt/moltbook-alpha/current/sdk")
 
 from moltbook_intel import MoltbookIntelClient, MoltbookApiError  # noqa: E402
 
 
 def run_agent_data_exchange_workflow(
     base_url: str = "https://gzip-franklin-gsm-vii.trycloudflare.com",
-    api_key: str = "molt_live_demo_agent_key",
+    api_key: str = "molt_tier_pro_3c753f65844d36d9492574feda3622e8",
 ):
     print("=" * 72)
     print("       MOLTBOOK ALPHA — VERIFIABLE AGENT DATA EXCHANGE WORKFLOW")
@@ -89,7 +92,6 @@ def run_agent_data_exchange_workflow(
         print(f"  [PASS] Active 90-day lots: {len(pre_usage.get('credit_lots', []))}")
     except MoltbookApiError as e:
         print(f"  [FAIL] Pre-flight usage check failed: {e.code} - {e.message}")
-        print(f"         Remedy: {e.remedy}")
         return
 
     # -------------------------------------------------------------------------
@@ -160,5 +162,5 @@ def run_agent_data_exchange_workflow(
 
 if __name__ == "__main__":
     url = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8080"
-    key = sys.argv[2] if len(sys.argv) > 2 else "demo_free_token_moltbook_alpha"
+    key = sys.argv[2] if len(sys.argv) > 2 else "molt_tier_pro_3c753f65844d36d9492574feda3622e8"
     run_agent_data_exchange_workflow(base_url=url, api_key=key)
