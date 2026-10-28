@@ -129,10 +129,61 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
     """
     import difflib
 
+    UNIT_PREFIXES = ["newt", "noot", "neuw", "new", "meter", "cm", "kg", "sec", "speed", "force", "claw", "lobst"]
+
+    NON_NUM_WORDS = {
+        "at", "by", "in", "on", "to", "from", "with", "is", "a", "an", "the", "bu", "but", "per", "hour",
+        "fight", "light", "right", "might", "sight", "tight", "night", "white",
+        "this", "that", "these", "those", "their", "there", "then", "them",
+        "claw", "force", "lobster", "lobsters", "red", "total", "another", "other",
+        "much", "what", "which", "more", "less", "dominance", "swim", "swims", "speed", "new", "meter", "meters",
+        "newton", "newtons", "nooton", "nootons", "applies", "apply"
+    }
+
+    def clean_token(t: str) -> str:
+        return re.sub(r"[^a-z0-9]", "", t.lower())
+
+    def is_non_num(t: str) -> bool:
+        c = clean_token(t)
+        if not c or c in NON_NUM_WORDS:
+            return True
+        dedup = re.sub(r"(.)\1+", r"\1", c)
+        if dedup in NON_NUM_WORDS:
+            return True
+        if any(dedup.startswith(u) for u in UNIT_PREFIXES):
+            return True
+        return False
+
+    def norm_num(tok: str) -> Optional[int]:
+        c = clean_token(tok)
+        if is_non_num(c):
+            return None
+        if c.isdigit():
+            return int(c)
+        if c in WORD_TO_NUMBER:
+            return WORD_TO_NUMBER[c]
+        dedup = re.sub(r"(.)\1+", r"\1", c)
+        if dedup in WORD_TO_NUMBER:
+            return WORD_TO_NUMBER[dedup]
+
+        for nw in sorted(WORD_TO_NUMBER.keys(), key=len, reverse=True):
+            if len(nw) >= 3 and (c.startswith(nw) or dedup.startswith(nw)):
+                rem = dedup[len(nw):] if dedup.startswith(nw) else c[len(nw):]
+                if any(rem.startswith(u) for u in UNIT_PREFIXES):
+                    return WORD_TO_NUMBER[nw]
+
+        if len(dedup) >= 4:
+            matches = difflib.get_close_matches(dedup, WORD_TO_NUMBER.keys(), n=1, cutoff=0.88)
+            if matches and not is_non_num(matches[0]):
+                return WORD_TO_NUMBER[matches[0]]
+        return None
+
     # 1. Strip intra-word punctuation noise
     cleaned = re.sub(r"(?<=[a-zA-Z])[\/\\|~^_+\-\]\[}{<>\.,`\'\"]+(?=[a-zA-Z])", "", challenge_text)
 
-    # 2. Operators with whitespace
+    # 2. Clean stray periods and noise not between digits
+    cleaned = re.sub(r"(?<!\d)\.|\.(?!\d)", " ", cleaned)
+
     for op in ["*", "×", "÷"]:
         cleaned = cleaned.replace(op, f" {op} ")
     cleaned = cleaned.replace("+", " + ")
@@ -145,93 +196,59 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
 
     tokens = [t.strip() for t in cleaned.split() if t.strip()]
 
-    NON_NUM_WORDS = {
-        "at", "by", "in", "on", "to", "from", "with", "is", "a", "an", "the", "bu", "but", "per", "hour",
-        "fight", "light", "right", "might", "sight", "tight", "night", "white",
-        "this", "that", "these", "those", "their", "there", "then", "them",
-        "claw", "force", "lobster", "lobsters", "red", "total",
-        "much", "what", "which", "more", "less", "dominance", "swim", "swims", "speed", "new", "meter", "meters",
-        "newton", "newtons", "nooton", "nootons"
-    }
-
-    def clean_token(t: str) -> str:
-        return re.sub(r"[^a-z0-9]", "", t.lower())
-
-    def norm_num(tok: str) -> Optional[int]:
-        c = clean_token(tok)
-        if not c or c in NON_NUM_WORDS:
-            return None
-        if c.isdigit():
-            return int(c)
-        if c in WORD_TO_NUMBER:
-            return WORD_TO_NUMBER[c]
-        dedup = re.sub(r"(.)\1+", r"\1", c)
-        if dedup in WORD_TO_NUMBER:
-            return WORD_TO_NUMBER[dedup]
-
-        for nw in sorted(WORD_TO_NUMBER.keys(), key=len, reverse=True):
-            if len(nw) >= 3 and c.startswith(nw):
-                rem = c[len(nw):]
-                if any(rem.startswith(u) for u in ["newt", "noot", "neuw", "meter", "cm", "kg", "sec", "speed", "force", "claw", "lobst"]):
-                    return WORD_TO_NUMBER[nw]
-
-        if len(dedup) >= 4:
-            matches = difflib.get_close_matches(dedup, WORD_TO_NUMBER.keys(), n=1, cutoff=0.85)
-            if matches and matches[0] not in NON_NUM_WORDS:
-                return WORD_TO_NUMBER[matches[0]]
-        return None
-
     items = []
     i = 0
     while i < len(tokens):
         t = tokens[i]
         c = clean_token(t)
-        if t in ["*", "x", "×"]:
-            items.append((i, "op", "*"))
+        dedup = re.sub(r"(.)\1+", r"\1", c)
+
+        if t in ["*", "x", "×"] or c in ["times", "multiplied"] or dedup in ["times", "multiplied"]:
+            items.append((i, i + 1, "op", "*"))
             i += 1
             continue
-        elif t in ["+", "plus"]:
-            items.append((i, "op", "+"))
+        elif t in ["+", "plus"] or c in ["plus", "add", "added"] or dedup in ["plus", "add", "added"]:
+            items.append((i, i + 1, "op", "+"))
             i += 1
             continue
-        elif t in ["-", "minus", "−", "–"]:
+        elif t in ["-", "minus", "−", "–"] or c in ["minus", "subtract"] or dedup in ["minus", "subtract"]:
             next_t = clean_token(tokens[i+1]) if i + 1 < len(tokens) else ""
-            if not any(next_t.startswith(u) for u in ["meter", "newt", "noot", "sec", "speed"]):
-                items.append((i, "op", "-"))
+            if not any(next_t.startswith(u) for u in UNIT_PREFIXES):
+                items.append((i, i + 1, "op", "-"))
             i += 1
             continue
-        elif t in ["/", "÷", "divided"]:
-            items.append((i, "op", "/"))
+        elif t in ["/", "÷", "divided"] or c in ["divided"] or dedup in ["divided"]:
+            items.append((i, i + 1, "op", "/"))
             i += 1
             continue
 
-        if c in NON_NUM_WORDS:
+        if is_non_num(t):
             i += 1
             continue
 
         matched_compound = False
-        for k in (3, 2):
+        for k in (4, 3, 2):
             if i + k <= len(tokens):
                 sub = tokens[i:i+k]
-                sub_clean = [clean_token(x) for x in sub]
                 if any(x in ["*", "x", "×", "+", "-", "/", "÷"] for x in sub):
                     continue
-                if any(x.isdigit() for x in sub_clean):
+                if any(clean_token(x).isdigit() for x in sub):
                     continue
-                if any(x in NON_NUM_WORDS for x in sub_clean):
+                if any(is_non_num(x) for x in sub):
                     continue
+                sub_clean = [clean_token(x) for x in sub]
                 cand = "".join(sub_clean)
                 val = norm_num(cand)
                 if val is not None:
-                    if items and items[-1][1] == "num" and items[-1][2] == float(val):
+                    if items and items[-1][2] == "num" and items[-1][3] == float(val):
                         i += k
                         matched_compound = True
                         break
-                    if items and items[-1][1] == "num" and items[-1][0] == i - 1 and items[-1][2] in [20, 30, 40, 50, 60, 70, 80, 90] and val < 10:
-                        prev_idx, _, prev_val = items.pop()
-                        items.append((prev_idx, "num", prev_val + float(val)))
+                    if items and items[-1][2] == "num" and items[-1][1] == i and items[-1][3] in [20, 30, 40, 50, 60, 70, 80, 90] and val < 10:
+                        prev_start, _, _, prev_val = items.pop()
+                        items.append((prev_start, i + k, "num", prev_val + float(val)))
                     else:
-                        items.append((i, "num", float(val)))
+                        items.append((i, i + k, "num", float(val)))
                     i += k
                     matched_compound = True
                     break
@@ -240,25 +257,25 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
 
         val = norm_num(t)
         if val is not None:
-            if items and items[-1][1] == "num" and items[-1][2] == float(val):
+            if items and items[-1][2] == "num" and items[-1][3] == float(val):
                 i += 1
                 continue
-            if items and items[-1][1] == "num" and items[-1][0] == i - 1 and items[-1][2] in [20, 30, 40, 50, 60, 70, 80, 90] and val < 10:
-                prev_idx, _, prev_val = items.pop()
-                items.append((prev_idx, "num", prev_val + float(val)))
+            if items and items[-1][2] == "num" and items[-1][1] == i and items[-1][3] in [20, 30, 40, 50, 60, 70, 80, 90] and val < 10:
+                prev_start, _, _, prev_val = items.pop()
+                items.append((prev_start, i + 1, "num", prev_val + float(val)))
             else:
-                items.append((i, "num", float(val)))
+                items.append((i, i + 1, "num", float(val)))
         i += 1
 
-    nums = [x for x in items if x[1] == "num"]
-    ops = [x for x in items if x[1] == "op"]
+    nums = [x for x in items if x[2] == "num"]
+    ops = [x for x in items if x[2] == "op"]
 
     filtered_nums = []
     for n in nums:
-        idx, _, val = n
+        idx_start, idx_end, _, val = n
         if val == 1.0:
-            is_prep = idx > 0 and clean_token(tokens[idx-1]) in ["with", "in", "on", "per"]
-            is_body = idx + 1 < len(tokens) and clean_token(tokens[idx+1]) in ["claw", "hand", "side", "arm"]
+            is_prep = idx_start > 0 and clean_token(tokens[idx_start-1]) in ["with", "in", "on", "per"]
+            is_body = idx_end < len(tokens) and clean_token(tokens[idx_end]) in ["claw", "hand", "side", "arm"]
             if is_prep or is_body:
                 continue
         filtered_nums.append(n)
@@ -270,27 +287,36 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
     cleaned_lower = cleaned.lower()
     collapsed_lower = re.sub(r"(.)\1+", r"\1", cleaned_lower)
 
+    stripped_letters = re.sub(r"[^a-z]", "", cleaned_lower)
+    collapsed_letters = re.sub(r"(.)\1+", r"\1", stripped_letters)
+
     def has_word(words):
-        return any(w in cleaned_lower or w in collapsed_lower for w in words)
+        return any(w in cleaned_lower or w in collapsed_lower or w in stripped_letters or w in collapsed_letters for w in words)
 
     has_mul = has_word(["product", "times", "multipli", "each", "duplicat", "doubl", "tripl", "quadrupl"])
-    has_sub = has_word(["reduc", "slow", "minus", "decreas", "lose", "loses", "drop", "differ", "subtract"])
+    has_sub = has_word(["reduc", "slow", "minus", "decreas", "lose", "loses", "drop", "differ", "subtract", "remain", "left"])
     has_add = has_word(["gain", "plus", "increas", "add", "combin", "total"])
 
     if ops:
-        op_idx, _, op_type = ops[0]
-        before = [n for n in nums if n[0] < op_idx]
-        after = [n for n in nums if n[0] > op_idx]
+        op_start, op_end, _, op_type = ops[0]
+        before = [n for n in nums if n[1] <= op_start]
+        after = [n for n in nums if n[0] >= op_end]
         if before and after:
-            a = before[-1][2]
-            b = after[0][2]
             if op_type == "*":
+                a = before[-1][3]
+                b = after[0][3]
                 res = a * b
             elif op_type == "/":
+                a = before[-1][3]
+                b = after[0][3]
                 res = a / b if b != 0 else 0
             elif op_type == "+":
+                a = sum(n[3] for n in before) if (len(before) > 1 and (has_add or "total" in cleaned_lower)) else before[-1][3]
+                b = sum(n[3] for n in after) if (len(after) > 1 and (has_add or "total" in cleaned_lower)) else after[0][3]
                 res = a + b
             elif op_type == "-":
+                a = before[0][3] if len(before) == 1 else sum(n[3] for n in before)
+                b = after[0][3]
                 if has_mul:
                     res = a * b
                 elif has_add and not has_sub:
@@ -300,18 +326,17 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
             return f"{res:.2f}"
 
     if len(nums) >= 2:
-        a = nums[0][2]
-        b = nums[1][2]
+        a = nums[0][3]
+        b = nums[1][3]
         if has_mul:
             return f"{a * b:.2f}"
         elif has_sub:
             return f"{a - b:.2f}"
         elif has_add:
-            return f"{sum(n[2] for n in nums):.2f}"
+            return f"{sum(n[3] for n in nums):.2f}"
         return f"{a + b:.2f}"
 
     return None
-
 
 class MoltbookClient:
     def __init__(self, api_key: Optional[str] = None):
@@ -328,6 +353,8 @@ class MoltbookClient:
             self.agent_id = None
 
     def _request(self, endpoint: str, method: str = "GET", payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        from ops.transport.resilient_client import execute_sync, RetryPolicy
+
         url = f"{BASE_URL}{endpoint}"
         data_bytes = json.dumps(payload).encode("utf-8") if payload is not None else None
         headers = {
@@ -337,12 +364,17 @@ class MoltbookClient:
         if payload is not None:
             headers["Content-Type"] = "application/json"
 
-        try:
+        def _do_http_call():
             req = urllib.request.Request(url, data=data_bytes, headers=headers, method=method)
             with urllib.request.urlopen(req, timeout=12) as resp:
                 return json.loads(resp.read().decode("utf-8"))
+
+        policy = getattr(self, "retry_policy", None) or RetryPolicy()
+
+        try:
+            return execute_sync(_do_http_call, policy=policy)
         except urllib.error.HTTPError as e:
-            err_body = e.read().decode("utf-8")
+            err_body = e.read().decode("utf-8") if hasattr(e, "read") else str(e)
             raise RuntimeError(f"HTTP {e.code} from {endpoint}: {err_body}") from e
         except Exception as e:
             raise RuntimeError(f"Network error querying {endpoint}: {e!s}") from e

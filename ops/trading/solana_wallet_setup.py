@@ -3,7 +3,7 @@
 Moltbook Alpha — Secure Solana Trading Wallet Manager.
 
 Provides non-custodial Solana keypair generation, standard [u8; 64] JSON export,
-and on-chain SOL / SPL USDC balance queries via multi-RPC failover.
+and on-chain SOL / SPL token (USDC, BONK, JUP) balance queries via multi-RPC failover.
 """
 
 import json
@@ -35,6 +35,9 @@ from config import (  # noqa: E402
 )
 
 DEFAULT_WALLET_FILE = DATA_DIR / "trading_wallet.json"
+SPL_TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+BONK_MINT = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+JUP_MINT = "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN"
 
 
 def b58decode(s: str) -> bytes:
@@ -125,20 +128,31 @@ class SolanaTradingWallet:
 
     def get_balances(self, rpc_urls: Optional[List[str]] = None) -> Dict[str, Any]:
         """
-        Queries live SOL and USDC balances via Solana JSON-RPC with multi-endpoint failover.
+        Queries live SOL, USDC, BONK, and JUP balances via Solana JSON-RPC with multi-endpoint failover.
         """
         import httpx
 
         if not rpc_urls:
             try:
                 cfg = load_payment_config()
-                rpc_urls = cfg.get("rpc_endpoints", ["https://api.mainnet-beta.solana.com"])
+                endpoints: List[str] = []
+                if cfg.get("rpc_url"):
+                    endpoints.append(cfg["rpc_url"])
+                for fb in cfg.get("fallback_rpc_urls", []):
+                    if fb not in endpoints:
+                        endpoints.append(fb)
+                for ep in cfg.get("rpc_endpoints", []):
+                    if ep not in endpoints:
+                        endpoints.append(ep)
+                rpc_urls = endpoints or ["https://api.mainnet-beta.solana.com", "https://solana-rpc.publicnode.com"]
             except Exception:
                 rpc_urls = ["https://api.mainnet-beta.solana.com", "https://solana-rpc.publicnode.com"]
 
         last_error = None
         sol_balance = 0.0
         usdc_balance = 0.0
+        bonk_balance = 0.0
+        jup_balance = 0.0
         success = False
 
         for rpc in rpc_urls:
@@ -157,26 +171,31 @@ class SolanaTradingWallet:
                         lamports = data["result"]["value"]
                         sol_balance = lamports / 1_000_000_000.0
 
-                # 2. Fetch SPL USDC Balance
-                req_usdc = {
+                # 2. Fetch all SPL Token Accounts in one RPC call
+                req_spl = {
                     "jsonrpc": "2.0",
                     "id": 2,
                     "method": "getTokenAccountsByOwner",
                     "params": [
                         self.pubkey_b58,
-                        {"mint": CANONICAL_USDC_MINT},
+                        {"programId": SPL_TOKEN_PROGRAM_ID},
                         {"encoding": "jsonParsed", "commitment": "confirmed"},
                     ],
                 }
-                resp_usdc = httpx.post(rpc, json=req_usdc, timeout=6.0)
-                if resp_usdc.status_code == 200:
-                    data_usdc = resp_usdc.json()
-                    accounts = data_usdc.get("result", {}).get("value", [])
-                    if accounts:
-                        token_amount = accounts[0]["account"]["data"]["parsed"]["info"]["tokenAmount"]
-                        usdc_balance = float(token_amount.get("uiAmount", 0.0))
-                    else:
-                        usdc_balance = 0.0
+                resp_spl = httpx.post(rpc, json=req_spl, timeout=6.0)
+                if resp_spl.status_code == 200:
+                    data_spl = resp_spl.json()
+                    accounts = data_spl.get("result", {}).get("value", [])
+                    for acc in accounts:
+                        info = acc.get("account", {}).get("data", {}).get("parsed", {}).get("info", {})
+                        mint = info.get("mint")
+                        ui_amt = float(info.get("tokenAmount", {}).get("uiAmount") or 0.0)
+                        if mint == CANONICAL_USDC_MINT:
+                            usdc_balance += ui_amt
+                        elif mint == BONK_MINT:
+                            bonk_balance += ui_amt
+                        elif mint == JUP_MINT:
+                            jup_balance += ui_amt
 
                 success = True
                 break
@@ -188,6 +207,8 @@ class SolanaTradingWallet:
             "address": self.pubkey_b58,
             "sol": round(sol_balance, 6),
             "usdc": round(usdc_balance, 4),
+            "bonk": round(bonk_balance, 2),
+            "jup": round(jup_balance, 6),
             "success": success,
             "error": None if success else last_error,
         }
@@ -216,3 +237,5 @@ if __name__ == "__main__":
     print("  Live Balances:")
     print(f"    SOL:  {balances['sol']} SOL")
     print(f"    USDC: ${balances['usdc']} USDC")
+    print(f"    BONK: {balances['bonk']:,.2f} BONK")
+    print(f"    JUP:  {balances['jup']} JUP")

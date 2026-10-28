@@ -808,7 +808,9 @@ class MicrostructureBroadcaster:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+            from ops.security.egress_guard import create_safe_async_client, validate_outbound_url
+            validate_outbound_url(target_url, allow_http=True)
+            async with create_safe_async_client(timeout_seconds=timeout_seconds, allow_http=True) as client:
                 res = await client.post(target_url, content=payload_bytes, headers=headers)
                 return {
                     "success": 200 <= res.status_code < 300,

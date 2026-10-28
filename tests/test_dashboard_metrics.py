@@ -156,3 +156,95 @@ def test_api_dashboard_metrics_auth_protection(monkeypatch):
     resp = client.get("/v1/metrics/dashboard", headers={"Authorization": "Bearer secret_admin_token_12345"})
     assert resp.status_code == 200
     assert resp.json()["success"] is True
+
+
+def test_quickstart_and_universal_api_key_auth(monkeypatch):
+    """
+    Verifies:
+    1. /v1/metrics/dashboard includes latest_briefing with briefing_id, state_witness_id, briefing_markdown, and newsletter_markdown.
+    2. /v1/quickstart returns 200 with authentication_methods and free_unmetered_endpoints_0_credits.
+    3. Metered/account endpoints accept API keys via X-API-KEY, Authorization: Bearer molt_..., and ?api_key=molt_...
+    """
+    monkeypatch.setenv("METRICS_BEARER_TOKEN", "secret_admin_token_12345")
+    client = TestClient(app)
+
+    # 1. Dashboard includes latest_briefing
+    dash_resp = client.get("/v1/metrics/dashboard", headers={"Authorization": "Bearer secret_admin_token_12345"})
+    assert dash_resp.status_code == 200
+    dash_data = dash_resp.json()
+    assert "latest_briefing" in dash_data
+    lb = dash_data["latest_briefing"]
+    assert "briefing_id" in lb
+    assert "state_witness_id" in lb
+    assert "briefing_markdown" in lb
+    assert "newsletter_markdown" in lb
+
+    # 2. Quickstart endpoint returns 200 (0 credits)
+    qs_resp = client.get("/v1/quickstart")
+    assert qs_resp.status_code == 200
+    qs_data = qs_resp.json()
+    assert "authentication_methods" in qs_data
+    assert "free_unmetered_endpoints_0_credits" in qs_data
+    assert "earn_free_credits_in_one_call" in qs_data
+
+    # 3. Universal API key authentication (Authorization: Bearer molt_... and ?api_key=molt_...)
+    raw_key, _ = storage.create_api_key(tier="pro", credits=10)
+    r_bearer = client.get("/v1/account/quota", headers={"Authorization": f"Bearer {raw_key}"})
+    assert r_bearer.status_code == 200
+    assert r_bearer.json()["credits_remaining"] == 10
+
+    r_query = client.get(f"/v1/account/quota?api_key={raw_key}")
+    assert r_query.status_code == 200
+    assert r_query.json()["credits_remaining"] == 10
+
+
+def test_cors_preflight_max_age_caching():
+    """Verifies that CORS OPTIONS preflight returns Access-Control-Max-Age: 86400 to prevent browser polling amplification."""
+    client = TestClient(app)
+    resp = client.options(
+        "/v1/metrics/dashboard",
+        headers={
+            "Origin": "https://theheiszt.github.io",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization,accept",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers.get("access-control-max-age") == "86400"
+    assert "authorization" in resp.headers.get("access-control-allow-headers", "").lower()
+
+
+def test_dashboard_metrics_in_memory_ttl_cache(monkeypatch):
+    """Verifies that subsequent requests within the 10-second TTL window reuse cached payload without hitting storage."""
+    monkeypatch.setenv("METRICS_BEARER_TOKEN", "test_cache_token_xyz")
+    client = TestClient(app)
+
+    # First fetch populates cache
+    resp1 = client.get("/v1/metrics/dashboard", headers={"Authorization": "Bearer test_cache_token_xyz"})
+    assert resp1.status_code == 200
+    data1 = resp1.json()
+
+    # Second fetch should return the exact cached payload
+    resp2 = client.get("/v1/metrics/dashboard", headers={"Authorization": "Bearer test_cache_token_xyz"})
+    assert resp2.status_code == 200
+    data2 = resp2.json()
+
+    assert data1["server"]["timestamp"] == data2["server"]["timestamp"]
+    assert data1["users"]["total_users"] == data2["users"]["total_users"]
+
+
+def test_dashboard_metrics_rate_limiting(monkeypatch):
+    """Verifies that exceeding 30 requests/min from a single IP triggers HTTP 429 Too Many Requests."""
+    monkeypatch.setenv("METRICS_BEARER_TOKEN", "test_ratelimit_token_123")
+    client = TestClient(app)
+
+    # Send 30 requests - all allowed
+    for _ in range(30):
+        r = client.get("/v1/metrics/dashboard", headers={"Authorization": "Bearer test_ratelimit_token_123"})
+        assert r.status_code in (200, 429)
+
+    # 31st request triggers rate limit
+    r_exceeded = client.get("/v1/metrics/dashboard", headers={"Authorization": "Bearer test_ratelimit_token_123"})
+    assert r_exceeded.status_code == 429
+    data = r_exceeded.json()
+    assert data["code"] == "RATE_LIMIT_EXCEEDED" or "rate limit" in str(data).lower()

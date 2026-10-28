@@ -91,3 +91,45 @@ def test_paper_trading_execution():
     assert res_sell["success"] is True
     assert engine.capital_usdc > 449.0
     assert len(engine.trade_history) == 2
+
+
+def test_first_passage_and_two_barrier_probabilities():
+    engine = QuantTradingEngine()
+
+    fp = engine.compute_first_passage_probability(
+        target_gross_pct=0.0158,
+        hourly_volatility=0.00578,
+        horizon_hours=24.0,
+        hourly_drift=0.0,
+    )
+    assert 0.55 <= fp["zero_drift_prob"] <= 0.62
+    assert fp["drift_adjusted_prob"] == fp["zero_drift_prob"]
+
+    # Positive drift increases first-passage probability
+    fp_pos = engine.compute_first_passage_probability(
+        target_gross_pct=0.0158,
+        hourly_volatility=0.00578,
+        horizon_hours=24.0,
+        hourly_drift=0.0005,
+    )
+    assert fp_pos["drift_adjusted_prob"] > fp["zero_drift_prob"]
+
+    # Two-barrier win probability (+1.5% target vs -2.0% stop loss)
+    win_prob = engine.compute_two_barrier_win_probability(
+        target_gross_pct=0.0158,
+        stop_loss_pct=0.020,
+        hourly_volatility=0.00578,
+        hourly_drift=0.0,
+    )
+    assert 0.55 <= win_prob <= 0.58
+
+    profile = engine.evaluate_trade_probability_profile(
+        pair="BONK/SOL",
+        target_net_pct=0.015,
+        stop_loss_pct=0.020,
+        roundtrip_spread_bps=8.0,
+    )
+    assert profile["pair"] == "BONK/SOL"
+    assert len(profile["horizon_probabilities"]) == 6
+    assert len(profile["optimal_target_ladder"]) == 6
+    assert profile["recommended_target_net_pct"] > 0

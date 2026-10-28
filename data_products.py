@@ -385,6 +385,64 @@ DEFAULT_DATA_PRODUCTS: Dict[str, DataProductContract] = {
         },
         output_schema=TRADING_SIGNALS_OUTPUT_SCHEMA,
     ),
+    "solana-dex-quant-probability-v1": DataProductContract(
+        product_id="solana-dex-quant-probability-v1",
+        name="Solana DEX First-Passage & Trade Viability Probability Matrix",
+        version="1.0.0",
+        publisher="Moltbook Alpha Quant Engine",
+        category="quantitative_risk_and_probability",
+        description=(
+            "Analytical Brownian reflection and drift-adjusted inverse Gaussian first-passage probabilities, "
+            "two-barrier take-profit vs stop-loss win odds, Kelly fractions, and optimal target velocity ladders "
+            "across Solana DEX pairs (BONK/SOL, JUP/SOL, SOL/USDC, RAY/SOL)."
+        ),
+        update_frequency="real_time_on_demand",
+        max_staleness_seconds=60,
+        access_tier_required=["tier_starter", "tier_pro", "tier_premium"],
+        cost_credits=1,
+        input_parameters_schema={
+            "type": "object",
+            "properties": {
+                "pair": {
+                    "type": "string",
+                    "default": "BONK/SOL",
+                    "description": "Target trading pair (e.g. BONK/SOL, JUP/SOL, SOL/USDC, RAY/SOL).",
+                },
+                "target_net_pct": {
+                    "type": "number",
+                    "default": 0.015,
+                    "description": "Desired net profit target after round-trip DEX spread (e.g. 0.015 for +1.5%).",
+                },
+            },
+            "additionalProperties": False,
+        },
+        output_schema={
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "title": "SolanaDexQuantProbabilitySnapshot",
+            "type": "object",
+            "required": [
+                "product_id",
+                "snapshot_id",
+                "generated_at",
+                "retrieval_outcome",
+                "freshness_seconds",
+                "source_attribution",
+                "probability_profiles",
+                "usage_receipt",
+            ],
+            "properties": {
+                "product_id": {"type": "string", "const": "solana-dex-quant-probability-v1"},
+                "snapshot_id": {"type": "string"},
+                "generated_at": {"type": "string", "format": "date-time"},
+                "retrieval_outcome": {"type": "string", "enum": ["VALUE", "CONFIRMED_ABSENCE", "UNKNOWN_TIMEOUT"]},
+                "freshness_seconds": {"type": "integer"},
+                "source_attribution": {"type": "object"},
+                "probability_profiles": {"type": "array", "items": {"type": "object"}},
+                "state_witness_id": {"type": ["string", "null"]},
+                "usage_receipt": {"type": "object"},
+            },
+        },
+    ),
 }
 
 
@@ -664,6 +722,51 @@ class DataProductExchange:
                 "usage_receipt": receipt or {},
             }
 
+        elif product_id == "solana-dex-quant-probability-v1":
+            from ops.trading.quant_trader import QuantTradingEngine
+
+            q_engine = QuantTradingEngine()
+            pair_filter = params.get("pair")
+            target_net = float(params.get("target_net_pct") or params.get("min_profit_pct") or 0.015)
+            pairs_to_eval = [pair_filter.upper()] if pair_filter else ["BONK/SOL", "JUP/SOL", "SOL/USDC", "RAY/SOL"]
+            profiles = [
+                q_engine.evaluate_trade_probability_profile(pair=p, target_net_pct=target_net)
+                for p in pairs_to_eval
+            ]
+
+            if witness_manager:
+                try:
+                    w = witness_manager.create_witness(
+                        action="DATA_PRODUCT_QUANT_PROBABILITY_SERVED",
+                        actor=product_id,
+                        key_hash=receipt.get("key_hash", "anonymous") if receipt else "anonymous",
+                        request_id=receipt.get("request_id") if receipt else None,
+                        environmental_anchor={
+                            "product_id": product_id,
+                            "pairs_analyzed": pairs_to_eval,
+                            "target_net_pct": target_net,
+                        },
+                    )
+                    witness_id = w.get("witness_id")
+                except Exception:
+                    pass
+
+            return {
+                "product_id": product_id,
+                "snapshot_id": snap_id,
+                "generated_at": now_iso,
+                "retrieval_outcome": "VALUE",
+                "freshness_seconds": 5,
+                "source_attribution": {
+                    "publisher": contract.publisher,
+                    "pairs_analyzed": pairs_to_eval,
+                    "methodology": "brownian_first_passage_and_two_barrier_gbm",
+                },
+                "probability_profiles": profiles,
+                "state_witness_id": witness_id,
+                "usage_receipt": receipt or {},
+            }
+
         else:
             raise KeyError(f"Snapshot generator for '{product_id}' not implemented.")
 
@@ -850,6 +953,33 @@ class DataProductExchange:
                         "verification_method": "quantitative_factor_model",
                     }
                 ],
+                "state_witness_id": witness_id,
+                "witness_signature": witness_sig,
+                "usage_receipt": sample_receipt,
+            }
+
+        elif product_id == "solana-dex-quant-probability-v1":
+            from ops.trading.quant_trader import QuantTradingEngine
+
+            q_engine = QuantTradingEngine()
+            sample_profile = q_engine.evaluate_trade_probability_profile(
+                pair="BONK/SOL",
+                target_net_pct=0.015,
+                stop_loss_pct=0.020,
+                roundtrip_spread_bps=8.0,
+            )
+            return {
+                "product_id": product_id,
+                "snapshot_id": snap_id,
+                "generated_at": now_iso,
+                "retrieval_outcome": "VALUE",
+                "freshness_seconds": 0,
+                "source_attribution": {
+                    "publisher": contract.publisher,
+                    "pairs_analyzed": ["BONK/SOL"],
+                    "methodology": "brownian_first_passage_and_two_barrier_gbm",
+                },
+                "probability_profiles": [sample_profile],
                 "state_witness_id": witness_id,
                 "witness_signature": witness_sig,
                 "usage_receipt": sample_receipt,

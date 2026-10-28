@@ -35,6 +35,7 @@ class RecoveryAction(str, Enum):
     BACKOFF_AND_RETRY = "backoff_and_retry"
     INSPECT_PARAMETERS = "inspect_parameters"
     CONTACT_SUPPORT = "contact_support"
+    CONFIRM_OPERATION = "confirm_operation"
 
 
 class ErrorCode(str, Enum):
@@ -75,6 +76,9 @@ class ErrorCode(str, Enum):
     DATABASE_UNAVAILABLE = "DATABASE_UNAVAILABLE"
     FEATURE_DISABLED = "FEATURE_DISABLED"
     INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR"
+    # Step-Up Policy & Confirmation Nonces
+    POLICY_CONFIRMATION_REQUIRED = "POLICY_CONFIRMATION_REQUIRED"
+    CONFIRMATION_NONCE_INVALID = "CONFIRMATION_NONCE_INVALID"
 
 
 class ErrorDefinition(BaseModel):
@@ -391,6 +395,28 @@ ERROR_REGISTRY: Dict[str, ErrorDefinition] = {
         default_message="Invalid or missing X-Webhook-Secret header.",
         description="Returned when a webhook request fails secret header authentication.",
         docs_url=f"{DOCS_BASE_URL}#UNAUTHORIZED_WEBHOOK",
+    ),
+    ErrorCode.POLICY_CONFIRMATION_REQUIRED.value: ErrorDefinition(
+        code=ErrorCode.POLICY_CONFIRMATION_REQUIRED,
+        status_code=428,
+        retryable=False,
+        outcome=OperationOutcome.NOT_COMMITTED,
+        state_effect="none",
+        recovery_action=RecoveryAction.CONFIRM_OPERATION,
+        default_message="Step-up confirmation required: This action will permanently dispatch an on-chain refund transaction from the treasury.",
+        description="Returned when high-consequence operations require explicit confirmation with a single-use nonce.",
+        docs_url=f"{DOCS_BASE_URL}#POLICY_CONFIRMATION_REQUIRED",
+    ),
+    ErrorCode.CONFIRMATION_NONCE_INVALID.value: ErrorDefinition(
+        code=ErrorCode.CONFIRMATION_NONCE_INVALID,
+        status_code=410,
+        retryable=False,
+        outcome=OperationOutcome.NOT_COMMITTED,
+        state_effect="none",
+        recovery_action=RecoveryAction.INSPECT_PARAMETERS,
+        default_message="Confirmation nonce is missing, expired, invalid, or was already consumed.",
+        description="Returned when an invalid, expired, or previously burned confirmation nonce is presented.",
+        docs_url=f"{DOCS_BASE_URL}#CONFIRMATION_NONCE_INVALID",
     ),
     ErrorCode.INTERNAL_SERVER_ERROR.value: ErrorDefinition(
         code=ErrorCode.INTERNAL_SERVER_ERROR,

@@ -103,7 +103,7 @@ WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "moltbook_webhook_secret_dev")
 # Default production-safe rates (USD values converted to integer micro-units)
 NANO_TREASURY_ADDRESS = os.getenv(
     "NANO_TREASURY_ADDRESS",
-    "nano_3moltbookintel111111111111111111111111111111111111111111111111",
+    "nano_3t1sxtuxyjgdabj6miwn6st58p8x553i8ybkikoc9ozn7mra7kk71iysfyn1",
 )
 
 DEFAULT_RATES: Dict[str, Dict[str, Any]] = {
@@ -307,7 +307,7 @@ def load_payment_config() -> Dict[str, Any]:
 
     return {
         "solana_treasury_wallet": treasury_wallet,
-        "nano_treasury_address": NANO_TREASURY_ADDRESS,
+        "nano_treasury_address": os.getenv("NANO_TREASURY_ADDRESS", config_data.get("nano_treasury_address", NANO_TREASURY_ADDRESS)).strip(),
         "accepted_rails": ["solana", "nano"],
         "rpc_url": rpc_endpoints[0],
         "rpc_endpoints": rpc_endpoints,
