@@ -133,10 +133,11 @@ def run_assurance_assay(base_url: str, api_key: Optional[str] = None):
         return False
 
     cap_products = caps.get("capabilities", {}).get("agent_data_exchange", {}).get("data_products", [])
-    print_pass(f"Data Product Catalog: {len(catalog.get('data_products', []))} products active")
+    catalog_list = catalog.get("data_products") or catalog.get("products") or []
+    print_pass(f"Data Product Catalog: {len(catalog_list)} products active")
 
     # Verify single-source-of-truth alignment
-    catalog_ids = {p["product_id"]: p for p in catalog.get("data_products", [])}
+    catalog_ids = {p["product_id"]: p for p in catalog_list}
     for p in cap_products:
         pid = p["product_id"]
         if pid in catalog_ids:

@@ -2295,6 +2295,7 @@ def list_data_products():
     return {
         "count": len(products),
         "products": products,
+        "data_products": products,
     }
 
 
