@@ -9,6 +9,7 @@ quant signals, account quotas, and Solana payment verification.
 import sys
 import json
 import os
+import time
 from typing import Dict, Any
 
 # Ensure repository root is on Python path
@@ -264,7 +265,7 @@ TOOLS_DEFINITION = [
 
 class MoltbookMCPServer:
     def __init__(self):
-        base_url = os.getenv("MOLTBOOK_API_BASE_URL", "http://127.0.0.1:8080")
+        base_url = os.getenv("MOLTBOOK_API_BASE_URL", "https://gzip-franklin-gsm-vii.trycloudflare.com")
         api_key = os.getenv("MOLTBOOK_API_KEY")
         self.client = MoltbookIntelClient(base_url=base_url, api_key=api_key)
 
