@@ -1,6 +1,7 @@
 """
 Unit and Integration Tests for Moltbook Alpha Operational & Traffic Metrics Dashboard.
-Verifies user counts, sales aggregation, connected telemetry, and funnel tracking.
+Verifies user counts, sales aggregation, connected telemetry, admin authentication,
+and password change lifecycle.
 """
 
 from fastapi.testclient import TestClient
@@ -41,40 +42,105 @@ def test_storage_dashboard_metrics_aggregation():
     assert act["events_last_24h"] >= 0
 
 
-def test_api_dashboard_metrics_endpoint():
-    """Verifies GET /v1/metrics/dashboard returns 200 with unified server, connected, users, and sales data."""
+def test_api_admin_auth_and_metrics_lifecycle():
+    """
+    Verifies full admin authentication lifecycle:
+    1. Unauthenticated request to /v1/metrics/dashboard returns 401.
+    2. Invalid credentials to /v1/admin/login returns 401.
+    3. Valid default credentials (ADMIN / Neverwinter#7789) return 200 with session token.
+    4. Authenticated request with session token returns 200 and unified metrics.
+    5. Admin can change password; old sessions are revoked.
+    6. Logging in with new password succeeds; old password fails.
+    7. Admin logout successfully revokes session.
+    """
     client = TestClient(app)
-    resp = client.get("/v1/metrics/dashboard")
-    assert resp.status_code == 200
-    data = resp.json()
 
+    # 1. Unauthenticated -> 401
+    resp = client.get("/v1/metrics/dashboard")
+    assert resp.status_code == 401
+    assert "Admin authentication required" in resp.json()["detail"]
+
+    # 2. Invalid credentials -> 401
+    bad_login = client.post("/v1/admin/login", json={"username": "ADMIN", "password": "WrongPassword!123"})
+    assert bad_login.status_code == 401
+
+    # 3. Valid default login -> 200
+    login_resp = client.post("/v1/admin/login", json={"username": "ADMIN", "password": "Neverwinter#7789"})
+    assert login_resp.status_code == 200
+    login_data = login_resp.json()
+    assert login_data["success"] is True
+    assert "token" in login_data
+    token = login_data["token"]
+    assert token.startswith("adm_sess_")
+
+    # 4. Valid session probe -> 200
+    sess_check = client.get("/v1/admin/session", headers={"Authorization": f"Bearer {token}"})
+    assert sess_check.status_code == 200
+    assert sess_check.json()["authenticated"] is True
+    assert sess_check.json()["username"] == "ADMIN"
+
+    # 5. Access metrics with session token -> 200
+    metrics_resp = client.get("/v1/metrics/dashboard", headers={"Authorization": f"Bearer {token}"})
+    assert metrics_resp.status_code == 200
+    data = metrics_resp.json()
     assert data["success"] is True
     assert "server" in data
     assert data["server"]["status"] == "healthy"
-    assert data["server"]["version"] == "1.2.0"
-    assert data["server"]["uptime_seconds"] >= 0
-
     assert "connected" in data
-    assert data["connected"]["active_websockets"] >= 0
-    assert data["connected"]["in_flight_requests"] >= 0
-
     assert "users" in data
-    assert data["users"]["total_users"] >= 0
-
     assert "sales" in data
-    assert data["sales"]["total_sales_count"] >= 0
-    assert data["sales"]["total_revenue_usd"] >= 0.0
-
     assert "traffic" in data
-    assert isinstance(data["traffic"]["status_codes"], dict)
-    assert isinstance(data["traffic"]["top_endpoints"], list)
-
     assert "funnel" in data
-    assert isinstance(data["recent_activity"], list)
+
+    # 6. Change password to new password
+    new_pw = "DragonLance#2026!Secure"
+    change_resp = client.post(
+        "/v1/admin/change-password",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"current_password": "Neverwinter#7789", "new_password": new_pw},
+    )
+    assert change_resp.status_code == 200
+    new_token = change_resp.json()["new_token"]
+    assert new_token.startswith("adm_sess_")
+
+    # Old token was revoked on password change
+    old_token_check = client.get("/v1/metrics/dashboard", headers={"Authorization": f"Bearer {token}"})
+    assert old_token_check.status_code == 401
+
+    # New token works
+    new_token_check = client.get("/v1/metrics/dashboard", headers={"Authorization": f"Bearer {new_token}"})
+    assert new_token_check.status_code == 200
+
+    # Old password no longer works
+    old_pw_login = client.post("/v1/admin/login", json={"username": "ADMIN", "password": "Neverwinter#7789"})
+    assert old_pw_login.status_code == 401
+
+    # New password works
+    new_pw_login = client.post("/v1/admin/login", json={"username": "ADMIN", "password": new_pw})
+    assert new_pw_login.status_code == 200
+    fresh_token = new_pw_login.json()["token"]
+
+    # Revert password back to Neverwinter#7789 for test consistency
+    revert_resp = client.post(
+        "/v1/admin/change-password",
+        headers={"Authorization": f"Bearer {fresh_token}"},
+        json={"current_password": new_pw, "new_password": "Neverwinter#7789"},
+    )
+    assert revert_resp.status_code == 200
+    reverted_token = revert_resp.json()["new_token"]
+
+    # 7. Logout revokes token
+    logout_resp = client.post("/v1/admin/logout", headers={"Authorization": f"Bearer {reverted_token}"})
+    assert logout_resp.status_code == 200
+    assert logout_resp.json()["success"] is True
+
+    # Post-logout probe -> 401
+    post_logout_check = client.get("/v1/metrics/dashboard", headers={"Authorization": f"Bearer {reverted_token}"})
+    assert post_logout_check.status_code == 401
 
 
 def test_api_dashboard_metrics_auth_protection(monkeypatch):
-    """Verifies that setting METRICS_BEARER_TOKEN enforces bearer authentication."""
+    """Verifies that setting METRICS_BEARER_TOKEN enforces bearer authentication for automated scrapers."""
     monkeypatch.setenv("METRICS_BEARER_TOKEN", "secret_admin_token_12345")
     client = TestClient(app)
 

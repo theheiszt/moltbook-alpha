@@ -344,6 +344,23 @@ class StorageManager:
                         properties_json TEXT NOT NULL
                     );
                     CREATE INDEX IF NOT EXISTS idx_funnel_events_name_time ON funnel_events(event_name, timestamp_utc);
+
+                    CREATE TABLE IF NOT EXISTS admin_users (
+                        username TEXT PRIMARY KEY,
+                        password_hash TEXT NOT NULL,
+                        salt TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    );
+
+                    CREATE TABLE IF NOT EXISTS admin_sessions (
+                        token TEXT PRIMARY KEY,
+                        username TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        expires_at TEXT NOT NULL,
+                        FOREIGN KEY(username) REFERENCES admin_users(username)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_admin_sessions_exp ON admin_sessions(expires_at);
                 """)
 
                 cur = conn.cursor()
@@ -388,6 +405,18 @@ class StorageManager:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_unmatched_payer ON unmatched_payments(payer_wallet)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_unmatched_status ON unmatched_payments(status)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_webhooks_active ON webhook_subscriptions(is_active)")
+
+                # Seed initial ADMIN credentials if not present
+                cur.execute("SELECT username FROM admin_users WHERE username = 'ADMIN'")
+                if not cur.fetchone():
+                    salt = secrets.token_hex(16)
+                    default_pw = "Neverwinter#7789"
+                    pw_hash = hashlib.pbkdf2_hmac("sha256", default_pw.encode("utf-8"), salt.encode("utf-8"), 100_000).hex()
+                    now_iso = datetime.now(timezone.utc).isoformat()
+                    cur.execute(
+                        "INSERT INTO admin_users (username, password_hash, salt, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                        ("ADMIN", pw_hash, salt, now_iso, now_iso)
+                    )
 
                 # Backfill legacy keys that have no records in credit_lots
                 cur.execute("SELECT key_hash, key_prefix, tier, credits, created_at, is_active FROM api_keys WHERE key_hash NOT IN (SELECT DISTINCT key_hash FROM credit_lots)")
@@ -3277,3 +3306,89 @@ class StorageManager:
                     (subscription_id.strip(),),
                 )
                 return cur.rowcount > 0
+
+    # ---------------------------------------------------------
+    # Administrator Authentication & Session Management
+    # ---------------------------------------------------------
+
+    def verify_admin_credentials(self, username: str, password: str) -> bool:
+        """Verifies admin credentials using PBKDF2-HMAC-SHA256 and constant-time comparison."""
+        clean_user = (username or "").strip().upper()
+        if not clean_user or not password:
+            return False
+        with self._lock, self.connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT password_hash, salt FROM admin_users WHERE username = ?", (clean_user,))
+            row = cur.fetchone()
+            if not row:
+                return False
+            stored_hash = row["password_hash"]
+            salt = row["salt"]
+            calc_hash = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 100_000).hex()
+            return hmac.compare_digest(stored_hash, calc_hash)
+
+    def change_admin_password(self, username: str, current_password: str, new_password: str) -> Tuple[bool, str]:
+        """
+        Validates current password and updates to new password with a fresh cryptographic salt.
+        Revokes existing active sessions to enforce security.
+        """
+        clean_user = (username or "").strip().upper()
+        if not clean_user:
+            return False, "Username is required."
+        if not self.verify_admin_credentials(clean_user, current_password):
+            return False, "Current password does not match."
+        if not new_password or len(new_password) < 8:
+            return False, "New password must be at least 8 characters long."
+
+        new_salt = secrets.token_hex(16)
+        new_hash = hashlib.pbkdf2_hmac("sha256", new_password.encode("utf-8"), new_salt.encode("utf-8"), 100_000).hex()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._lock, self.connection() as conn:
+            with conn:
+                conn.execute(
+                    "UPDATE admin_users SET password_hash = ?, salt = ?, updated_at = ? WHERE username = ?",
+                    (new_hash, new_salt, now_iso, clean_user),
+                )
+                conn.execute("DELETE FROM admin_sessions WHERE username = ?", (clean_user,))
+        self.log_audit_event("admin_password_changed", f"Password changed for admin user '{clean_user}'")
+        return True, "Password changed successfully."
+
+    def create_admin_session(self, username: str, duration_hours: int = 24) -> str:
+        """Issues an active session token for the authenticated admin user."""
+        clean_user = (username or "").strip().upper()
+        token = f"adm_sess_{secrets.token_hex(24)}"
+        now = datetime.now(timezone.utc)
+        expires = now + timedelta(hours=duration_hours)
+        with self._lock, self.connection() as conn:
+            with conn:
+                conn.execute(
+                    "INSERT INTO admin_sessions (token, username, created_at, expires_at) VALUES (?, ?, ?, ?)",
+                    (token, clean_user, now.isoformat(), expires.isoformat()),
+                )
+        return token
+
+    def validate_admin_session(self, token: str) -> Optional[str]:
+        """Validates an admin session token, returning the username if valid and unexpired."""
+        if not token or not token.startswith("adm_sess_"):
+            return None
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._lock, self.connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT username, expires_at FROM admin_sessions WHERE token = ?", (token,))
+            row = cur.fetchone()
+            if not row:
+                return None
+            if row["expires_at"] < now_iso:
+                with conn:
+                    conn.execute("DELETE FROM admin_sessions WHERE token = ?", (token,))
+                return None
+            return row["username"]
+
+    def revoke_admin_session(self, token: str) -> bool:
+        """Revokes an admin session token."""
+        if not token:
+            return False
+        with self._lock, self.connection() as conn:
+            with conn:
+                res = conn.execute("DELETE FROM admin_sessions WHERE token = ?", (token,))
+                return res.rowcount > 0

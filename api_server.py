@@ -158,6 +158,10 @@ async def metrics_middleware(request: Request, call_next):
             "/v1/intel/refresh",
             "/v1/intel/microstructure",
             "/v1/metrics/funnel",
+            "/v1/admin/login",
+            "/v1/admin/change-password",
+            "/v1/admin/logout",
+            "/v1/admin/session",
             "/v1/webhooks",
             "/v1/webhooks/subscribe",
             "/v1/payments/config",
@@ -680,27 +684,132 @@ def get_funnel_metrics_endpoint(request: Request, since: Optional[str] = None):
     }
 
 
+class AdminLoginInput(BaseModel):
+    username: str
+    password: str
+
+
+class AdminChangePasswordInput(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@app.post("/v1/admin/login")
+def admin_login_endpoint(payload: AdminLoginInput, request: Request):
+    client_ip = get_client_ip(request)
+    allowed, retry_after = rate_limiter.is_allowed(f"admin_login:{client_ip}", limit=10, window_seconds=300)
+    if not allowed:
+        record_rate_limit("/v1/admin/login")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many failed login attempts. Please retry in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    clean_user = (payload.username or "").strip().upper()
+    if not storage.verify_admin_credentials(clean_user, payload.password):
+        storage.log_audit_event("admin_login_failed", f"Failed admin login attempt for '{clean_user}'", ip_address=client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid administrator credentials.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    session_token = storage.create_admin_session(clean_user, duration_hours=24)
+    storage.log_audit_event("admin_login_success", f"Admin user '{clean_user}' successfully authenticated", ip_address=client_ip)
+    return {
+        "success": True,
+        "token": session_token,
+        "username": clean_user,
+        "expires_in_hours": 24,
+    }
+
+
+@app.post("/v1/admin/change-password")
+def admin_change_password_endpoint(payload: AdminChangePasswordInput, request: Request):
+    client_ip = get_client_ip(request)
+    auth_header = request.headers.get("authorization", "")
+    token = ""
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+
+    admin_user = storage.validate_admin_session(token)
+    if not admin_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Valid administrator session required to change password.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    ok, message = storage.change_admin_password(admin_user, payload.current_password, payload.new_password)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=message,
+        )
+
+    # Issue fresh session token since old sessions were revoked
+    new_token = storage.create_admin_session(admin_user, duration_hours=24)
+    return {
+        "success": True,
+        "message": message,
+        "new_token": new_token,
+        "username": admin_user,
+    }
+
+
+@app.post("/v1/admin/logout")
+def admin_logout_endpoint(request: Request):
+    auth_header = request.headers.get("authorization", "")
+    token = ""
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+    storage.revoke_admin_session(token)
+    return {"success": True, "message": "Admin session revoked."}
+
+
+@app.get("/v1/admin/session")
+def admin_session_endpoint(request: Request):
+    auth_header = request.headers.get("authorization", "")
+    token = ""
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+    admin_user = storage.validate_admin_session(token)
+    if not admin_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired admin session.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return {"authenticated": True, "username": admin_user}
+
+
 @app.get("/v1/metrics/dashboard")
 def get_dashboard_metrics_endpoint(request: Request):
     """
-    Returns unified operational dashboard metrics for real-time monitoring:
-    - Connected users (active websockets, in-flight requests, recent callers)
-    - Total users by tier and active status
-    - Total sales count, USD volume, and multi-rail breakdown
-    - Invoice lifecycle and conversion rates
-    - Full conversion funnel telemetry
-    - Real-time audit activity feed
+    Returns unified operational dashboard metrics for real-time monitoring.
+    Requires administrator session token or METRICS_BEARER_TOKEN.
     """
+    auth_header = request.headers.get("authorization", "")
+    bearer_token = ""
+    if auth_header.lower().startswith("bearer "):
+        bearer_token = auth_header[7:].strip()
+
+    is_authenticated = False
     metrics_token = os.getenv("METRICS_BEARER_TOKEN", "").strip()
-    if metrics_token:
-        auth_header = request.headers.get("authorization", "")
-        expected = f"Bearer {metrics_token}"
-        if not hmac.compare_digest(auth_header, expected):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Unauthorized access to metrics exposition.",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+    if metrics_token and bearer_token and hmac.compare_digest(bearer_token, metrics_token):
+        is_authenticated = True
+    elif bearer_token:
+        admin_user = storage.validate_admin_session(bearer_token)
+        if admin_user:
+            is_authenticated = True
+
+    if not is_authenticated:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Admin authentication required. Please sign in with ADMIN credentials.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     db_metrics = storage.get_dashboard_metrics()
 
