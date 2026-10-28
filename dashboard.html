@@ -6,7 +6,6 @@
   <title>Moltbook Alpha — Live Traffic & Operations Dashboard</title>
   <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
   <style>
-    /* Pulse badge animation */
     @keyframes pulse-ring {
       0% { transform: scale(0.95); opacity: 0.8; }
       50% { transform: scale(1.15); opacity: 0.4; }
@@ -66,6 +65,21 @@
         </button>
       </div>
     </header>
+
+    <!-- Disconnection / Error Alert Banner -->
+    <div id="errorBanner" class="hidden bg-rose-950/70 border border-rose-800 text-rose-200 rounded-2xl p-4 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+      <div class="flex items-center gap-2.5">
+        <span class="text-rose-400 font-bold text-base">⚠️</span>
+        <div>
+          <span class="font-semibold block">Gateway Unreachable</span>
+          <span id="errorDetailsText" class="text-rose-300 font-mono text-[11px]">Cannot connect to API</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <a id="testHealthLink" href="https://gzip-franklin-gsm-vii.trycloudflare.com/v1/health" target="_blank" class="px-2.5 py-1 bg-rose-900/60 hover:bg-rose-800 border border-rose-700 text-rose-200 rounded-lg text-xs font-medium">Test /v1/health ↗</a>
+        <button onclick="fetchMetrics()" class="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-semibold">Retry</button>
+      </div>
+    </div>
 
     <!-- Custom URL Input (Hidden unless selected) -->
     <div id="customUrlContainer" class="hidden bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-xl p-3 flex items-center gap-3">
@@ -401,16 +415,21 @@
     async function fetchMetrics() {
       const badge = document.getElementById("connectionBadge");
       const badgeText = document.getElementById("connectionText");
+      const errorBanner = document.getElementById("errorBanner");
+      const errorDetailsText = document.getElementById("errorDetailsText");
+      const testHealthLink = document.getElementById("testHealthLink");
+      testHealthLink.href = `${currentBaseUrl}/v1/health`;
 
       try {
         const url = `${currentBaseUrl}/v1/metrics/dashboard`;
         const resp = await fetch(url, { headers: { "Accept": "application/json" } });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
         const data = await resp.json();
 
         // Mark online
         badge.className = "flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800";
         badgeText.textContent = "ONLINE";
+        errorBanner.classList.add("hidden");
 
         renderDashboard(data);
         document.getElementById("lastUpdatedTime").textContent = new Date().toLocaleTimeString();
@@ -418,6 +437,8 @@
         console.error("Dashboard fetch error:", err);
         badge.className = "flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-full bg-rose-950/80 text-rose-400 border border-rose-800";
         badgeText.textContent = "DISCONNECTED";
+        errorBanner.classList.remove("hidden");
+        errorDetailsText.textContent = `Error connecting to ${currentBaseUrl}: ${err.message}. If opening via browser/file, verify the server has CORS enabled or check /v1/health.`;
       }
     }
 
@@ -667,6 +688,23 @@
 
     // Initialize on load
     window.addEventListener("DOMContentLoaded", () => {
+      // If opened from a hosted origin (e.g. http://127.0.0.1:8080 or https://gzip-franklin-gsm-vii.trycloudflare.com)
+      if (window.location.protocol.startsWith("http") && !window.location.host.includes("github.io")) {
+        currentBaseUrl = window.location.origin;
+        const select = document.getElementById("serverUrl");
+        let matched = false;
+        for (let i = 0; i < select.options.length; i++) {
+          if (select.options[i].value === currentBaseUrl) {
+            select.selectedIndex = i;
+            matched = true;
+            break;
+          }
+        }
+        if (!matched && currentBaseUrl) {
+          const opt = new Option(`Current Origin (${currentBaseUrl})`, currentBaseUrl, true, true);
+          select.add(opt, 0);
+        }
+      }
       fetchMetrics();
       onIntervalChange();
     });

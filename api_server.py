@@ -16,6 +16,7 @@ import hmac
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, List
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
@@ -85,6 +86,13 @@ app = FastAPI(
     title="Moltbook Alpha Intelligence API",
     description="Agentic Market Intelligence & Quant Insights with Solana Verification",
     version="1.2.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 SERVER_START_TIME = time.time()
