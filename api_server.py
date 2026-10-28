@@ -21,7 +21,7 @@ from fastapi import FastAPI, Header, HTTPException, Request, Response, WebSocket
 from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 import uvicorn
 
 from errors import (
@@ -791,6 +791,17 @@ class CreateInvoiceInput(BaseModel):
     cluster: Optional[str] = "mainnet-beta"
     expected_payer: Optional[str] = None
     target_api_key: Optional[str] = None
+    tier: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_tier_alias(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "tier" in data and ("target_tier" not in data or not data["target_tier"]):
+                data["target_tier"] = data["tier"]
+            elif "target_tier" in data and ("tier" not in data or not data["tier"]):
+                data["tier"] = data["target_tier"]
+        return data
 
     @field_validator("target_tier")
     @classmethod

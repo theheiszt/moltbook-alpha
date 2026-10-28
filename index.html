@@ -488,16 +488,36 @@ audit = client.verify_witness_local(witness)
             const iconEl = document.getElementById('healthIcon');
             iconEl.innerText = '⏳';
             resultEl.classList.remove('hidden');
+            resultEl.className = 'mt-4 p-3 bg-black/90 border border-slate-800 rounded-lg text-xs font-mono text-emerald-400 overflow-x-auto whitespace-pre';
             resultEl.innerText = 'Querying https://gzip-franklin-gsm-vii.trycloudflare.com/v1/health...';
 
             try {
-                const resp = await fetch('https://gzip-franklin-gsm-vii.trycloudflare.com/v1/health');
+                const resp = await fetch('https://gzip-franklin-gsm-vii.trycloudflare.com/v1/health', {
+                    cache: 'no-store',
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
                 const json = await resp.json();
                 iconEl.innerText = '✅';
                 resultEl.innerText = JSON.stringify(json, null, 2);
             } catch (err) {
                 iconEl.innerText = '⚠️';
-                resultEl.innerText = 'Live fetch error: ' + err.message + '\n(Note: CORS or network restrictions in sandbox may require direct cURL).';
+                resultEl.className = 'mt-4 p-3 bg-rose-950/40 border border-rose-800/60 rounded-lg text-xs font-mono text-rose-300 overflow-x-auto';
+                resultEl.innerHTML = `
+                    <div class="font-bold text-rose-400 mb-1">Live fetch note: ${err.message}</div>
+                    <div class="text-slate-300 text-[11px] mb-2 leading-relaxed">
+                        If your browser cached an earlier preflight error or an ad-blocker is restricting the tunnel, you can verify directly in your browser or terminal:
+                    </div>
+                    <div class="flex flex-wrap gap-2 mb-2">
+                        <a href="https://gzip-franklin-gsm-vii.trycloudflare.com/v1/health" target="_blank" class="px-2.5 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded text-[11px] font-sans font-medium transition inline-flex items-center gap-1">
+                            Open /v1/health in New Tab ↗
+                        </a>
+                        <button onclick="testLiveHealth()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-[11px] font-sans font-medium transition border border-slate-700">
+                            Retry Fresh Probe ⟳
+                        </button>
+                    </div>
+                    <div class="text-slate-400 text-[11px]">Direct cURL: <code class="text-emerald-300 bg-black/50 px-1 py-0.5 rounded">curl -s https://gzip-franklin-gsm-vii.trycloudflare.com/v1/health</code></div>
+                `;
             }
         }
 

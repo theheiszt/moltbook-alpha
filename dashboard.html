@@ -422,7 +422,7 @@
 
       try {
         const url = `${currentBaseUrl}/v1/metrics/dashboard`;
-        const resp = await fetch(url, { headers: { "Accept": "application/json" } });
+        const resp = await fetch(url, { cache: "no-store", headers: { "Accept": "application/json" } });
         if (!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
         const data = await resp.json();
 
