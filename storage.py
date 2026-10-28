@@ -2466,6 +2466,175 @@ class StorageManager:
                 })
             return results
 
+    def get_dashboard_metrics(self) -> Dict[str, Any]:
+        """
+        Aggregates live operational, commercial, and traffic metrics for the Moltbook Alpha dashboard:
+        - Current connected & active users (5m, 1h, 24h)
+        - Total registered users and tier distribution
+        - Completed sales volume, revenue in USD, and multi-rail breakdown
+        - Invoice lifecycle conversion metrics (created, fulfilled, pending, expired)
+        - Conversion funnel telemetry and drop-off rates
+        - Recent live activity stream and completed transactions
+        """
+        now = datetime.now(timezone.utc)
+        iso_5m = (now - timedelta(minutes=5)).isoformat()
+        iso_1h = (now - timedelta(hours=1)).isoformat()
+        iso_24h = (now - timedelta(hours=24)).isoformat()
+
+        with self._lock, self.connection() as conn:
+            cur = conn.cursor()
+
+            # 1. Total & Active Users
+            cur.execute("""
+                SELECT
+                    COUNT(*) as total_users,
+                    SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_users,
+                    SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) as revoked_users
+                FROM api_keys
+            """)
+            u_row = cur.fetchone()
+            total_users = u_row["total_users"] if u_row else 0
+            active_users = u_row["active_users"] if u_row else 0
+            revoked_users = u_row["revoked_users"] if u_row else 0
+
+            cur.execute("""
+                SELECT tier, COUNT(*) as cnt
+                FROM api_keys
+                GROUP BY tier
+                ORDER BY cnt DESC
+            """)
+            users_by_tier = {row["tier"]: row["cnt"] for row in cur.fetchall()}
+
+            cur.execute("""
+                SELECT key_prefix, tier, credits, created_at, is_active
+                FROM api_keys
+                ORDER BY created_at DESC
+                LIMIT 8
+            """)
+            recent_keys = [dict(r) for r in cur.fetchall()]
+
+            # 2. Activity / Events count from audit logs
+            cur.execute("SELECT COUNT(*) as cnt FROM audit_logs WHERE created_at >= ?", (iso_5m,))
+            events_5m = cur.fetchone()["cnt"]
+
+            cur.execute("SELECT COUNT(*) as cnt FROM audit_logs WHERE created_at >= ?", (iso_1h,))
+            events_1h = cur.fetchone()["cnt"]
+
+            cur.execute("SELECT COUNT(*) as cnt FROM audit_logs WHERE created_at >= ?", (iso_24h,))
+            events_24h = cur.fetchone()["cnt"]
+
+            # 3. Completed Sales & Revenue
+            cur.execute("""
+                SELECT
+                    COUNT(*) as sales_count,
+                    asset,
+                    tier,
+                    SUM(amount_raw) as total_amount_raw
+                FROM payment_redemptions
+                GROUP BY asset, tier
+            """)
+            redemptions = [dict(r) for r in cur.fetchall()]
+
+            total_sales_count = sum(r["sales_count"] for r in redemptions)
+            sales_by_tier: Dict[str, int] = {}
+            sales_by_asset: Dict[str, Dict[str, Any]] = {}
+            total_revenue_usd = 0.0
+
+            TIER_PRICES_USD = {
+                "tier_micro": 0.25,
+                "tier_starter": 1.00,
+                "starter": 1.00,
+                "tier_pro": 5.00,
+                "pro": 5.00,
+                "tier_premium": 20.00,
+                "premium": 20.00,
+                "topup_500": 8.00,
+                "topup_1500": 20.00,
+                "topup_5000": 50.00,
+            }
+
+            for r in redemptions:
+                t = r["tier"]
+                a = r["asset"]
+                cnt = r["sales_count"]
+                sales_by_tier[t] = sales_by_tier.get(t, 0) + cnt
+
+                tier_unit_price = TIER_PRICES_USD.get(t, 1.00)
+                tier_rev = cnt * tier_unit_price
+                total_revenue_usd += tier_rev
+
+                if a not in sales_by_asset:
+                    sales_by_asset[a] = {"count": 0, "revenue_usd": 0.0}
+                sales_by_asset[a]["count"] += cnt
+                sales_by_asset[a]["revenue_usd"] = round(sales_by_asset[a]["revenue_usd"] + tier_rev, 2)
+
+            cur.execute("""
+                SELECT tx_signature, asset, amount_raw, tier, credits_granted, redeemed_at, payer_wallet
+                FROM payment_redemptions
+                ORDER BY redeemed_at DESC
+                LIMIT 8
+            """)
+            recent_sales = [dict(r) for r in cur.fetchall()]
+
+            # 4. Invoices Lifecycle
+            cur.execute("""
+                SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = 'fulfilled' THEN 1 ELSE 0 END) as fulfilled,
+                    SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+                    SUM(CASE WHEN status = 'expired' THEN 1 ELSE 0 END) as expired
+                FROM payment_invoices
+            """)
+            inv = cur.fetchone()
+            total_invoices = inv["total"] if inv else 0
+            fulfilled_invoices = inv["fulfilled"] if inv else 0
+            pending_invoices = inv["pending"] if inv else 0
+            expired_invoices = inv["expired"] if inv else 0
+            settlement_rate = (fulfilled_invoices / total_invoices * 100.0) if total_invoices > 0 else 0.0
+
+            # 5. Conversion Funnel Telemetry
+            funnel_metrics = self.get_funnel_metrics()
+
+            # 6. Recent System Activity Log
+            cur.execute("""
+                SELECT id, event_type, detail, created_at
+                FROM audit_logs
+                ORDER BY id DESC
+                LIMIT 25
+            """)
+            recent_activity = [dict(r) for r in cur.fetchall()]
+
+        return {
+            "users": {
+                "total_users": total_users,
+                "active_users": active_users,
+                "revoked_users": revoked_users,
+                "users_by_tier": users_by_tier,
+                "recent_keys": recent_keys,
+            },
+            "activity": {
+                "events_last_5m": events_5m,
+                "events_last_1h": events_1h,
+                "events_last_24h": events_24h,
+            },
+            "sales": {
+                "total_sales_count": total_sales_count,
+                "total_revenue_usd": round(total_revenue_usd, 2),
+                "sales_by_tier": sales_by_tier,
+                "sales_by_asset": sales_by_asset,
+                "recent_sales": recent_sales,
+                "invoices": {
+                    "total": total_invoices,
+                    "fulfilled": fulfilled_invoices,
+                    "pending": pending_invoices,
+                    "expired": expired_invoices,
+                    "settlement_rate_pct": round(settlement_rate, 1),
+                },
+            },
+            "funnel": funnel_metrics,
+            "recent_activity": recent_activity,
+        }
+
     def revoke_key(self, key_prefix_or_hash: str) -> bool:
         """
         Deactivates an API key by prefix match or exact hash.

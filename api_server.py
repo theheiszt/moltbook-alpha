@@ -9,10 +9,12 @@ import ipaddress
 import secrets
 import re
 import asyncio
+import threading
 import time
 import hashlib
 import hmac
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, status
 from fastapi.exceptions import RequestValidationError
@@ -84,6 +86,9 @@ app = FastAPI(
     description="Agentic Market Intelligence & Quant Insights with Solana Verification",
     version="1.2.0",
 )
+
+SERVER_START_TIME = time.time()
+PROJECT_ROOT = Path(__file__).resolve().parent
 
 
 @app.middleware("http")
@@ -665,6 +670,110 @@ def get_funnel_metrics_endpoint(request: Request, since: Optional[str] = None):
         "funnel_metrics": storage.get_funnel_metrics(since_utc=since),
         "recent_events": storage.get_funnel_events(limit=25),
     }
+
+
+@app.get("/v1/metrics/dashboard")
+def get_dashboard_metrics_endpoint(request: Request):
+    """
+    Returns unified operational dashboard metrics for real-time monitoring:
+    - Connected users (active websockets, in-flight requests, recent callers)
+    - Total users by tier and active status
+    - Total sales count, USD volume, and multi-rail breakdown
+    - Invoice lifecycle and conversion rates
+    - Full conversion funnel telemetry
+    - Real-time audit activity feed
+    """
+    metrics_token = os.getenv("METRICS_BEARER_TOKEN", "").strip()
+    if metrics_token:
+        auth_header = request.headers.get("authorization", "")
+        expected = f"Bearer {metrics_token}"
+        if not hmac.compare_digest(auth_header, expected):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unauthorized access to metrics exposition.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    db_metrics = storage.get_dashboard_metrics()
+
+    # Enrich with real-time in-memory telemetry
+    active_ws = 0
+    if hasattr(microstructure_broadcaster, "active_connections_count"):
+        try:
+            active_ws = microstructure_broadcaster.active_connections_count
+            if callable(active_ws):
+                active_ws = active_ws()
+        except Exception:
+            active_ws = 0
+
+    # In-flight concurrency slots
+    in_flight = 0
+    if hasattr(concurrency_limiter, "_in_flight"):
+        try:
+            with getattr(concurrency_limiter, "_lock", threading.Lock()):
+                in_flight = sum(len(slots) for slots in concurrency_limiter._in_flight.values())
+        except Exception:
+            in_flight = 0
+
+    # Request distribution from Prometheus registry
+    requests_total = 0
+    status_codes = {"2xx": 0, "4xx": 0, "5xx": 0}
+    top_endpoints: Dict[str, int] = {}
+
+    try:
+        with registry._lock:
+            for (m_name, labels_tuple), val in registry._counters.items():
+                if m_name == "moltbook_api_requests_total":
+                    requests_total += int(val)
+                    labels_dict = dict(labels_tuple)
+                    ep = labels_dict.get("endpoint", "other")
+                    code_str = labels_dict.get("status_code", "200")
+                    top_endpoints[ep] = top_endpoints.get(ep, 0) + int(val)
+                    if code_str.startswith("2"):
+                        status_codes["2xx"] += int(val)
+                    elif code_str.startswith("4"):
+                        status_codes["4xx"] += int(val)
+                    elif code_str.startswith("5"):
+                        status_codes["5xx"] += int(val)
+    except Exception:
+        pass
+
+    uptime_sec = round(time.time() - SERVER_START_TIME, 1)
+
+    return {
+        "success": True,
+        "server": {
+            "status": "healthy",
+            "version": "1.2.0",
+            "uptime_seconds": uptime_sec,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+        "connected": {
+            "active_websockets": active_ws,
+            "in_flight_requests": in_flight,
+            "events_last_5m": db_metrics["activity"]["events_last_5m"],
+            "events_last_1h": db_metrics["activity"]["events_last_1h"],
+            "events_last_24h": db_metrics["activity"]["events_last_24h"],
+        },
+        "users": db_metrics["users"],
+        "sales": db_metrics["sales"],
+        "traffic": {
+            "total_requests": requests_total,
+            "status_codes": status_codes,
+            "top_endpoints": sorted(top_endpoints.items(), key=lambda x: x[1], reverse=True)[:8],
+        },
+        "funnel": db_metrics["funnel"],
+        "recent_activity": db_metrics["recent_activity"],
+    }
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def serve_dashboard():
+    """Serves the real-time Moltbook Alpha traffic & operations dashboard."""
+    dashboard_path = PROJECT_ROOT / "dashboard.html"
+    if dashboard_path.exists():
+        return HTMLResponse(content=dashboard_path.read_text(encoding="utf-8"))
+    return HTMLResponse(content="<h1>Dashboard application file not found.</h1>", status_code=404)
 
 
 class CreateInvoiceInput(BaseModel):

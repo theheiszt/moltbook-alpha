@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Moltbook Alpha — Live Traffic & Operations Dashboard</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    /* Pulse badge animation */
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.15); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .pulse-dot {
+      animation: pulse-ring 2s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-[var(--background,#0b0f17)] text-[var(--foreground,#f1f5f9)] antialiased min-h-screen p-4 md:p-6 font-sans">
+  <div class="max-w-7xl mx-auto space-y-6">
+
+    <!-- Top Navigation & Live Controls -->
+    <header class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-4 md:p-5 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-md">
+          M
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg md:text-xl font-bold tracking-tight text-[var(--foreground,#f8fafc)]">Moltbook Alpha</h1>
+            <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-cyan-950/80 text-cyan-400 border border-cyan-800">API v1.2</span>
+            <span id="connectionBadge" class="flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 pulse-dot"></span>
+              <span id="connectionText">ONLINE</span>
+            </span>
+          </div>
+          <p class="text-xs text-[var(--muted-foreground,#94a3b8)]">Real-time Connected Users, Sales Volume, and Traffic Analytics</p>
+        </div>
+      </div>
+
+      <!-- Controls & Gateway Switcher -->
+      <div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+        <div class="flex items-center bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl px-2.5 py-1.5 text-xs">
+          <label for="serverUrl" class="text-[var(--muted-foreground,#94a3b8)] mr-2 font-medium">Gateway:</label>
+          <select id="serverUrl" onchange="onServerChange()" class="bg-transparent text-[var(--foreground,#f8fafc)] focus:outline-none cursor-pointer font-mono">
+            <option value="https://gzip-franklin-gsm-vii.trycloudflare.com" class="bg-slate-900 text-white">Live Ingress (Cloudflare)</option>
+            <option value="http://127.0.0.1:8080" class="bg-slate-900 text-white">Local Node (127.0.0.1:8080)</option>
+            <option value="" class="bg-slate-900 text-white">Custom Origin...</option>
+          </select>
+        </div>
+
+        <div class="flex items-center bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl px-2.5 py-1.5 text-xs">
+          <label for="refreshInterval" class="text-[var(--muted-foreground,#94a3b8)] mr-2 font-medium">Poll:</label>
+          <select id="refreshInterval" onchange="onIntervalChange()" class="bg-transparent text-[var(--foreground,#f8fafc)] focus:outline-none cursor-pointer font-mono">
+            <option value="3000" class="bg-slate-900 text-white">3s</option>
+            <option value="5000" selected class="bg-slate-900 text-white">5s</option>
+            <option value="15000" class="bg-slate-900 text-white">15s</option>
+            <option value="0" class="bg-slate-900 text-white">Manual</option>
+          </select>
+        </div>
+
+        <button onclick="fetchMetrics()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 active:scale-95 text-white text-xs font-semibold transition-all shadow-sm">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+          <span>Refresh</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Custom URL Input (Hidden unless selected) -->
+    <div id="customUrlContainer" class="hidden bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-xl p-3 flex items-center gap-3">
+      <span class="text-xs text-[var(--muted-foreground,#94a3b8)] font-medium">Custom API URL:</span>
+      <input id="customUrlInput" type="text" placeholder="https://api.yourdomain.com" class="flex-1 bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-lg px-3 py-1.5 text-xs text-[var(--foreground,#f8fafc)] focus:outline-none font-mono">
+      <button onclick="applyCustomUrl()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs rounded-lg font-medium">Apply</button>
+    </div>
+
+    <!-- 4 Primary KPI Summary Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+      <!-- KPI 1: Connected Users -->
+      <div class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-5 shadow-sm relative overflow-hidden">
+        <div class="flex items-center justify-between text-[var(--muted-foreground,#94a3b8)] text-xs font-medium uppercase tracking-wider mb-2">
+          <span>Connected Users</span>
+          <span class="p-1 rounded-lg bg-emerald-950/60 text-emerald-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z"></path></svg>
+          </span>
+        </div>
+        <div class="flex items-baseline gap-2">
+          <span id="metricConnectedUsers" class="text-3xl font-extrabold text-[var(--foreground,#f8fafc)] tracking-tight">0</span>
+          <span class="text-xs text-emerald-400 font-medium">Active Now</span>
+        </div>
+        <div class="mt-3 pt-3 border-t border-[var(--border,#222f3e)]/60 flex items-center justify-between text-xs text-[var(--muted-foreground,#94a3b8)]">
+          <span>WebSockets: <strong id="metricWebSockets" class="text-[var(--foreground,#f8fafc)]">0</strong></span>
+          <span>In-Flight: <strong id="metricInFlight" class="text-[var(--foreground,#f8fafc)]">0</strong></span>
+          <span>5m Callers: <strong id="metricActive5m" class="text-[var(--foreground,#f8fafc)]">0</strong></span>
+        </div>
+      </div>
+
+      <!-- KPI 2: Total Users Registered -->
+      <div class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-5 shadow-sm relative overflow-hidden">
+        <div class="flex items-center justify-between text-[var(--muted-foreground,#94a3b8)] text-xs font-medium uppercase tracking-wider mb-2">
+          <span>Total Users</span>
+          <span class="p-1 rounded-lg bg-blue-950/60 text-blue-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+          </span>
+        </div>
+        <div class="flex items-baseline gap-2">
+          <span id="metricTotalUsers" class="text-3xl font-extrabold text-[var(--foreground,#f8fafc)] tracking-tight">0</span>
+          <span id="metricActivePct" class="text-xs text-blue-400 font-medium">0% active</span>
+        </div>
+        <div class="mt-3 pt-3 border-t border-[var(--border,#222f3e)]/60 flex items-center justify-between text-xs text-[var(--muted-foreground,#94a3b8)]">
+          <span>Active: <strong id="metricActiveUsers" class="text-emerald-400">0</strong></span>
+          <span>Revoked: <strong id="metricRevokedUsers" class="text-rose-400">0</strong></span>
+          <span>Tiers: <strong id="metricTiersCount" class="text-[var(--foreground,#f8fafc)]">0</strong></span>
+        </div>
+      </div>
+
+      <!-- KPI 3: Total Sales & Revenue -->
+      <div class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-5 shadow-sm relative overflow-hidden">
+        <div class="flex items-center justify-between text-[var(--muted-foreground,#94a3b8)] text-xs font-medium uppercase tracking-wider mb-2">
+          <span>Total Sales Volume</span>
+          <span class="p-1 rounded-lg bg-amber-950/60 text-amber-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          </span>
+        </div>
+        <div class="flex items-baseline gap-2">
+          <span id="metricTotalSales" class="text-3xl font-extrabold text-[var(--foreground,#f8fafc)] tracking-tight">0</span>
+          <span class="text-xs text-amber-400 font-medium">Completed</span>
+        </div>
+        <div class="mt-3 pt-3 border-t border-[var(--border,#222f3e)]/60 flex items-center justify-between text-xs text-[var(--muted-foreground,#94a3b8)]">
+          <span>Revenue: <strong id="metricTotalRevenue" class="text-emerald-400 font-semibold">$0.00</strong></span>
+          <span>Avg: <strong id="metricAvgOrder" class="text-[var(--foreground,#f8fafc)]">$0.00</strong></span>
+        </div>
+      </div>
+
+      <!-- KPI 4: Invoices & Conversion -->
+      <div class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-5 shadow-sm relative overflow-hidden">
+        <div class="flex items-center justify-between text-[var(--muted-foreground,#94a3b8)] text-xs font-medium uppercase tracking-wider mb-2">
+          <span>Invoice Settlement</span>
+          <span class="p-1 rounded-lg bg-indigo-950/60 text-indigo-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          </span>
+        </div>
+        <div class="flex items-baseline gap-2">
+          <span id="metricConversionRate" class="text-3xl font-extrabold text-[var(--foreground,#f8fafc)] tracking-tight">0%</span>
+          <span class="text-xs text-indigo-400 font-medium">Conversion</span>
+        </div>
+        <div class="mt-3 pt-3 border-t border-[var(--border,#222f3e)]/60 flex items-center justify-between text-xs text-[var(--muted-foreground,#94a3b8)]">
+          <span>Fulfilled: <strong id="metricInvoicesFulfilled" class="text-emerald-400">0</strong></span>
+          <span>Pending: <strong id="metricInvoicesPending" class="text-amber-400">0</strong></span>
+          <span>Expired: <strong id="metricInvoicesExpired" class="text-slate-400">0</strong></span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Conversion Funnel Section -->
+    <div class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-5 shadow-sm">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-sm font-bold text-[var(--foreground,#f8fafc)] uppercase tracking-wider flex items-center gap-2">
+            <span>Customer Conversion Funnel</span>
+            <span class="text-xs font-normal lowercase text-[var(--muted-foreground,#94a3b8)]">(Unmetered Sample &rarr; Paid Autonomous Consumption)</span>
+          </h2>
+        </div>
+        <span id="metricTotalFunnelEvents" class="text-xs font-medium px-2.5 py-1 rounded-lg bg-[var(--background,#0b0f17)] text-[var(--muted-foreground,#94a3b8)] border border-[var(--border,#222f3e)]">
+          0 total events
+        </span>
+      </div>
+
+      <!-- Funnel Steps Visual Grid -->
+      <div class="grid grid-cols-2 md:grid-cols-6 gap-3 text-center" id="funnelStepsContainer">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <!-- Middle Split: Sales Breakdown & Traffic Intelligence -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+      <!-- Left Column: Sales & Tiers -->
+      <div class="space-y-6">
+
+        <!-- Sales by Tier Card -->
+        <div class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--foreground,#f8fafc)]">Sales by Pricing Tier</h3>
+            <span class="text-xs text-[var(--muted-foreground,#94a3b8)]">Volume & Share</span>
+          </div>
+          <div id="tierBreakdownContainer" class="space-y-3">
+            <!-- Dynamic Tier Bars -->
+          </div>
+        </div>
+
+        <!-- Multi-Rail Settlement Card -->
+        <div class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--foreground,#f8fafc)]">Settlement Rails Breakdown</h3>
+            <span class="text-xs text-[var(--muted-foreground,#94a3b8)]">Multi-Rail Routing</span>
+          </div>
+          <div id="railsContainer" class="grid grid-cols-3 gap-3">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Traffic & Endpoints -->
+      <div class="space-y-6">
+
+        <!-- Traffic Breakdown -->
+        <div class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--foreground,#f8fafc)]">Traffic & HTTP Status Codes</h3>
+            <span id="metricTotalRequests" class="text-xs font-medium text-cyan-400">0 requests logged</span>
+          </div>
+
+          <div class="space-y-3 mb-5">
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-emerald-400 font-medium">2xx Success Rate</span>
+                <span id="pctStatus2xx" class="text-[var(--foreground,#f8fafc)] font-semibold">0% (0)</span>
+              </div>
+              <div class="w-full bg-[var(--background,#0b0f17)] rounded-full h-2 overflow-hidden border border-[var(--border,#222f3e)]">
+                <div id="barStatus2xx" class="bg-emerald-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-amber-400 font-medium">4xx Client Errors / Rate Limits</span>
+                <span id="pctStatus4xx" class="text-[var(--foreground,#f8fafc)] font-semibold">0% (0)</span>
+              </div>
+              <div class="w-full bg-[var(--background,#0b0f17)] rounded-full h-2 overflow-hidden border border-[var(--border,#222f3e)]">
+                <div id="barStatus4xx" class="bg-amber-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-rose-400 font-medium">5xx Server Errors</span>
+                <span id="pctStatus5xx" class="text-[var(--foreground,#f8fafc)] font-semibold">0% (0)</span>
+              </div>
+              <div class="w-full bg-[var(--background,#0b0f17)] rounded-full h-2 overflow-hidden border border-[var(--border,#222f3e)]">
+                <div id="barStatus5xx" class="bg-rose-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-4 border-t border-[var(--border,#222f3e)]">
+            <h4 class="text-xs font-semibold text-[var(--muted-foreground,#94a3b8)] uppercase tracking-wider mb-3">Top API Routes</h4>
+            <div id="topEndpointsContainer" class="space-y-2">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Node & Server Health -->
+        <div class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--foreground,#f8fafc)]">Node Infrastructure Health</h3>
+            <span class="text-xs text-emerald-400 font-medium">Verified</span>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+            <div class="bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl p-3">
+              <span class="text-xs text-[var(--muted-foreground,#94a3b8)] block">Server Uptime</span>
+              <span id="metricUptime" class="text-sm font-bold text-[var(--foreground,#f8fafc)] font-mono">0s</span>
+            </div>
+            <div class="bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl p-3">
+              <span class="text-xs text-[var(--muted-foreground,#94a3b8)] block">Storage</span>
+              <span class="text-sm font-bold text-emerald-400 font-mono">SQLite WAL</span>
+            </div>
+            <div class="bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl p-3">
+              <span class="text-xs text-[var(--muted-foreground,#94a3b8)] block">RPC Quorum</span>
+              <span class="text-sm font-bold text-emerald-400 font-mono">3 / 3 Online</span>
+            </div>
+            <div class="bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl p-3">
+              <span class="text-xs text-[var(--muted-foreground,#94a3b8)] block">Ed25519 Witness</span>
+              <span class="text-sm font-bold text-indigo-400 font-mono">Supervisor</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Recent Completed Sales & Live Activity Feed -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+      <!-- Recent Sales Table -->
+      <div class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--foreground,#f8fafc)]">Recent Settled Sales</h3>
+          <span class="text-xs text-[var(--muted-foreground,#94a3b8)]">Blockchain & Feeless Confirmations</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead>
+              <tr class="border-b border-[var(--border,#222f3e)] text-[var(--muted-foreground,#94a3b8)] pb-2">
+                <th class="py-2 font-medium">Tx Signature / Ref</th>
+                <th class="py-2 font-medium">Tier</th>
+                <th class="py-2 font-medium">Asset</th>
+                <th class="py-2 font-medium">Credits</th>
+                <th class="py-2 font-medium text-right">Time</th>
+              </tr>
+            </thead>
+            <tbody id="recentSalesTbody" class="divide-y divide-[var(--border,#222f3e)]/50">
+              <!-- Rendered by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Real-Time Activity Feed -->
+      <div class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--foreground,#f8fafc)]">Live System Activity Stream</h3>
+          <span class="text-xs text-[var(--muted-foreground,#94a3b8)]">Last 25 Events</span>
+        </div>
+        <div id="activityFeedContainer" class="space-y-2.5 max-h-[380px] overflow-y-auto pr-1 font-mono text-xs">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <footer class="pt-4 border-t border-[var(--border,#222f3e)] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[var(--muted-foreground,#94a3b8)]">
+      <div>
+        Moltbook Alpha &copy; 2026. Non-custodial, deterministic agent market intelligence.
+      </div>
+      <div class="flex items-center gap-4">
+        <span>Last updated: <span id="lastUpdatedTime" class="font-mono text-[var(--foreground,#f8fafc)]">Never</span></span>
+        <a href="https://theheiszt.github.io/moltbook-alpha" target="_blank" class="text-cyan-400 hover:underline">Documentation & Portal &rarr;</a>
+      </div>
+    </footer>
+
+  </div>
+
+  <script>
+    let pollTimer = null;
+    let currentBaseUrl = "https://gzip-franklin-gsm-vii.trycloudflare.com";
+
+    function onServerChange() {
+      const select = document.getElementById("serverUrl");
+      const customContainer = document.getElementById("customUrlContainer");
+      if (select.value === "") {
+        customContainer.classList.remove("hidden");
+      } else {
+        customContainer.classList.add("hidden");
+        currentBaseUrl = select.value;
+        fetchMetrics();
+      }
+    }
+
+    function applyCustomUrl() {
+      const input = document.getElementById("customUrlInput").value.trim();
+      if (input) {
+        currentBaseUrl = input.replace(/\/+$/, "");
+        fetchMetrics();
+      }
+    }
+
+    function onIntervalChange() {
+      const ms = parseInt(document.getElementById("refreshInterval").value, 10);
+      if (pollTimer) clearInterval(pollTimer);
+      if (ms > 0) {
+        pollTimer = setInterval(fetchMetrics, ms);
+      }
+    }
+
+    function formatTimeAgo(isoString) {
+      if (!isoString) return "N/A";
+      try {
+        const d = new Date(isoString);
+        const now = new Date();
+        const diffSec = Math.floor((now - d) / 1000);
+        if (diffSec < 5) return "just now";
+        if (diffSec < 60) return `${diffSec}s ago`;
+        const diffMin = Math.floor(diffSec / 60);
+        if (diffMin < 60) return `${diffMin}m ago`;
+        const diffHr = Math.floor(diffMin / 60);
+        if (diffHr < 24) return `${diffHr}h ago`;
+        return `${Math.floor(diffHr / 24)}d ago`;
+      } catch (e) {
+        return isoString;
+      }
+    }
+
+    function formatDuration(sec) {
+      if (!sec) return "0s";
+      const s = Math.floor(sec);
+      const hrs = Math.floor(s / 3600);
+      const mins = Math.floor((s % 3600) / 60);
+      const secs = s % 60;
+      if (hrs > 0) return `${hrs}h ${mins}m`;
+      if (mins > 0) return `${mins}m ${secs}s`;
+      return `${secs}s`;
+    }
+
+    async function fetchMetrics() {
+      const badge = document.getElementById("connectionBadge");
+      const badgeText = document.getElementById("connectionText");
+
+      try {
+        const url = `${currentBaseUrl}/v1/metrics/dashboard`;
+        const resp = await fetch(url, { headers: { "Accept": "application/json" } });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+
+        // Mark online
+        badge.className = "flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800";
+        badgeText.textContent = "ONLINE";
+
+        renderDashboard(data);
+        document.getElementById("lastUpdatedTime").textContent = new Date().toLocaleTimeString();
+      } catch (err) {
+        console.error("Dashboard fetch error:", err);
+        badge.className = "flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-full bg-rose-950/80 text-rose-400 border border-rose-800";
+        badgeText.textContent = "DISCONNECTED";
+      }
+    }
+
+    function renderDashboard(data) {
+      const connected = data.connected || {};
+      const users = data.users || {};
+      const sales = data.sales || {};
+      const traffic = data.traffic || {};
+      const funnel = data.funnel || {};
+      const server = data.server || {};
+      const recentActivity = data.recent_activity || [];
+
+      // 1. Connected Users
+      const activeWs = connected.active_websockets || 0;
+      const inFlight = connected.in_flight_requests || 0;
+      const act5m = connected.events_last_5m || 0;
+      const totalConnected = activeWs + (act5m > 0 ? act5m : (inFlight > 0 ? inFlight : 0));
+
+      document.getElementById("metricConnectedUsers").textContent = totalConnected;
+      document.getElementById("metricWebSockets").textContent = activeWs;
+      document.getElementById("metricInFlight").textContent = inFlight;
+      document.getElementById("metricActive5m").textContent = act5m;
+
+      // 2. Total Users
+      const totalUsers = users.total_users || 0;
+      const activeUsers = users.active_users || 0;
+      const revokedUsers = users.revoked_users || 0;
+      const activePct = totalUsers > 0 ? Math.round((activeUsers / totalUsers) * 100) : 0;
+
+      document.getElementById("metricTotalUsers").textContent = totalUsers.toLocaleString();
+      document.getElementById("metricActivePct").textContent = `${activePct}% active`;
+      document.getElementById("metricActiveUsers").textContent = activeUsers.toLocaleString();
+      document.getElementById("metricRevokedUsers").textContent = revokedUsers.toLocaleString();
+      document.getElementById("metricTiersCount").textContent = Object.keys(users.users_by_tier || {}).length;
+
+      // 3. Total Sales & Revenue
+      const salesCount = sales.total_sales_count || 0;
+      const revUsd = sales.total_revenue_usd || 0.0;
+      const avgOrder = salesCount > 0 ? (revUsd / salesCount).toFixed(2) : "0.00";
+
+      document.getElementById("metricTotalSales").textContent = salesCount.toLocaleString();
+      document.getElementById("metricTotalRevenue").textContent = `$${revUsd.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+      document.getElementById("metricAvgOrder").textContent = `$${avgOrder}`;
+
+      // 4. Invoices & Conversion
+      const inv = sales.invoices || {};
+      const ratePct = inv.settlement_rate_pct !== undefined ? inv.settlement_rate_pct : 0.0;
+      document.getElementById("metricConversionRate").textContent = `${ratePct}%`;
+      document.getElementById("metricInvoicesFulfilled").textContent = (inv.fulfilled || 0).toLocaleString();
+      document.getElementById("metricInvoicesPending").textContent = (inv.pending || 0).toLocaleString();
+      document.getElementById("metricInvoicesExpired").textContent = (inv.expired || 0).toLocaleString();
+
+      // 5. Funnel Steps
+      renderFunnel(funnel);
+
+      // 6. Sales by Tier
+      renderTiers(sales.sales_by_tier || {});
+
+      // 7. Settlement Rails
+      renderRails(sales.sales_by_asset || {});
+
+      // 8. Traffic
+      renderTraffic(traffic);
+
+      // 9. Server Uptime
+      document.getElementById("metricUptime").textContent = formatDuration(server.uptime_seconds || 0);
+
+      // 10. Recent Sales Table
+      renderRecentSales(sales.recent_sales || []);
+
+      // 11. Activity Stream
+      renderActivityFeed(recentActivity);
+    }
+
+    function renderFunnel(funnel) {
+      const container = document.getElementById("funnelStepsContainer");
+      document.getElementById("metricTotalFunnelEvents").textContent = `${(funnel.total_events || 0).toLocaleString()} events`;
+
+      const stages = [
+        { key: "sample_viewed", label: "Sample Viewed", color: "from-cyan-600 to-cyan-500", desc: "Evaluation" },
+        { key: "invoice_created", label: "Invoice Created", color: "from-blue-600 to-blue-500", desc: "Checkout" },
+        { key: "payment_verified", label: "Payment Verified", color: "from-indigo-600 to-indigo-500", desc: "Settlement" },
+        { key: "key_delivered", label: "Key Delivered", color: "from-purple-600 to-purple-500", desc: "Provisioned" },
+        { key: "first_query", label: "First Query", color: "from-emerald-600 to-emerald-500", desc: "Active Consumption" },
+        { key: "topup_purchased", label: "Top-Up / Repeat", color: "from-amber-600 to-amber-500", desc: "Expansion" }
+      ];
+
+      container.innerHTML = stages.map(s => {
+        const val = funnel[s.key] || 0;
+        return `
+          <div class="bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl p-3 flex flex-col justify-between">
+            <span class="text-[11px] text-[var(--muted-foreground,#94a3b8)] font-medium truncate">${s.label}</span>
+            <div class="my-2">
+              <span class="text-xl font-bold text-[var(--foreground,#f8fafc)]">${val.toLocaleString()}</span>
+            </div>
+            <span class="text-[10px] text-cyan-400 font-medium">${s.desc}</span>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderTiers(tiersMap) {
+      const container = document.getElementById("tierBreakdownContainer");
+      const entries = Object.entries(tiersMap);
+      if (entries.length === 0) {
+        container.innerHTML = `<p class="text-xs text-[var(--muted-foreground,#94a3b8)]">No sales recorded yet.</p>`;
+        return;
+      }
+
+      const maxVal = Math.max(...entries.map(e => e[1]), 1);
+
+      const tierLabels = {
+        "tier_micro": "Micro ($0.25 feeless Nano)",
+        "tier_starter": "Starter ($1.00 USDC/SOL)",
+        "starter": "Starter Pack ($1.00)",
+        "tier_pro": "Pro Pack ($5.00)",
+        "tier_premium": "Premium Allocation ($20.00)",
+        "topup_500": "Top-Up 500 Credits ($8.00)",
+        "topup_1500": "Top-Up 1,500 Credits ($20.00)",
+        "topup_5000": "Top-Up 5,000 Credits ($50.00)"
+      };
+
+      container.innerHTML = entries.map(([tier, count]) => {
+        const pct = Math.round((count / maxVal) * 100);
+        const label = tierLabels[tier] || tier;
+        return `
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-[var(--foreground,#f8fafc)] font-medium">${label}</span>
+              <span class="text-cyan-400 font-semibold">${count.toLocaleString()} sales</span>
+            </div>
+            <div class="w-full bg-[var(--background,#0b0f17)] rounded-full h-2 overflow-hidden border border-[var(--border,#222f3e)]">
+              <div class="bg-gradient-to-r from-cyan-500 to-indigo-500 h-2 rounded-full" style="width: ${pct}%"></div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderRails(railsMap) {
+      const container = document.getElementById("railsContainer");
+      const railConfig = [
+        { id: "USDC", name: "Solana USDC", badge: "SPL Micro", color: "text-blue-400" },
+        { id: "SOL", name: "Native SOL", badge: "Lamports", color: "text-purple-400" },
+        { id: "XNO", name: "Feeless Nano", badge: "Zero Gas", color: "text-emerald-400" }
+      ];
+
+      container.innerHTML = railConfig.map(r => {
+        const data = railsMap[r.id] || { count: 0, revenue_usd: 0.0 };
+        return `
+          <div class="bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl p-3 text-center">
+            <span class="text-xs font-semibold ${r.color} block">${r.name}</span>
+            <span class="text-lg font-bold text-[var(--foreground,#f8fafc)] block my-1">${data.count.toLocaleString()}</span>
+            <span class="text-[11px] text-[var(--muted-foreground,#94a3b8)] font-mono">$${data.revenue_usd.toFixed(2)} USD</span>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderTraffic(traffic) {
+      document.getElementById("metricTotalRequests").textContent = `${(traffic.total_requests || 0).toLocaleString()} requests`;
+
+      const codes = traffic.status_codes || {};
+      const s2 = codes["2xx"] || 0;
+      const s4 = codes["4xx"] || 0;
+      const s5 = codes["5xx"] || 0;
+      const total = s2 + s4 + s5 || 1;
+
+      const p2 = Math.round((s2 / total) * 100);
+      const p4 = Math.round((s4 / total) * 100);
+      const p5 = Math.round((s5 / total) * 100);
+
+      document.getElementById("pctStatus2xx").textContent = `${p2}% (${s2.toLocaleString()})`;
+      document.getElementById("barStatus2xx").style.width = `${p2}%`;
+
+      document.getElementById("pctStatus4xx").textContent = `${p4}% (${s4.toLocaleString()})`;
+      document.getElementById("barStatus4xx").style.width = `${p4}%`;
+
+      document.getElementById("pctStatus5xx").textContent = `${p5}% (${s5.toLocaleString()})`;
+      document.getElementById("barStatus5xx").style.width = `${p5}%`;
+
+      // Top routes
+      const container = document.getElementById("topEndpointsContainer");
+      const routes = traffic.top_endpoints || [];
+      if (routes.length === 0) {
+        container.innerHTML = `<span class="text-xs text-[var(--muted-foreground,#94a3b8)]">No endpoint metrics recorded yet.</span>`;
+        return;
+      }
+
+      container.innerHTML = routes.map(([ep, count]) => `
+        <div class="flex items-center justify-between text-xs py-1 border-b border-[var(--border,#222f3e)]/40 font-mono">
+          <span class="text-[var(--foreground,#f8fafc)] truncate max-w-[240px]">${ep}</span>
+          <span class="text-cyan-400 font-semibold">${count.toLocaleString()} hits</span>
+        </div>
+      `).join("");
+    }
+
+    function renderRecentSales(salesList) {
+      const tbody = document.getElementById("recentSalesTbody");
+      if (salesList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-xs text-[var(--muted-foreground,#94a3b8)]">No sales recorded yet.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = salesList.map(s => {
+        const sig = s.tx_signature || "N/A";
+        const shortSig = sig.length > 16 ? `${sig.slice(0, 8)}...${sig.slice(-6)}` : sig;
+        return `
+          <tr class="hover:bg-[var(--background,#0b0f17)]/50 font-mono">
+            <td class="py-2.5 text-cyan-400 font-semibold" title="${sig}">${shortSig}</td>
+            <td class="py-2.5 text-[var(--foreground,#f8fafc)]">${s.tier || "N/A"}</td>
+            <td class="py-2.5 text-indigo-400 font-bold">${s.asset || "USDC"}</td>
+            <td class="py-2.5 text-emerald-400 font-semibold">${(s.credits_granted || 0).toLocaleString()}</td>
+            <td class="py-2.5 text-right text-[var(--muted-foreground,#94a3b8)]">${formatTimeAgo(s.redeemed_at)}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function renderActivityFeed(feed) {
+      const container = document.getElementById("activityFeedContainer");
+      if (feed.length === 0) {
+        container.innerHTML = `<div class="p-4 text-center text-xs text-[var(--muted-foreground,#94a3b8)]">No system events logged.</div>`;
+        return;
+      }
+
+      const getBadgeClass = (type) => {
+        if (type.includes("success") || type.includes("connected")) return "bg-emerald-950 text-emerald-400 border-emerald-800";
+        if (type.includes("failed") || type.includes("error") || type.includes("replay")) return "bg-rose-950 text-rose-400 border-rose-800";
+        if (type.includes("invoice") || type.includes("key")) return "bg-blue-950 text-blue-400 border-blue-800";
+        if (type.includes("warning") || type.includes("threshold")) return "bg-amber-950 text-amber-400 border-amber-800";
+        return "bg-slate-900 text-slate-400 border-slate-700";
+      };
+
+      container.innerHTML = feed.map(item => `
+        <div class="p-2.5 rounded-xl bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] flex flex-col gap-1">
+          <div class="flex items-center justify-between gap-2">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${getBadgeClass(item.event_type)}">
+              ${item.event_type}
+            </span>
+            <span class="text-[10px] text-[var(--muted-foreground,#94a3b8)]">${formatTimeAgo(item.created_at)}</span>
+          </div>
+          <p class="text-[11px] text-[var(--foreground,#f8fafc)] break-words mt-0.5">${item.detail || "No details"}</p>
+        </div>
+      `).join("");
+    }
+
+    // Initialize on load
+    window.addEventListener("DOMContentLoaded", () => {
+      fetchMetrics();
+      onIntervalChange();
+    });
+  </script>
+</body>
+</html>

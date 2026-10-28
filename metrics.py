@@ -22,7 +22,10 @@ ALLOWED_RPC_OUTCOMES = {"success", "rate_limited_429", "timeout", "error", "unkn
 ALLOWED_HTTP_METHODS = {"GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "UNKNOWN"}
 KNOWN_NORMALIZED_ENDPOINTS = {
     "/",
+    "/dashboard",
     "/metrics",
+    "/v1/metrics/dashboard",
+    "/v1/metrics/funnel",
     "/v1/health",
     "/v1/payments/config",
     "/v1/payments/verify-solana",
