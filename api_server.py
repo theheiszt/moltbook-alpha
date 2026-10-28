@@ -1485,13 +1485,22 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
             f"Replay detected for sig={sig[:16]}..., returning existing key {existing_redemption['key_prefix']}",
             ip_address=client_ip,
         )
+        recovered_key = None
+        inv_id = existing_redemption.get("invoice_id") or req.invoice_id
+        if req.claim_secret and inv_id:
+            try:
+                claim_res = storage.claim_invoice_credential(inv_id, req.claim_secret)
+                recovered_key = claim_res.get("api_key")
+            except Exception:
+                pass
         return {
             "success": True,
             "message": "Key previously redeemed for this transaction signature.",
+            "api_key": recovered_key,
             "key_prefix": existing_redemption["key_prefix"],
             "tier": existing_redemption["tier"],
             "credits": existing_redemption["remaining_credits"],
-            "invoice_id": existing_redemption.get("invoice_id") or req.invoice_id,
+            "invoice_id": inv_id,
         }
 
     # Resolve invoice
@@ -1509,29 +1518,64 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
             )
         if invoice["status"] == "fulfilled":
             redemption = storage.get_payment_redemption(invoice.get("tx_signature") or sig)
+            recovered_key = None
+            if req.claim_secret:
+                try:
+                    claim_res = storage.claim_invoice_credential(invoice["invoice_id"], req.claim_secret)
+                    recovered_key = claim_res.get("api_key")
+                except Exception:
+                    pass
             return {
                 "success": True,
                 "message": "Invoice was already fulfilled.",
+                "api_key": recovered_key,
                 "key_prefix": redemption["key_prefix"] if redemption else "",
                 "tier": invoice["tier"],
                 "credits": invoice["credits"],
                 "invoice_id": invoice["invoice_id"],
             }
-        if invoice["status"] == "expired":
+        now_iso = datetime.now(timezone.utc).isoformat()
+        is_expired = (invoice["status"] == "expired" or now_iso > invoice["expires_at"])
+        if is_expired:
+            try:
+                exp_verifier = SolanaPaymentVerifier(
+                    max_age_seconds=cfg.get("max_age_seconds", 3600),
+                    require_consensus=False,
+                )
+                exp_payment = exp_verifier.verify_payment(
+                    sig,
+                    requested_tier=invoice["tier"],
+                    expected_payer=req.expected_payer,
+                    expected_reference=invoice["reference"],
+                )
+                unm = storage.record_unmatched_payment(
+                    rail="solana",
+                    tx_signature=exp_payment.tx_signature,
+                    payer_wallet=exp_payment.payer,
+                    asset=exp_payment.asset,
+                    amount_raw=exp_payment.amount_raw,
+                    expected_amount_raw=invoice["amount_raw"],
+                    reason="EXPIRED_INVOICE_PAID",
+                )
+                raise ApiError(
+                    code=ErrorCode.INVOICE_EXPIRED,
+                    status_code=400,
+                    message=f"Invoice '{req.invoice_id}' has expired. Valid on-chain transfer detected and held in unmatched ledger ({unm['unmatched_id']}) for refund.",
+                    outcome=OperationOutcome.NOT_COMMITTED,
+                    state_effect="recorded_unmatched",
+                    recovery_action=RecoveryAction.CREATE_NEW_INVOICE,
+                    details={
+                        "unmatched_id": unm["unmatched_id"],
+                        "refund_endpoint": f"POST /v1/payments/refund/{unm['unmatched_id']}",
+                    },
+                )
+            except (VerificationError, RPCError):
+                pass
+
             raise ApiError(
                 code=ErrorCode.INVOICE_EXPIRED,
                 status_code=400,
                 message=f"Invoice '{req.invoice_id}' has expired. Please create a new invoice.",
-                outcome=OperationOutcome.NOT_COMMITTED,
-                state_effect="none",
-                recovery_action=RecoveryAction.CREATE_NEW_INVOICE,
-            )
-        now_iso = datetime.now(timezone.utc).isoformat()
-        if now_iso > invoice["expires_at"]:
-            raise ApiError(
-                code=ErrorCode.INVOICE_EXPIRED,
-                status_code=400,
-                message=f"Invoice '{req.invoice_id}' expired at {invoice['expires_at']}.",
                 outcome=OperationOutcome.NOT_COMMITTED,
                 state_effect="none",
                 recovery_action=RecoveryAction.CREATE_NEW_INVOICE,
@@ -1608,24 +1652,50 @@ def verify_solana_payment(req: VerifyPaymentInput, request: Request, response: R
 
     # Verify payment matches invoice asset and amount
     if payment.asset != invoice["asset"]:
+        unm = storage.record_unmatched_payment(
+            rail="solana",
+            tx_signature=payment.tx_signature,
+            payer_wallet=payment.payer,
+            asset=payment.asset,
+            amount_raw=payment.amount_raw,
+            expected_amount_raw=invoice["amount_raw"],
+            reason=f"ASSET_MISMATCH: expected {invoice['asset']}, received {payment.asset}",
+        )
         raise ApiError(
             code=ErrorCode.PAYMENT_VERIFICATION_FAILED,
             status_code=400,
             retryable=False,
             outcome=OperationOutcome.NOT_COMMITTED,
-            state_effect="none",
+            state_effect="recorded_unmatched",
             recovery_action=RecoveryAction.CREATE_NEW_INVOICE,
-            message=f"Payment asset '{payment.asset}' does not match invoice expected asset '{invoice['asset']}'.",
+            message=f"Payment asset '{payment.asset}' does not match invoice expected asset '{invoice['asset']}'. Recorded in unmatched ledger: {unm['unmatched_id']}",
+            details={
+                "unmatched_id": unm["unmatched_id"],
+                "refund_endpoint": f"POST /v1/payments/refund/{unm['unmatched_id']}",
+            },
         )
     if payment.amount_raw < invoice["amount_raw"]:
+        unm = storage.record_unmatched_payment(
+            rail="solana",
+            tx_signature=payment.tx_signature,
+            payer_wallet=payment.payer,
+            asset=payment.asset,
+            amount_raw=payment.amount_raw,
+            expected_amount_raw=invoice["amount_raw"],
+            reason="UNDERPAID_AMOUNT",
+        )
         raise ApiError(
             code=ErrorCode.PAYMENT_VERIFICATION_FAILED,
             status_code=400,
             retryable=False,
             outcome=OperationOutcome.NOT_COMMITTED,
-            state_effect="none",
+            state_effect="recorded_unmatched",
             recovery_action=RecoveryAction.CREATE_NEW_INVOICE,
-            message=f"Payment amount ({payment.amount_raw}) is below the minimum invoice required amount ({invoice['amount_raw']}).",
+            message=f"Payment amount ({payment.amount_raw}) is below the minimum required amount ({invoice['amount_raw']}). Recorded in unmatched ledger: {unm['unmatched_id']}",
+            details={
+                "unmatched_id": unm["unmatched_id"],
+                "refund_endpoint": f"POST /v1/payments/refund/{unm['unmatched_id']}",
+            },
         )
 
     # Atomic fulfillment and redemption
@@ -2219,6 +2289,9 @@ def get_data_product_latest(
     pair: Optional[str] = None,
     asset: Optional[str] = None,
     min_confidence: Optional[float] = None,
+    evidence_level: Optional[str] = None,
+    category: Optional[str] = None,
+    limit: Optional[int] = None,
 ):
     """
     Agent Data Exchange: Retrieves the latest structured snapshot for a data product.
@@ -2389,6 +2462,12 @@ def get_data_product_latest(
             params["asset"] = asset
         if min_confidence is not None:
             params["min_confidence"] = min_confidence
+        if evidence_level is not None:
+            params["evidence_level"] = evidence_level
+        if category is not None:
+            params["category"] = category
+        if limit is not None:
+            params["limit"] = limit
 
         snapshot = data_product_exchange.generate_snapshot(
             product_id=product_id,

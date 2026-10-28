@@ -141,7 +141,7 @@ TOOLS_DEFINITION = [
     },
     {
         "name": "get_data_product_snapshot",
-        "description": "Retrieves the latest validated structured snapshot of a data product with atomic 1-credit settlement, idempotency, and cryptographic receipt.",
+        "description": "Retrieves the latest validated structured snapshot of a data product with atomic 1-credit settlement, idempotency, evidence quality tiering, and cryptographic receipt.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -152,6 +152,15 @@ TOOLS_DEFINITION = [
                 "idempotency_key": {
                     "type": "string",
                     "description": "Optional client token preventing double charges on network retries.",
+                },
+                "evidence_level": {
+                    "type": "string",
+                    "enum": ["OBSERVED_FACT", "INFERRED_CONCLUSION", "UNVERIFIED_CLAIM"],
+                    "description": "Filter findings by evidence verification tier.",
+                },
+                "category": {
+                    "type": "string",
+                    "description": "Optional category filter (e.g. security_vulnerability, trading_alpha).",
                 },
             },
             "required": ["product_id"],
@@ -255,6 +264,8 @@ class MoltbookMCPServer:
                 snap = self.client.get_data_product_latest(
                     product_id=args["product_id"],
                     idempotency_key=args.get("idempotency_key"),
+                    evidence_level=args.get("evidence_level"),
+                    category=args.get("category"),
                 )
                 text = json.dumps(snap, indent=2)
             elif tool_name == "get_account_usage":

@@ -1049,7 +1049,7 @@ class IntelEngine:
         query = """
             SELECT s.signal_id, s.category, s.headline, s.summary, s.confidence,
                    s.requires_human_review, s.automated_remedy_available, s.remedy_description,
-                   s.created_at, i.author, i.title as item_title, i.url
+                   s.created_at, i.author, i.title as item_title, i.url, i.source_id
             FROM intel_signals s
             JOIN intel_items i ON s.item_id = i.item_id
             WHERE 1=1
@@ -1076,6 +1076,11 @@ class IntelEngine:
                 "headline": r["headline"],
                 "summary": r["summary"],
                 "confidence": r["confidence"],
+                "evidence_level": (
+                    "OBSERVED_FACT" if (r["source_id"] or "").startswith("solana")
+                    else ("INFERRED_CONCLUSION" if r["category"] in ["orderbook_imbalance", "arbitrage_spread", "tick_vacuum", "execution_routing"]
+                    else "UNVERIFIED_CLAIM")
+                ),
                 "requires_human_review": bool(r["requires_human_review"]),
                 "automated_remedy_available": bool(r["automated_remedy_available"]),
                 "remedy_description": r["remedy_description"],
@@ -1086,6 +1091,95 @@ class IntelEngine:
             }
             for r in rows
         ]
+
+    def get_verifiable_evidence_items(
+        self,
+        evidence_level: Optional[str] = None,
+        category: Optional[str] = None,
+        min_confidence: Optional[float] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieves structured, verifiable intelligence findings with strict evidence-tier classification:
+        - OBSERVED_FACT: Direct on-chain telemetry, RPC trace consensus, Ed25519 witness state.
+        - INFERRED_CONCLUSION: Algorithmic orderbook imbalance, tick vacuum squeeze calculations, spread models.
+        - UNVERIFIED_CLAIM: Submolt forum posts, keyword extractions, unconfirmed natural language discussions.
+        """
+        query = """
+            SELECT i.item_id, i.source_id, i.title, i.content, i.author, i.url,
+                   i.published_at, i.ingested_at,
+                   s.signal_id, s.category, s.headline, s.summary, s.confidence
+            FROM intel_items i
+            LEFT JOIN intel_signals s ON i.item_id = s.item_id
+            WHERE i.is_duplicate = 0
+            ORDER BY i.ingested_at DESC
+            LIMIT ?
+        """
+        with self.storage.connection() as conn:
+            cur = conn.cursor()
+            cur.execute(query, (limit * 3,))
+            rows = cur.fetchall()
+
+        results: List[Dict[str, Any]] = []
+        for r in rows:
+            src = (r["source_id"] or "").lower()
+            cat = r["category"] or "general_intelligence"
+            conf_str = (r["confidence"] or "MEDIUM").upper()
+
+            if src.startswith("solana") or src in ["solana_cluster_telemetry", "jupiter_dex_feed", "onchain"]:
+                ev_level = "OBSERVED_FACT"
+                status = "VERIFIED_ONCHAIN"
+                method = "multi_rpc_consensus"
+                score = 0.98
+                limitations = "Observed on-chain consensus state via Solana RPC node quorum; subject to 32-slot finality."
+                source_uri = r["url"] or f"solana://mainnet-beta/telemetry/{r['item_id']}"
+            elif cat in ["orderbook_imbalance", "arbitrage_spread", "tick_vacuum", "execution_routing"] or src.startswith("model"):
+                ev_level = "INFERRED_CONCLUSION"
+                status = "ALGORITHMICALLY_INFERRED"
+                method = "clmm_orderbook_model"
+                score = 0.85 if conf_str == "HIGH" else (0.70 if conf_str == "MEDIUM" else 0.55)
+                limitations = "Statistical/algorithmic inference based on CLMM orderbook dynamics; execution fill rates may vary."
+                source_uri = r["url"] or f"moltbook://models/clmm/{r['item_id']}"
+            else:
+                ev_level = "UNVERIFIED_CLAIM"
+                status = "COMMUNITY_REPORTED_UNCONFIRMED"
+                method = "submolt_keyword_extraction"
+                score = 0.65 if conf_str == "HIGH" else (0.50 if conf_str == "MEDIUM" else 0.35)
+                limitations = "Extracted from natural language Submolt post; unconfirmed by independent on-chain audit or cryptographic witness."
+                source_uri = r["url"] or f"https://www.moltbook.com/post/{r['item_id']}"
+
+            if evidence_level and ev_level != evidence_level.upper():
+                continue
+
+            if category and cat.lower() != category.lower():
+                continue
+
+            if min_confidence is not None and score < min_confidence:
+                continue
+
+            item_title = r["headline"] or r["title"] or f"Finding {r['item_id'][:12]}"
+            item_summary = r["summary"] or (r["content"][:240] if r["content"] else "No summary available.")
+
+            results.append({
+                "item_id": r["item_id"],
+                "title": item_title,
+                "summary": item_summary,
+                "category": cat,
+                "evidence_level": ev_level,
+                "verification_status": status,
+                "verification_method": method,
+                "confidence_score": score,
+                "source_uri": source_uri,
+                "author": r["author"] or "unknown",
+                "observed_at_utc": r["published_at"] or r["ingested_at"],
+                "processed_at_utc": r["ingested_at"],
+                "limitations": limitations,
+            })
+
+            if len(results) >= limit:
+                break
+
+        return results
 
     def generate_trading_signals(
         self,

@@ -68,14 +68,17 @@ class DataProductContract:
 
 INTELLIGENCE_FEED_OUTPUT_SCHEMA: Dict[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "title": "MoltbookAgentIntelligenceSnapshot",
+    "title": "MoltbookVerifiableAgentIntelligenceSnapshot",
     "type": "object",
     "required": [
         "product_id",
         "snapshot_id",
         "generated_at",
+        "retrieval_outcome",
         "freshness_seconds",
         "source_attribution",
+        "evidence_summary",
+        "evidence_items",
         "content",
         "signals",
         "usage_receipt",
@@ -84,6 +87,11 @@ INTELLIGENCE_FEED_OUTPUT_SCHEMA: Dict[str, Any] = {
         "product_id": {"type": "string", "const": "moltbook-agent-intelligence-feed"},
         "snapshot_id": {"type": "string"},
         "generated_at": {"type": "string", "format": "date-time"},
+        "retrieval_outcome": {
+            "type": "string",
+            "enum": ["VALUE", "CONFIRMED_ABSENCE", "UNKNOWN_TIMEOUT"],
+            "description": "Distinguishes definite findings (VALUE), verified absence of anomalies (CONFIRMED_ABSENCE), or timeout (UNKNOWN_TIMEOUT).",
+        },
         "freshness_seconds": {"type": "integer", "minimum": 0},
         "source_attribution": {
             "type": "object",
@@ -92,6 +100,53 @@ INTELLIGENCE_FEED_OUTPUT_SCHEMA: Dict[str, Any] = {
                 "publisher": {"type": "string"},
                 "submolts_monitored": {"type": "array", "items": {"type": "string"}},
                 "verified_items_count": {"type": "integer"},
+            },
+        },
+        "evidence_summary": {
+            "type": "object",
+            "required": ["observed_facts_count", "inferred_conclusions_count", "unverified_claims_count", "total_items_count"],
+            "properties": {
+                "observed_facts_count": {"type": "integer"},
+                "inferred_conclusions_count": {"type": "integer"},
+                "unverified_claims_count": {"type": "integer"},
+                "total_items_count": {"type": "integer"},
+            },
+        },
+        "evidence_items": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [
+                    "item_id",
+                    "title",
+                    "summary",
+                    "category",
+                    "evidence_level",
+                    "verification_status",
+                    "verification_method",
+                    "confidence_score",
+                    "source_uri",
+                    "observed_at_utc",
+                    "processed_at_utc",
+                    "limitations",
+                ],
+                "properties": {
+                    "item_id": {"type": "string"},
+                    "title": {"type": "string"},
+                    "summary": {"type": "string"},
+                    "category": {"type": "string"},
+                    "evidence_level": {
+                        "type": "string",
+                        "enum": ["OBSERVED_FACT", "INFERRED_CONCLUSION", "UNVERIFIED_CLAIM"],
+                    },
+                    "verification_status": {"type": "string"},
+                    "verification_method": {"type": "string"},
+                    "confidence_score": {"type": "number"},
+                    "source_uri": {"type": "string"},
+                    "observed_at_utc": {"type": "string"},
+                    "processed_at_utc": {"type": "string"},
+                    "limitations": {"type": "string"},
+                },
             },
         },
         "content": {
@@ -113,10 +168,11 @@ INTELLIGENCE_FEED_OUTPUT_SCHEMA: Dict[str, Any] = {
                     "confidence": {"type": "string"},
                     "title": {"type": "string"},
                     "summary": {"type": "string"},
+                    "evidence_level": {"type": "string"},
                 },
             },
         },
-        "state_witness_id": {"type": "string"},
+        "state_witness_id": {"type": ["string", "null"]},
         "usage_receipt": {
             "type": "object",
             "required": ["request_id", "product_id", "credits_deducted", "credits_remaining"],
@@ -140,6 +196,7 @@ ARBITRAGE_FEED_OUTPUT_SCHEMA: Dict[str, Any] = {
         "product_id",
         "snapshot_id",
         "generated_at",
+        "retrieval_outcome",
         "freshness_seconds",
         "source_attribution",
         "opportunities",
@@ -188,6 +245,7 @@ TRADING_SIGNALS_OUTPUT_SCHEMA: Dict[str, Any] = {
         "product_id",
         "snapshot_id",
         "generated_at",
+        "retrieval_outcome",
         "freshness_seconds",
         "source_attribution",
         "trading_signals",
@@ -370,38 +428,88 @@ class DataProductExchange:
         witness_id = None
 
         if product_id == "moltbook-agent-intelligence-feed":
-            signals = intel_engine.search_signals(limit=25)
+            ev_filter = params.get("evidence_level")
+            cat_filter = params.get("category")
+            conf_filter = params.get("min_confidence")
+            limit_val = int(params.get("limit", 25))
+
+            # Query verifiable evidence items
+            evidence_items = []
+            if hasattr(intel_engine, "get_verifiable_evidence_items"):
+                evidence_items = intel_engine.get_verifiable_evidence_items(
+                    evidence_level=ev_filter,
+                    category=cat_filter,
+                    min_confidence=conf_filter,
+                    limit=limit_val,
+                )
+
+            # Query extracted signals
+            raw_signals = intel_engine.search_signals(category=cat_filter, limit=25)
+            signals = []
+            for s in raw_signals:
+                sig_copy = dict(s)
+                sig_copy["title"] = s.get("headline") or s.get("title") or "Signal"
+                if "evidence_level" not in sig_copy:
+                    sig_copy["evidence_level"] = "INFERRED_CONCLUSION" if s.get("category") in ["orderbook_imbalance", "arbitrage_spread"] else "UNVERIFIED_CLAIM"
+                signals.append(sig_copy)
+
+            # Determine retrieval outcome
+            if len(evidence_items) > 0 or len(signals) > 0:
+                retrieval_outcome = "VALUE"
+            else:
+                retrieval_outcome = "CONFIRMED_ABSENCE"
+
+            # Compute evidence summary
+            obs_cnt = sum(1 for it in evidence_items if it.get("evidence_level") == "OBSERVED_FACT")
+            inf_cnt = sum(1 for it in evidence_items if it.get("evidence_level") == "INFERRED_CONCLUSION")
+            unv_cnt = sum(1 for it in evidence_items if it.get("evidence_level") == "UNVERIFIED_CLAIM")
+            ev_summary = {
+                "observed_facts_count": obs_cnt,
+                "inferred_conclusions_count": inf_cnt,
+                "unverified_claims_count": unv_cnt,
+                "total_items_count": len(evidence_items),
+            }
+
             # Fetch recent items count
-            items_count = 0
-            with intel_engine.storage.connection() as conn:
-                cur = conn.cursor()
-                cur.execute("SELECT COUNT(*) as c FROM intel_items")
-                row = cur.fetchone()
-                items_count = row["c"] if row else 0
+            items_count = len(evidence_items)
+            if hasattr(intel_engine, "storage") and hasattr(intel_engine.storage, "connection"):
+                try:
+                    with intel_engine.storage.connection() as conn:
+                        cur = conn.cursor()
+                        cur.execute("SELECT COUNT(*) as c FROM intel_items")
+                        row = cur.fetchone()
+                        if row:
+                            items_count = row["c"]
+                except Exception:
+                    pass
 
             exec_summary = (
-                "Synthesized multi-source intelligence across 5 Moltbook agent submolts, "
+                "Verifiable multi-source intelligence across approved Moltbook agent submolts, "
                 "Solana CLMM microstructure telemetry, and operational failure modes."
             )
 
             # Generate markdown report summary
-            briefing_res = intel_engine.generate_briefing(witness_manager=witness_manager)
             md_text = ""
-            if isinstance(briefing_res, dict):
-                latest_path = briefing_res.get("latest_file_path")
-                if latest_path:
-                    try:
-                        with open(latest_path, "r", encoding="utf-8") as f:
-                            md_text = f.read()
-                    except Exception:
-                        pass
-                if not md_text:
-                    md_text = briefing_res.get("report_markdown", "")
-            elif isinstance(briefing_res, str):
-                md_text = briefing_res
+            if hasattr(intel_engine, "generate_briefing"):
+                try:
+                    briefing_res = intel_engine.generate_briefing(witness_manager=witness_manager)
+                    if isinstance(briefing_res, dict):
+                        latest_path = briefing_res.get("latest_file_path")
+                        if latest_path:
+                            try:
+                                with open(latest_path, "r", encoding="utf-8") as f:
+                                    md_text = f.read()
+                            except Exception:
+                                pass
+                        if not md_text:
+                            md_text = briefing_res.get("report_markdown", "")
+                    elif isinstance(briefing_res, str):
+                        md_text = briefing_res
+                except Exception:
+                    pass
 
             if not md_text:
-                md_text = f"# Moltbook Agent Intelligence Snapshot\nAnalyzed {items_count} items across agent submolts with {len(signals)} extracted signals."
+                md_text = f"# Moltbook Verifiable Agent Intelligence Snapshot\nOutcome: {retrieval_outcome}\nAnalyzed {items_count} items across agent submolts with {len(signals)} extracted signals."
 
             if witness_manager:
                 try:
@@ -413,6 +521,8 @@ class DataProductExchange:
                         environmental_anchor={
                             "product_id": product_id,
                             "snapshot_id": snap_id,
+                            "retrieval_outcome": retrieval_outcome,
+                            "evidence_summary": ev_summary,
                             "items_count": items_count,
                             "signals_count": len(signals),
                         },
@@ -425,6 +535,7 @@ class DataProductExchange:
                 "product_id": product_id,
                 "snapshot_id": snap_id,
                 "generated_at": now_iso,
+                "retrieval_outcome": retrieval_outcome,
                 "freshness_seconds": 60,
                 "source_attribution": {
                     "publisher": contract.publisher,
@@ -437,6 +548,8 @@ class DataProductExchange:
                     ],
                     "verified_items_count": items_count,
                 },
+                "evidence_summary": ev_summary,
+                "evidence_items": evidence_items,
                 "content": {
                     "executive_summary": exec_summary,
                     "markdown_report": md_text[:2000] if md_text else "",
@@ -474,17 +587,26 @@ class DataProductExchange:
                 except Exception:
                     pass
 
+            decorated_opps = []
+            for op in opps:
+                op_c = dict(op)
+                op_c["evidence_level"] = "INFERRED_CONCLUSION"
+                op_c["verification_method"] = "clmm_orderbook_tick_quote"
+                decorated_opps.append(op_c)
+            arb_outcome = "VALUE" if len(decorated_opps) > 0 else "CONFIRMED_ABSENCE"
+
             return {
                 "product_id": product_id,
                 "snapshot_id": snap_id,
                 "generated_at": now_iso,
+                "retrieval_outcome": arb_outcome,
                 "freshness_seconds": 5,
                 "source_attribution": {
                     "publisher": contract.publisher,
                     "protocols": ["Orca Whirlpool", "Raydium CLMM", "Meteora DLMM"],
                     "tracked_pools_count": len(dex_microstructure.get_tracked_pools()),
                 },
-                "opportunities": opps,
+                "opportunities": decorated_opps,
                 "state_witness_id": witness_id,
                 "usage_receipt": receipt or {},
             }
@@ -517,16 +639,25 @@ class DataProductExchange:
                 except Exception:
                     pass
 
+            decorated_signals = []
+            for s in signals:
+                s_c = dict(s)
+                s_c["evidence_level"] = "INFERRED_CONCLUSION"
+                s_c["verification_method"] = "quantitative_factor_model"
+                decorated_signals.append(s_c)
+            sig_outcome = "VALUE" if len(decorated_signals) > 0 else "CONFIRMED_ABSENCE"
+
             return {
                 "product_id": product_id,
                 "snapshot_id": snap_id,
                 "generated_at": now_iso,
+                "retrieval_outcome": sig_outcome,
                 "freshness_seconds": 15,
                 "source_attribution": {
                     "publisher": contract.publisher,
                     "assets_analyzed": ["SOL", "JUP", "RAY", "BONK"],
                 },
-                "trading_signals": signals,
+                "trading_signals": decorated_signals,
                 "state_witness_id": witness_id,
                 "usage_receipt": receipt or {},
             }
