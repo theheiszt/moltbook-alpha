@@ -38,6 +38,12 @@ KNOWN_NORMALIZED_ENDPOINTS = {
     "/v1/keys/generate-demo",
     "/v1/briefing/latest",
     "/v1/account/quota",
+    "/v1/intel/sample",
+    "/v1/intel/latest",
+    "/v1/intel/signals",
+    "/v1/intel/signals/trading",
+    "/v1/intel/opportunities",
+    "/v1/intel/microstructure",
     "unmatched_route",
 }
 

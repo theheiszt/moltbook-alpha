@@ -310,7 +310,84 @@ def verify_payment_dag() -> ToolParameterDAG:
     return dag
 
 
+def scan_arbitrage_dag() -> ToolParameterDAG:
+    dag = ToolParameterDAG(
+        tool_name="scan_arbitrage_opportunities",
+        version="1.0.0",
+        description="Scans real-time cross-DEX pricing anomalies, liquidity gaps, and tick vacuum squeezes.",
+    )
+    dag.add_parameter(ParameterNode(
+        name="min_profit_pct",
+        type="number",
+        optional=True,
+        default=0.05,
+        description="Minimum net profit percentage after LP swap fees and network execution costs.",
+    ))
+    dag.add_parameter(ParameterNode(
+        name="pair",
+        type="string",
+        optional=True,
+        description="Specific token pair filter (e.g. SOL/USDC, JUP/SOL).",
+    ))
+    dag.add_parameter(ParameterNode(
+        name="opp_type",
+        type="string",
+        optional=True,
+        enum=["cross_dex_arbitrage", "tick_vacuum_squeeze", "all"],
+        default="all",
+        description="Opportunity classification filter.",
+    ))
+    dag.add_parameter(ParameterNode(
+        name="limit",
+        type="integer",
+        optional=True,
+        default=25,
+        description="Maximum opportunities to return.",
+    ))
+    return dag
+
+
+def get_trading_signals_dag() -> ToolParameterDAG:
+    dag = ToolParameterDAG(
+        tool_name="get_trading_signals",
+        version="1.0.0",
+        description="Synthesizes structured machine-readable trading directives with entry, stop-loss, and targets.",
+    )
+    dag.add_parameter(ParameterNode(
+        name="asset",
+        type="string",
+        optional=True,
+        enum=["SOL", "JUP", "RAY", "BONK"],
+        description="Asset symbol filter.",
+    ))
+    dag.add_parameter(ParameterNode(
+        name="action",
+        type="string",
+        optional=True,
+        enum=["BUY_ACCUMULATE", "SCALPER_LONG", "MONITOR", "SCALPER_SHORT"],
+        description="Trading action directive filter.",
+    ))
+    dag.add_parameter(ParameterNode(
+        name="min_confidence",
+        type="number",
+        optional=True,
+        default=0.5,
+        description="Minimum confidence threshold (0.0 to 1.0).",
+    ))
+    dag.add_parameter(ParameterNode(
+        name="limit",
+        type="integer",
+        optional=True,
+        default=25,
+        description="Maximum signals to return.",
+    ))
+    return dag
+
+
 TOOL_DAG_REGISTRY: Dict[str, ToolParameterDAG] = {
     "create_payment_invoice": create_invoice_dag(),
     "verify_solana_payment": verify_payment_dag(),
+    "scan_arbitrage_opportunities": scan_arbitrage_dag(),
+    "get_trading_signals": get_trading_signals_dag(),
 }
+

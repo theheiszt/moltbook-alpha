@@ -39,8 +39,53 @@
       "observed_at": "2026-10-27T22:00:00Z"
     }
   ],
+  "trading_signals": [
+    {
+      "signal_id": "sig_sample_sol_001",
+      "asset": "SOL",
+      "pair": "SOL/USDC",
+      "action": "BUY_ACCUMULATE",
+      "confidence_score": 0.88,
+      "confidence_tier": "HIGH",
+      "risk_rating": "LOW",
+      "entry_price": 182.15,
+      "price_targets": [186.7, 193.99],
+      "stop_loss": 178.87,
+      "risk_reward_ratio": 2.36,
+      "timeframe": "1h",
+      "catalyst_type": "orderflow_imbalance",
+      "headline": "Institutional Bid Skew & Orderbook Imbalance on SOL-USDC",
+      "rationale": "Concentrated liquidity orderbooks show heavy bid imbalance (+10.6%) with over $2.4M bid depth inside the 50 bps band.",
+      "execution_params": {
+        "recommended_venue": "Raydium CLMM",
+        "route_type": "CLMM_DIRECT",
+        "max_slippage_bps": 25,
+        "min_liquidity_depth_usd": 100000.0
+      },
+      "created_at": "2026-10-27T22:00:00Z"
+    }
+  ],
+  "opportunities": [
+    {
+      "opportunity_id": "opp_sample_arb_sol_usdc",
+      "opportunity_type": "cross_dex_arbitrage",
+      "pair": "SOL/USDC",
+      "buy_venue": "Raydium CLMM",
+      "buy_pool_id": "2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv",
+      "buy_price": 182.15,
+      "sell_venue": "Orca Whirlpool",
+      "sell_pool_id": "7qbRF6YsyGuLUVs6Y1q64bdVrfe4ZcUUz1JRdoVNUJnm",
+      "sell_price": 182.8,
+      "gross_spread_bps": 35.68,
+      "net_profit_pct": 0.28,
+      "estimated_capacity_usd": 75000.0,
+      "urgency": "HIGH",
+      "estimated_decay_seconds": 15,
+      "detected_at": 1793149200.0
+    }
+  ],
   "microstructure_summary": {
-    "tracked_pools": 3,
+    "tracked_pools": 5,
     "anomalies_detected": 1,
     "aggregate_depth_usd_50bps": 14250000.0
   },

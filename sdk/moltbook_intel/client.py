@@ -195,6 +195,40 @@ class MoltbookIntelClient:
         res = self._request(f"/v1/intel/signals?{qs}")
         return res.get("signals", [])
 
+    def get_opportunities(
+        self,
+        min_profit_pct: float = 0.05,
+        pair: Optional[str] = None,
+        opp_type: Optional[str] = None,
+        limit: int = 25,
+    ) -> List[Dict[str, Any]]:
+        """Scans real-time cross-DEX arbitrage opportunities, liquidity gaps, and tick vacuum squeezes."""
+        params = [f"limit={limit}", f"min_profit_pct={min_profit_pct}"]
+        if pair:
+            params.append(f"pair={urllib.parse.quote(pair)}")
+        if opp_type:
+            params.append(f"opp_type={urllib.parse.quote(opp_type)}")
+        qs = "&".join(params)
+        res = self._request(f"/v1/intel/opportunities?{qs}")
+        return res.get("opportunities", [])
+
+    def get_trading_signals(
+        self,
+        asset: Optional[str] = None,
+        action: Optional[str] = None,
+        min_confidence: float = 0.5,
+        limit: int = 25,
+    ) -> List[Dict[str, Any]]:
+        """Synthesizes structured machine-readable trading directives with entry, targets, stop-loss, and execution routing."""
+        params = [f"limit={limit}", f"min_confidence={min_confidence}"]
+        if asset:
+            params.append(f"asset={urllib.parse.quote(asset)}")
+        if action:
+            params.append(f"action={urllib.parse.quote(action)}")
+        qs = "&".join(params)
+        res = self._request(f"/v1/intel/signals/trading?{qs}")
+        return res.get("trading_signals", [])
+
     def refresh_intelligence(self) -> Dict[str, Any]:
         """Triggers an immediate collection and synthesis cycle across approved sources."""
         return self._request("/v1/intel/refresh", method="POST")

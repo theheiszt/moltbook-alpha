@@ -155,6 +155,8 @@ async def metrics_middleware(request: Request, call_next):
             "/v1/intel/sample",
             "/v1/intel/latest",
             "/v1/intel/signals",
+            "/v1/intel/signals/trading",
+            "/v1/intel/opportunities",
             "/v1/intel/refresh",
             "/v1/intel/microstructure",
             "/v1/metrics/funnel",
@@ -458,6 +460,9 @@ dex_microstructure.parse_meteora_dlmm(
         ],
     },
 )
+
+# Seed standard production liquidity depths for Solana CLMM arbitrage
+dex_microstructure.seed_default_pools()
 
 
 # Run one-time legacy migration from api_keys.json if present (skipping any admin backdoors)
@@ -2309,11 +2314,26 @@ def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None
             except Exception:
                 pass
 
+        # Synthesize real-time quantitative trading signals & cross-DEX arbitrage
+        trading_signals = intel_engine.generate_trading_signals(
+            limit=5,
+            dex_microstructure=dex_microstructure,
+            witness_manager=witness_manager,
+        )
+        live_opportunities = intel_engine.get_live_opportunities(
+            dex_microstructure=dex_microstructure,
+            min_profit_pct=0.05,
+            limit=5,
+            witness_manager=witness_manager,
+        )
+
         res = {
             "success": True,
             "user_tier": res_info.get("tier"),
             "credits_remaining": res_info.get("credits"),
             "briefing_markdown": content,
+            "trading_signals": trading_signals,
+            "opportunities": live_opportunities,
         }
         if witness_id:
             res["state_witness_id"] = witness_id
@@ -2526,8 +2546,53 @@ def get_sample_briefing_payload() -> Dict[str, Any]:
                 "observed_at": now_iso,
             },
         ],
+        "trading_signals": [
+            {
+                "signal_id": "sig_sample_sol_001",
+                "asset": "SOL",
+                "pair": "SOL/USDC",
+                "action": "BUY_ACCUMULATE",
+                "confidence_score": 0.88,
+                "confidence_tier": "HIGH",
+                "risk_rating": "LOW",
+                "entry_price": 182.15,
+                "price_targets": [186.70, 193.99],
+                "stop_loss": 178.87,
+                "risk_reward_ratio": 2.36,
+                "timeframe": "1h",
+                "catalyst_type": "orderflow_imbalance",
+                "headline": "Institutional Bid Skew & Orderbook Imbalance on SOL-USDC",
+                "rationale": "Concentrated liquidity orderbooks show heavy bid imbalance (+10.6%) with over $2.4M bid depth inside the 50 bps band.",
+                "execution_params": {
+                    "recommended_venue": "Raydium CLMM",
+                    "route_type": "CLMM_DIRECT",
+                    "max_slippage_bps": 25,
+                    "min_liquidity_depth_usd": 100000.0,
+                },
+                "created_at": now_iso,
+            }
+        ],
+        "opportunities": [
+            {
+                "opportunity_id": "opp_sample_arb_sol_usdc",
+                "opportunity_type": "cross_dex_arbitrage",
+                "pair": "SOL/USDC",
+                "buy_venue": "Raydium CLMM",
+                "buy_pool_id": "2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv",
+                "buy_price": 182.15,
+                "sell_venue": "Orca Whirlpool",
+                "sell_pool_id": "7qbRF6YsyGuLUVs6Y1q64bdVrfe4ZcUUz1JRdoVNUJnm",
+                "sell_price": 182.80,
+                "gross_spread_bps": 35.68,
+                "net_profit_pct": 0.28,
+                "estimated_capacity_usd": 75000.0,
+                "urgency": "HIGH",
+                "estimated_decay_seconds": 15,
+                "detected_at": time.time(),
+            }
+        ],
         "microstructure_summary": {
-            "tracked_pools": 3,
+            "tracked_pools": 5,
             "anomalies_detected": 1,
             "aggregate_depth_usd_50bps": 14250000.0,
         },
@@ -2596,6 +2661,63 @@ def get_intel_signals(
     return {
         "count": len(signals),
         "signals": signals,
+    }
+
+
+@app.get("/v1/intel/opportunities")
+def get_intel_opportunities(
+    request: Request,
+    min_profit_pct: float = 0.05,
+    pair: Optional[str] = None,
+    opp_type: Optional[str] = None,
+    limit: int = 25,
+):
+    """
+    Scans real-time cross-DEX arbitrage opportunities, liquidity gaps,
+    and tick vacuum squeeze alerts across tracked Solana liquidity pools (Orca, Raydium, Meteora).
+    Calculates net profitability after pool fee tiers and execution gas costs.
+    """
+    opps = intel_engine.get_live_opportunities(
+        dex_microstructure=dex_microstructure,
+        min_profit_pct=min_profit_pct,
+        pair=pair,
+        opp_type=opp_type,
+        limit=min(limit, 100),
+        witness_manager=witness_manager,
+    )
+    return {
+        "count": len(opps),
+        "min_profit_pct": min_profit_pct,
+        "opportunities": opps,
+        "timestamp_utc": time.time(),
+    }
+
+
+@app.get("/v1/intel/signals/trading")
+def get_intel_trading_signals(
+    request: Request,
+    asset: Optional[str] = None,
+    action: Optional[str] = None,
+    min_confidence: float = 0.5,
+    limit: int = 25,
+):
+    """
+    Returns synthesized machine-readable trading directives with entry price,
+    targets, stop loss, risk rating, execution venue, and Ed25519 cryptographic witness.
+    """
+    signals = intel_engine.generate_trading_signals(
+        limit=min(limit, 100),
+        asset=asset,
+        action=action,
+        min_confidence=min_confidence,
+        dex_microstructure=dex_microstructure,
+        witness_manager=witness_manager,
+    )
+    return {
+        "count": len(signals),
+        "min_confidence": min_confidence,
+        "trading_signals": signals,
+        "timestamp_utc": time.time(),
     }
 
 
