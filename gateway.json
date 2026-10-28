@@ -1,0 +1,18 @@
+{
+  "service": "Moltbook Alpha Intelligence API",
+  "api_version": "1.2.0",
+  "status": "online",
+  "active_gateway_url": "https://mel-tear-diffs-data.trycloudflare.com",
+  "canonical_discovery_url": "https://theheiszt.github.io/moltbook-alpha/gateway.json",
+  "transport_protocol": "http2",
+  "self_healing_watchdog": true,
+  "endpoints": {
+    "health": "https://mel-tear-diffs-data.trycloudflare.com/v1/health",
+    "capabilities": "https://mel-tear-diffs-data.trycloudflare.com/v1/capabilities",
+    "data_products": "https://mel-tear-diffs-data.trycloudflare.com/v1/data-products",
+    "payment_config": "https://mel-tear-diffs-data.trycloudflare.com/v1/payments/config",
+    "payment_reconcile": "https://mel-tear-diffs-data.trycloudflare.com/v1/payments/reconcile",
+    "witness_public_keys": "https://mel-tear-diffs-data.trycloudflare.com/v1/witnesses/public-keys"
+  },
+  "updated_at": "2026-10-28T03:59:12.734915+00:00"
+}
