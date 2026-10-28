@@ -15,6 +15,8 @@ import {
   PaymentVerificationResult,
   StateWitnessRecord,
   ToolDAGGraph,
+  WebhookSubscription,
+  SubscribeWebhookInput,
   ChallengeInfo,
   ChallengeVerificationResult,
 } from "./types.js";
@@ -383,4 +385,38 @@ export class MoltbookIntelClient {
       },
     };
   }
+
+  // --- Outbound Webhook Subscriptions ---
+  public async subscribeWebhook(params: SubscribeWebhookInput): Promise<WebhookSubscription> {
+    return this._request<WebhookSubscription>("/v1/webhooks/subscribe", {
+      method: "POST",
+      body: {
+        target_url: params.targetUrl,
+        secret_token: params.secretToken,
+        subscribed_events: params.subscribedEvents || ["CROSS_DEX_ARBITRAGE", "SECURITY_ANOMALY"],
+        min_severity: params.minSeverity || "MEDIUM",
+      },
+    });
+  }
+
+  public async listWebhooks(activeOnly: boolean = true): Promise<{ count: number; subscriptions: WebhookSubscription[] }> {
+    return this._request<{ count: number; subscriptions: WebhookSubscription[] }>(
+      `/v1/webhooks?active_only=${activeOnly ? "true" : "false"}`
+    );
+  }
+
+  public async deleteWebhook(subscriptionId: string): Promise<{ status: string; subscription_id: string }> {
+    return this._request<{ status: string; subscription_id: string }>(
+      `/v1/webhooks/${encodeURIComponent(subscriptionId)}`,
+      { method: "DELETE" }
+    );
+  }
+
+  public async testWebhook(subscriptionId: string): Promise<Record<string, unknown>> {
+    return this._request<Record<string, unknown>>(
+      `/v1/webhooks/test/${encodeURIComponent(subscriptionId)}`,
+      { method: "POST" }
+    );
+  }
+
 }
