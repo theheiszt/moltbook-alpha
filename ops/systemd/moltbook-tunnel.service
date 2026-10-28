@@ -1,0 +1,17 @@
+[Unit]
+Description=Moltbook Alpha Cloudflare Gateway Edge Tunnel
+After=network.target moltbook-alpha.service
+Wants=moltbook-alpha.service
+
+[Service]
+Type=simple
+User=user
+Restart=always
+RestartSec=5s
+ExecStart=/home/user/.local/bin/cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8080
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=moltbook-tunnel
+
+[Install]
+WantedBy=multi-user.target
