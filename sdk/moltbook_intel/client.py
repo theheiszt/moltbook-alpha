@@ -359,3 +359,37 @@ class MoltbookIntelClient:
             target_pub = self._cached_server_pub_key
 
         return verify_witness_payload_offline(witness, target_pub)
+
+    # Outbound Webhook Push Subscriptions
+    def subscribe_webhook(
+        self,
+        target_url: str,
+        secret_token: str,
+        subscribed_events: Optional[List[str]] = None,
+        min_severity: str = "MEDIUM",
+    ) -> Dict[str, Any]:
+        """
+        Registers an automated HTTPS webhook subscription.
+        Event payloads matching subscribed_events and min_severity are signed with HMAC-SHA256 and pushed to target_url.
+        """
+        payload = {
+            "target_url": target_url,
+            "secret_token": secret_token,
+            "subscribed_events": subscribed_events or ["CROSS_DEX_ARBITRAGE", "SECURITY_ANOMALY"],
+            "min_severity": min_severity,
+        }
+        return self._request("/v1/webhooks/subscribe", method="POST", payload=payload)
+
+    def list_webhooks(self, active_only: bool = True) -> List[Dict[str, Any]]:
+        """Lists active webhook subscriptions with masked secret tokens."""
+        res = self._request(f"/v1/webhooks?active_only={'true' if active_only else 'false'}")
+        return res.get("subscriptions", [])
+
+    def delete_webhook(self, subscription_id: str) -> Dict[str, Any]:
+        """Deregisters a webhook callback subscription."""
+        return self._request(f"/v1/webhooks/{urllib.parse.quote(subscription_id)}", method="DELETE")
+
+    def test_webhook(self, subscription_id: str) -> Dict[str, Any]:
+        """Dispatches an HMAC-SHA256 signed test verification ping to verify receiver connectivity."""
+        return self._request(f"/v1/webhooks/test/{urllib.parse.quote(subscription_id)}", method="POST")
+
