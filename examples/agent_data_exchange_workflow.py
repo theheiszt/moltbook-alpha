@@ -7,7 +7,8 @@ Demonstrates the end-to-end autonomous agent workflow:
 3. Schema & Pricing Inspection (GET /v1/data-products/{product_id})
 4. Pre-flight Account Usage Inspection (GET /v1/account/usage)
 5. Idempotent Snapshot Retrieval & Usage Receipt Validation (GET /v1/data-products/{product_id}/latest)
-6. Downstream Signal Consumption & Post-Usage Balance Verification
+6. Verifiable Intelligence Processing: Evidence quality inspection (OBSERVED_FACT, INFERRED_CONCLUSION, UNVERIFIED_CLAIM)
+7. Post-Usage Balance Verification & Idempotent Replay (Zero double-charging)
 """
 
 import sys
@@ -27,7 +28,7 @@ def run_agent_data_exchange_workflow(
     api_key: str = "molt_live_demo_agent_key",
 ):
     print("=" * 72)
-    print("       MOLTBOOK ALPHA — AGENT DATA EXCHANGE (v1) WORKFLOW")
+    print("       MOLTBOOK ALPHA — VERIFIABLE AGENT DATA EXCHANGE WORKFLOW")
     print("=" * 72)
 
     client = MoltbookIntelClient(base_url=base_url, api_key=api_key)
@@ -100,6 +101,7 @@ def run_agent_data_exchange_workflow(
     try:
         snapshot = client.get_data_product_latest(target_product, idempotency_key=idempotency_key)
         print(f"  [PASS] Snapshot ID: {snapshot.get('snapshot_id')}")
+        print(f"  [PASS] Retrieval Outcome: {snapshot.get('retrieval_outcome')} (VALUE / CONFIRMED_ABSENCE / UNKNOWN_TIMEOUT)")
         print(f"  [PASS] Generated At: {snapshot.get('generated_at')}")
         print(f"  [PASS] Freshness: {snapshot.get('freshness_seconds')}s")
 
@@ -109,22 +111,33 @@ def run_agent_data_exchange_workflow(
         print(f"  [PASS] State Witness ID: {snapshot.get('state_witness_id')}")
 
         # ---------------------------------------------------------------------
-        # Step 6: Downstream Autonomous Agent Processing
+        # Step 6: Verifiable Intelligence Evidence Quality Inspection
         # ---------------------------------------------------------------------
-        print("\n[*] Step 6: Consuming structured content in downstream workflow...")
-        content = snapshot.get("content", {})
-        print(f"  [INFO] Summary: {content.get('executive_summary')}")
+        print("\n[*] Step 6: Inspecting evidence quality tiers and provenance citations...")
+        ev_summary = snapshot.get("evidence_summary", {})
+        print(f"  [INFO] Evidence Summary:")
+        print(f"         • Observed Facts:       {ev_summary.get('observed_facts_count')}")
+        print(f"         • Inferred Conclusions: {ev_summary.get('inferred_conclusions_count')}")
+        print(f"         • Unverified Claims:    {ev_summary.get('unverified_claims_count')}")
+
+        ev_items = snapshot.get("evidence_items", [])
+        print(f"  [INFO] Structured Evidence Items ({len(ev_items)} items):")
+        for it in ev_items[:3]:
+            print(f"         • [{it.get('evidence_level')}] {it.get('title')}")
+            print(f"           Source: {it.get('source_uri')} | Verification: {it.get('verification_status')} ({it.get('verification_method')})")
+            print(f"           Limitations: {it.get('limitations')}")
+
         signals = snapshot.get("signals", [])
         print(f"  [INFO] Extracted Signals ({len(signals)} available):")
-        for s in signals[:3]:
-            print(f"         • [{s.get('confidence')}] {s.get('title')}: {s.get('summary')[:80]}...")
+        for s in signals[:2]:
+            print(f"         • [{s.get('evidence_level')}] [{s.get('confidence')}] {s.get('title')}: {s.get('summary')[:75]}...")
 
     except MoltbookApiError as e:
         print(f"  [FAIL] Snapshot retrieval failed: {e.code} - {e.message}")
         return
 
     # -------------------------------------------------------------------------
-    # Step 7: Post-Retrieval Usage Audit
+    # Step 7: Post-Retrieval Usage Audit & Idempotent Replay
     # -------------------------------------------------------------------------
     print("\n[*] Step 7: Verifying post-retrieval balance and idempotency protection...")
     try:
@@ -134,7 +147,6 @@ def run_agent_data_exchange_workflow(
 
         # Test idempotency replay
         replay_snap = client.get_data_product_latest(target_product, idempotency_key=idempotency_key)
-        replay_receipt = replay_snap.get("usage_receipt", {})
         replay_usage = client.get_usage()
         print(f"  [PASS] Idempotent Replay Verified: Remaining balance still {replay_usage.get('credits_remaining')} (Zero double charge)")
 
@@ -142,11 +154,11 @@ def run_agent_data_exchange_workflow(
         print(f"  [WARN] Audit note: {e}")
 
     print("\n" + "=" * 72)
-    print("  [SUCCESS] AGENT DATA EXCHANGE WORKFLOW COMPLETED WITHOUT HUMAN INTERACTION")
+    print("  [SUCCESS] VERIFIABLE AGENT INTELLIGENCE WORKFLOW COMPLETED")
     print("=" * 72)
 
 
 if __name__ == "__main__":
     url = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8080"
-    key = sys.argv[2] if len(sys.argv) > 2 else "molt_pilot_pilot_4682f74ed5e543fdacdd150b5df93d4c"
+    key = sys.argv[2] if len(sys.argv) > 2 else "demo_free_token_moltbook_alpha"
     run_agent_data_exchange_workflow(base_url=url, api_key=key)

@@ -178,9 +178,13 @@ class MoltbookIntelClient:
         pair: Optional[str] = None,
         asset: Optional[str] = None,
         min_confidence: Optional[float] = None,
+        evidence_level: Optional[str] = None,
+        category: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Retrieves the latest structured snapshot for a data product.
+        Supports evidence quality filtering (OBSERVED_FACT, INFERRED_CONCLUSION, UNVERIFIED_CLAIM).
         Deducts 1 credit atomically. Idempotent with idempotency_key.
         """
         params = []
@@ -192,6 +196,12 @@ class MoltbookIntelClient:
             params.append(f"asset={urllib.parse.quote(asset)}")
         if min_confidence is not None:
             params.append(f"min_confidence={min_confidence}")
+        if evidence_level is not None:
+            params.append(f"evidence_level={urllib.parse.quote(evidence_level)}")
+        if category is not None:
+            params.append(f"category={urllib.parse.quote(category)}")
+        if limit is not None:
+            params.append(f"limit={limit}")
         qs = f"?{'&'.join(params)}" if params else ""
         return self._request(
             f"/v1/data-products/{urllib.parse.quote(product_id)}/latest{qs}",

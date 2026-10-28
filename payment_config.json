@@ -1,0 +1,60 @@
+{
+  "solana_treasury_wallet": "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx",
+  "rpc_url": "https://api.mainnet-beta.solana.com",
+  "fallback_rpc_urls": [
+    "https://solana-rpc.publicnode.com",
+    "https://rpc.ankr.com/solana"
+  ],
+  "rates": {
+    "tier_starter": {
+      "display_name": "Starter",
+      "usd": 1.0,
+      "credits": 50,
+      "validity_days": null
+    },
+    "tier_pro": {
+      "display_name": "Pro",
+      "usd": 5.0,
+      "credits": 300,
+      "validity_days": null
+    },
+    "tier_unlimited": {
+      "display_name": "Premium (10,000 queries / 30 days)",
+      "usd": 20.0,
+      "credits": 10000,
+      "validity_days": 30
+    },
+    "tier_premium": {
+      "display_name": "Premium (10,000 queries / 30 days)",
+      "usd": 20.0,
+      "credits": 10000,
+      "validity_days": 30
+    }
+  },
+  "topup_packages": {
+    "topup_500": {
+      "display_name": "Credit Top-Up (500 queries / 90 days)",
+      "usd": 8.0,
+      "credits": 500,
+      "validity_days": 90,
+      "usdc_units": 8000000,
+      "sol_lamports": 40000000
+    },
+    "topup_1500": {
+      "display_name": "Credit Top-Up (1,500 queries / 90 days)",
+      "usd": 20.0,
+      "credits": 1500,
+      "validity_days": 90,
+      "usdc_units": 20000000,
+      "sol_lamports": 100000000
+    },
+    "topup_5000": {
+      "display_name": "Credit Top-Up (5,000 queries / 90 days)",
+      "usd": 50.0,
+      "credits": 5000,
+      "validity_days": 90,
+      "usdc_units": 50000000,
+      "sol_lamports": 250000000
+    }
+  }
+}

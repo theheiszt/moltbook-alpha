@@ -1,0 +1,4 @@
+# Enforce Unix line endings on shell scripts
+*.sh text eol=lf
+*.service text eol=lf
+*.timer text eol=lf

@@ -1,0 +1,48 @@
+[Unit]
+Description=Moltbook Alpha Commercial Intelligence API Service
+After=network.target network-online.target
+Wants=network-online.target
+Documentation=https://github.com/moltbook/moltbook-intel
+StartLimitIntervalSec=60s
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=moltbook-api
+Group=moltbook-api
+WorkingDirectory=/opt/moltbook-alpha/current
+EnvironmentFile=-/etc/moltbook-alpha/api.env
+Environment=PYTHONUNBUFFERED=1
+Environment=APP_ENV=production
+Environment=MOLTBOOK_DATA_DIR=/var/lib/moltbook-alpha
+Environment=MOLTBOOK_HOST=0.0.0.0
+Environment=MOLTBOOK_PORT=8080
+
+ExecStart=/opt/moltbook-alpha/current/venv/bin/uvicorn api_server:app --host 0.0.0.0 --port 8080 --no-access-log
+ExecReload=/bin/kill -s HUP $MAINPID
+
+# Bounded failure recovery (avoids infinite tight crash loops)
+Restart=on-failure
+RestartSec=5s
+
+# Filesystem & Capability Hardening
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/moltbook-alpha /var/log/moltbook-alpha
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Standardized journal logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=moltbook-alpha
+
+[Install]
+WantedBy=multi-user.target

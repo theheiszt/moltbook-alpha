@@ -1,0 +1,10 @@
+[Unit]
+Description=Moltbook Alpha Daily Ubuntu Update Audit (Read-Only)
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/sbin/moltbook-ops/update_ubuntu.sh --audit
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=moltbook-update-audit
