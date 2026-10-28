@@ -51,62 +51,72 @@ def normalize_word(w: str) -> str:
             rem_col = re.sub(r"(.)\1+", r"\1", rem)
             if rem_col in WORD_TO_NUMBER:
                 return rem_col
+
+    if len(collapsed) >= 4:
+        import difflib
+        matches = difflib.get_close_matches(collapsed, WORD_TO_NUMBER.keys(), n=1, cutoff=0.72)
+        if matches:
+            return matches[0]
+
     return clean
 
 
 def parse_number_words(words: List[str]) -> Optional[float]:
-    """Converts sequential English number words into a numeric value."""
-    total = 0
-    current = 0
-    found_any = False
+    """Parse a list of normalized number words into a single float value."""
+    if not words:
+        return None
+
+    # Fast path: single token
+    if len(words) == 1:
+        w = words[0]
+        if w.isdigit():
+            return float(w)
+        if w in WORD_TO_NUMBER:
+            return float(WORD_TO_NUMBER[w])
+
+    total = 0.0
+    current = 0.0
 
     for w in words:
-        clean = normalize_word(w)
-        if clean in WORD_TO_NUMBER:
-            val = WORD_TO_NUMBER[clean]
-            found_any = True
-            if val == 100:
-                current = (current if current else 1) * 100
-            elif val == 1000:
-                total += (current if current else 1) * 1000
-                current = 0
-            else:
-                current += val
-        elif clean.isdigit():
-            found_any = True
-            current += int(clean)
+        if w.isdigit():
+            current += float(w)
+            continue
+        val = WORD_TO_NUMBER.get(w)
+        if val is None:
+            continue
+        if val in (100, 1000):
+            current = (current if current != 0 else 1.0) * val
+            total += current
+            current = 0.0
+        else:
+            current += float(val)
 
-    if found_any:
-        return float(total + current)
-    return None
+    total += current
+    return total if total > 0 or "zero" in words else None
 
 
-def merge_fragments(toks: List[str]) -> List[str]:
-    """Merges adjacent hyphenated or broken token fragments while preserving operator boundaries."""
+def merge_fragments(tokens: List[str]) -> List[str]:
+    """
+    Greedily merge adjacent sub-word fragments produced by deliberate whitespace splitting.
+    e.g. ['tw', 'enty'] -> 'twenty', ['f', 'iv', 'e'] -> 'five'
+    """
     merged: List[str] = []
     i = 0
-    ops = {"*", "x", "×", "÷", "+", "/", "-"}
-    while i < len(toks):
-        if toks[i] in ops:
-            merged.append(toks[i])
-            i += 1
-            continue
-
+    n = len(tokens)
+    while i < n:
         matched = False
-        for k in (4, 3, 2):
-            if i + k <= len(toks):
-                slice_toks = toks[i:i + k]
-                if any(t in ops for t in slice_toks):
-                    continue
-                combined = "".join(slice_toks)
-                clean_combined = normalize_word(combined)
-                if clean_combined in WORD_TO_NUMBER:
-                    merged.append(clean_combined)
-                    i += k
+        # Try merging up to 4 consecutive tokens
+        for length in (4, 3, 2):
+            if i + length <= n:
+                candidate = "".join(tokens[i : i + length])
+                norm = normalize_word(candidate)
+                if norm in WORD_TO_NUMBER:
+                    merged.append(norm)
+                    i += length
                     matched = True
                     break
         if not matched:
-            merged.append(toks[i])
+            merged.append(tokens[i])
             i += 1
     return merged
 
@@ -117,124 +127,190 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
     Handles explicit operator symbols (*, ×, ÷, +), whitespace/fragment obfuscation,
     compound vs. distinct sequential number phrases, and operation keywords.
     """
-    spaced_text = re.sub(r"[-−–]\s*(?:how|what|wh|find|calculate|is|which)\b", " ", challenge_text, flags=re.IGNORECASE)
-    spaced_text = re.sub(r"(?<=\s)[-−–](?=\s)", " - ", spaced_text)
-    spaced_text = re.sub(r"(\d)\s*[-−–]\s*(\d)", r"\1 - \2", spaced_text)
-    for op in ["*", "×", "÷", "+", " - "]:
-        spaced_text = spaced_text.replace(op, f" {op.strip()} ")
+    import difflib
 
-    cleaned_text = re.sub(r"[^a-zA-Z0-9\s*×÷+\-−–]", " ", spaced_text).lower()
-    raw_tokens = [t.strip() for t in cleaned_text.split() if t.strip()]
-    merged = merge_fragments(raw_tokens)
-    tokens: List[str] = []
-    for t in merged:
-        if not tokens or t != tokens[-1]:
-            tokens.append(t)
+    # 1. Strip intra-word punctuation noise
+    cleaned = re.sub(r"(?<=[a-zA-Z])[\/\\|~^_+\-\]\[}{<>\.,`\'\"]+(?=[a-zA-Z])", "", challenge_text)
 
-    # Extract numbers and explicit operator tokens
-    nums: List[float] = []
-    explicit_ops: List[str] = []
-    current_num_words: List[str] = []
+    # 2. Operators with whitespace
+    for op in ["*", "×", "÷"]:
+        cleaned = cleaned.replace(op, f" {op} ")
+    cleaned = cleaned.replace("+", " + ")
+    cleaned = re.sub(r"(\d)\s*[-−–]\s*(\d)", r"\1 - \2", cleaned)
+    cleaned = re.sub(r"\s+[-−–]\s+", " - ", cleaned)
+    cleaned = re.sub(r"[{}\[\]()^~,?!;:\/\\|`'\"_]", " ", cleaned)
+    cleaned = re.sub(r"(?<=[a-zA-Z])-(?=\s|$)", " ", cleaned)
+    cleaned = re.sub(r"(?<=\s)-(?=[a-zA-Z])", " ", cleaned)
+    cleaned = re.sub(r"^-([a-zA-Z])", r" \1", cleaned)
 
-    for i, t in enumerate(tokens):
-        word_norm = normalize_word(t)
-        if word_norm == "one":
-            prev_w = normalize_word(tokens[i - 1]) if i > 0 else ""
-            next_w = normalize_word(tokens[i + 1]) if i + 1 < len(tokens) else ""
-            if any(w in prev_w for w in ["with", "wiith", "in", "on", "from"]) or any(
-                w in next_w for w in ["claw", "hand", "side", "leg", "arm", "eye", "part", "half", "way"]
-            ):
-                continue
-        if t in ["*", "×"]:
-            if current_num_words:
-                val = parse_number_words(current_num_words)
-                if val is not None:
-                    nums.append(val)
-                current_num_words = []
-            explicit_ops.append("*")
-        elif t in ["+", "plus"]:
-            if current_num_words:
-                val = parse_number_words(current_num_words)
-                if val is not None:
-                    nums.append(val)
-                current_num_words = []
-            explicit_ops.append("+")
-        elif t in ["-", "minus", "−", "–"]:
-            if current_num_words:
-                val = parse_number_words(current_num_words)
-                if val is not None:
-                    nums.append(val)
-                current_num_words = []
-            explicit_ops.append("-")
-        elif t in ["/", "÷"]:
-            if current_num_words:
-                val = parse_number_words(current_num_words)
-                if val is not None:
-                    nums.append(val)
-                current_num_words = []
-            explicit_ops.append("/")
-        elif word_norm in WORD_TO_NUMBER or word_norm.isdigit():
-            if current_num_words:
-                prev_word = current_num_words[-1]
-                can_combine = (prev_word in TENS and word_norm in ONES) or (word_norm in SCALES) or (prev_word in SCALES)
-                if not can_combine:
-                    val = parse_number_words(current_num_words)
-                    if val is not None:
-                        nums.append(val)
-                    current_num_words = []
-            current_num_words.append(word_norm)
-        else:
-            if current_num_words:
-                val = parse_number_words(current_num_words)
-                if val is not None:
-                    nums.append(val)
-                current_num_words = []
+    tokens = [t.strip() for t in cleaned.split() if t.strip()]
 
-    if current_num_words:
-        val = parse_number_words(current_num_words)
-        if val is not None:
-            nums.append(val)
+    NON_NUM_WORDS = {
+        "at", "by", "in", "on", "to", "from", "with", "is", "a", "an", "the", "bu", "but", "per", "hour",
+        "fight", "light", "right", "might", "sight", "tight", "night", "white",
+        "this", "that", "these", "those", "their", "there", "then", "them",
+        "claw", "force", "lobster", "lobsters", "red", "total",
+        "much", "what", "which", "more", "less", "dominance", "swim", "swims", "speed", "new", "meter", "meters",
+        "newton", "newtons", "nooton", "nootons"
+    }
 
-    if len(nums) < 2:
+    def clean_token(t: str) -> str:
+        return re.sub(r"[^a-z0-9]", "", t.lower())
+
+    def norm_num(tok: str) -> Optional[int]:
+        c = clean_token(tok)
+        if not c or c in NON_NUM_WORDS:
+            return None
+        if c.isdigit():
+            return int(c)
+        if c in WORD_TO_NUMBER:
+            return WORD_TO_NUMBER[c]
+        dedup = re.sub(r"(.)\1+", r"\1", c)
+        if dedup in WORD_TO_NUMBER:
+            return WORD_TO_NUMBER[dedup]
+
+        for nw in sorted(WORD_TO_NUMBER.keys(), key=len, reverse=True):
+            if len(nw) >= 3 and c.startswith(nw):
+                rem = c[len(nw):]
+                if any(rem.startswith(u) for u in ["newt", "noot", "neuw", "meter", "cm", "kg", "sec", "speed", "force", "claw", "lobst"]):
+                    return WORD_TO_NUMBER[nw]
+
+        if len(dedup) >= 4:
+            matches = difflib.get_close_matches(dedup, WORD_TO_NUMBER.keys(), n=1, cutoff=0.85)
+            if matches and matches[0] not in NON_NUM_WORDS:
+                return WORD_TO_NUMBER[matches[0]]
         return None
 
-    if len(nums) > 2:
-        a, b = nums[-2], nums[-1]
-    else:
-        a, b = nums[0], nums[1]
+    items = []
+    i = 0
+    while i < len(tokens):
+        t = tokens[i]
+        c = clean_token(t)
+        if t in ["*", "x", "×"]:
+            items.append((i, "op", "*"))
+            i += 1
+            continue
+        elif t in ["+", "plus"]:
+            items.append((i, "op", "+"))
+            i += 1
+            continue
+        elif t in ["-", "minus", "−", "–"]:
+            next_t = clean_token(tokens[i+1]) if i + 1 < len(tokens) else ""
+            if not any(next_t.startswith(u) for u in ["meter", "newt", "noot", "sec", "speed"]):
+                items.append((i, "op", "-"))
+            i += 1
+            continue
+        elif t in ["/", "÷", "divided"]:
+            items.append((i, "op", "/"))
+            i += 1
+            continue
 
-    # Operation detection: explicit operator symbols take highest precedence, then semantic keywords
-    collapsed_text = re.sub(r"\s+", "", cleaned_text)
-    collapsed_dedup = re.sub(r"(.)\1+", r"\1", collapsed_text)
+        if c in NON_NUM_WORDS:
+            i += 1
+            continue
 
-    def has_op(keywords: List[str]) -> bool:
-        return any(k in cleaned_text or k in collapsed_text or k in collapsed_dedup for k in keywords)
+        matched_compound = False
+        for k in (3, 2):
+            if i + k <= len(tokens):
+                sub = tokens[i:i+k]
+                sub_clean = [clean_token(x) for x in sub]
+                if any(x in ["*", "x", "×", "+", "-", "/", "÷"] for x in sub):
+                    continue
+                if any(x.isdigit() for x in sub_clean):
+                    continue
+                if any(x in NON_NUM_WORDS for x in sub_clean):
+                    continue
+                cand = "".join(sub_clean)
+                val = norm_num(cand)
+                if val is not None:
+                    if items and items[-1][1] == "num" and items[-1][2] == float(val):
+                        i += k
+                        matched_compound = True
+                        break
+                    if items and items[-1][1] == "num" and items[-1][0] == i - 1 and items[-1][2] in [20, 30, 40, 50, 60, 70, 80, 90] and val < 10:
+                        prev_idx, _, prev_val = items.pop()
+                        items.append((prev_idx, "num", prev_val + float(val)))
+                    else:
+                        items.append((i, "num", float(val)))
+                    i += k
+                    matched_compound = True
+                    break
+        if matched_compound:
+            continue
 
-    has_add_intent = has_op(["gain", "plus", "increas", "add", "combin", "total"])
-    has_sub_intent = has_op(["reduc", "slow", "minus", "decreas", "lose", "drop", "differ", "subtract", "less"])
+        val = norm_num(t)
+        if val is not None:
+            if items and items[-1][1] == "num" and items[-1][2] == float(val):
+                i += 1
+                continue
+            if items and items[-1][1] == "num" and items[-1][0] == i - 1 and items[-1][2] in [20, 30, 40, 50, 60, 70, 80, 90] and val < 10:
+                prev_idx, _, prev_val = items.pop()
+                items.append((prev_idx, "num", prev_val + float(val)))
+            else:
+                items.append((i, "num", float(val)))
+        i += 1
 
-    if "*" in explicit_ops:
-        result = a * b
-    elif "/" in explicit_ops:
-        result = a / b if b != 0 else 0
-    elif "+" in explicit_ops and not has_sub_intent:
-        result = a + b
-    elif "-" in explicit_ops and not has_add_intent:
-        result = a - b
-    elif has_sub_intent:
-        result = a - b
-    elif has_op(["product", "times", "multipli", "each"]):
-        result = a * b
-    elif has_op(["divid", "split", "quotient"]):
-        result = a / b if b != 0 else 0
-    elif has_add_intent:
-        result = a + b
-    else:
-        result = a + b
+    nums = [x for x in items if x[1] == "num"]
+    ops = [x for x in items if x[1] == "op"]
 
-    return f"{result:.2f}"
+    filtered_nums = []
+    for n in nums:
+        idx, _, val = n
+        if val == 1.0:
+            is_prep = idx > 0 and clean_token(tokens[idx-1]) in ["with", "in", "on", "per"]
+            is_body = idx + 1 < len(tokens) and clean_token(tokens[idx+1]) in ["claw", "hand", "side", "arm"]
+            if is_prep or is_body:
+                continue
+        filtered_nums.append(n)
+    nums = filtered_nums
 
+    if not nums:
+        return None
 
+    cleaned_lower = cleaned.lower()
+    collapsed_lower = re.sub(r"(.)\1+", r"\1", cleaned_lower)
+
+    def has_word(words):
+        return any(w in cleaned_lower or w in collapsed_lower for w in words)
+
+    has_mul = has_word(["product", "times", "multipli", "each", "duplicat", "doubl", "tripl", "quadrupl"])
+    has_sub = has_word(["reduc", "slow", "minus", "decreas", "lose", "loses", "drop", "differ", "subtract"])
+    has_add = has_word(["gain", "plus", "increas", "add", "combin", "total"])
+
+    if ops:
+        op_idx, _, op_type = ops[0]
+        before = [n for n in nums if n[0] < op_idx]
+        after = [n for n in nums if n[0] > op_idx]
+        if before and after:
+            a = before[-1][2]
+            b = after[0][2]
+            if op_type == "*":
+                res = a * b
+            elif op_type == "/":
+                res = a / b if b != 0 else 0
+            elif op_type == "+":
+                res = a + b
+            elif op_type == "-":
+                if has_mul:
+                    res = a * b
+                elif has_add and not has_sub:
+                    res = a + b
+                else:
+                    res = a - b
+            return f"{res:.2f}"
+
+    if len(nums) >= 2:
+        a = nums[0][2]
+        b = nums[1][2]
+        if has_mul:
+            return f"{a * b:.2f}"
+        elif has_sub:
+            return f"{a - b:.2f}"
+        elif has_add:
+            return f"{sum(n[2] for n in nums):.2f}"
+        return f"{a + b:.2f}"
+
+    return None
 
 
 class MoltbookClient:
@@ -295,11 +371,15 @@ class MoltbookClient:
         if not ans:
             return False
 
-        res = self.verify_challenge(code, ans)
-        clean_res = str(res).encode("ascii", "replace").decode("ascii")
-        print(f"[Verification Gate] Response: {clean_res}")
-        return res.get("success", False)
-
+        try:
+            res = self.verify_challenge(code, ans)
+            clean_res = str(res).encode("ascii", "replace").decode("ascii")
+            print(f"[Verification Gate] Response: {clean_res}")
+            return res.get("success", False)
+        except Exception as e:
+            clean_err = str(e).encode("ascii", "replace").decode("ascii")
+            print(f"[Verification Gate] Verification failed: {clean_err}")
+            return False
 
     def create_post(self, submolt_name: str, title: str, content: str) -> Tuple[Dict[str, Any], bool]:
         payload = {"submolt_name": submolt_name, "title": title, "content": content}

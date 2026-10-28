@@ -141,6 +141,45 @@ TOOLS_DEFINITION = [
         },
     },
     {
+        "name": "get_data_product_sample",
+        "description": "Retrieves a free (0-credit), schema-valid sample snapshot for a data product with provenance metadata, evidence grading, and Ed25519 witness signature.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "product_id": {
+                    "type": "string",
+                    "description": "Identifier of the data product (e.g. 'moltbook-agent-intelligence-feed').",
+                },
+            },
+            "required": ["product_id"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "reconcile_payment",
+        "description": "Reconciles an on-chain Solana transaction signature against open invoices, or quarantines/refunds unlinked deposits with an Ed25519 witness receipt.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "transaction_signature": {
+                    "type": "string",
+                    "description": "Base58-encoded Solana transaction signature.",
+                },
+                "invoice_id": {
+                    "type": "string",
+                    "description": "Optional invoice ID to reconcile against.",
+                },
+                "auto_refund_unmatched": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "If true, automatically dispatches an on-chain refund if the payment is quarantined as unmatched.",
+                },
+            },
+            "required": ["transaction_signature"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "get_data_product_snapshot",
         "description": "Retrieves the latest validated structured snapshot of a data product with atomic 1-credit settlement, idempotency, evidence quality tiering, and cryptographic receipt.",
         "inputSchema": {
@@ -265,7 +304,7 @@ TOOLS_DEFINITION = [
 
 class MoltbookMCPServer:
     def __init__(self):
-        base_url = os.getenv("MOLTBOOK_API_BASE_URL", "https://gzip-franklin-gsm-vii.trycloudflare.com")
+        base_url = os.getenv("MOLTBOOK_API_BASE_URL", "https://mel-tear-diffs-data.trycloudflare.com")
         api_key = os.getenv("MOLTBOOK_API_KEY")
         self.client = MoltbookIntelClient(base_url=base_url, api_key=api_key)
 
@@ -344,6 +383,16 @@ class MoltbookMCPServer:
             elif tool_name == "get_data_product_schema":
                 contract = self.client.get_data_product(args["product_id"])
                 text = json.dumps(contract, indent=2)
+            elif tool_name == "get_data_product_sample":
+                sample = self.client.get_data_product_sample(args["product_id"])
+                text = json.dumps(sample, indent=2)
+            elif tool_name == "reconcile_payment":
+                rec = self.client.reconcile_payment(
+                    transaction_signature=args["transaction_signature"],
+                    invoice_id=args.get("invoice_id"),
+                    auto_refund_unmatched=bool(args.get("auto_refund_unmatched", False)),
+                )
+                text = json.dumps(rec, indent=2)
             elif tool_name == "get_data_product_snapshot":
                 snap = self.client.get_data_product_latest(
                     product_id=args["product_id"],

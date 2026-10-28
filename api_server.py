@@ -173,6 +173,8 @@ async def metrics_middleware(request: Request, call_next):
             norm_endpoint = "/v1/witnesses/:id"
         elif endpoint.startswith("/v1/data-products/") and endpoint.endswith("/latest"):
             norm_endpoint = "/v1/data-products/:product_id/latest"
+        elif endpoint.startswith("/v1/data-products/") and endpoint.endswith("/sample"):
+            norm_endpoint = "/v1/data-products/:product_id/sample"
         elif endpoint.startswith("/v1/data-products/") and endpoint != "/v1/data-products":
             norm_endpoint = "/v1/data-products/:product_id"
         elif endpoint.startswith("/v1/intel/microstructure/") and endpoint != "/v1/intel/microstructure":
@@ -184,6 +186,8 @@ async def metrics_middleware(request: Request, call_next):
         elif endpoint in {
             "/",
             "/metrics",
+            "/gateway.json",
+            "/v1/gateway/discovery",
             "/v1/health",
             "/v1/errors",
             "/v1/challenges",
@@ -209,6 +213,7 @@ async def metrics_middleware(request: Request, call_next):
             "/v1/payments/invoice",
             "/v1/payments/verify-solana",
             "/v1/payments/verify-nano",
+            "/v1/payments/reconcile",
             "/v1/payments/unmatched",
             "/v1/payments/webhook",
             "/v1/keys/generate-demo",
@@ -1040,6 +1045,88 @@ class ClaimInvoiceInput(BaseModel):
         return s
 
 
+class ReconcilePaymentInput(BaseModel):
+    transaction_signature: str
+    invoice_id: Optional[str] = None
+    expected_payer: Optional[str] = None
+    auto_refund_unmatched: bool = False
+
+    @field_validator("transaction_signature")
+    @classmethod
+    def validate_signature(cls, v: str) -> str:
+        s = v.strip()
+        if not (64 <= len(s) <= 90):
+            raise ValueError("Transaction signature must be between 64 and 90 characters.")
+        return s
+
+
+def get_active_gateway_url() -> str:
+    """
+    Resolves the currently active public edge gateway URL for autonomous agent discovery.
+    Priority:
+    1. MOLTBOOK_GATEWAY_URL environment variable
+    2. /var/lib/moltbook-alpha/gateway_url.txt (written by tunnel_status.sh / watchdog)
+    3. Local gateway_url.txt or gateway.json in project root
+    4. Default active tunnel fallback
+    """
+    env_url = os.getenv("MOLTBOOK_GATEWAY_URL", "").strip()
+    if env_url.startswith("http"):
+        return env_url.rstrip("/")
+
+    for candidate in (
+        Path("/var/lib/moltbook-alpha/gateway_url.txt"),
+        PROJECT_ROOT / "gateway_url.txt",
+    ):
+        try:
+            if candidate.exists():
+                val = candidate.read_text(encoding="utf-8").strip()
+                if val.startswith("http"):
+                    return val.rstrip("/")
+        except Exception:
+            pass
+
+    try:
+        gw_json = PROJECT_ROOT / "gateway.json"
+        if gw_json.exists():
+            data = json.loads(gw_json.read_text(encoding="utf-8"))
+            val = str(data.get("active_gateway_url", "")).strip()
+            if val.startswith("http"):
+                return val.rstrip("/")
+    except Exception:
+        pass
+
+    return "https://mel-tear-diffs-data.trycloudflare.com"
+
+
+@app.get("/v1/gateway/discovery")
+@app.get("/gateway.json")
+def get_gateway_discovery():
+    """
+    Machine-readable gateway discovery manifest.
+    Allows SDKs, MCP clients, and autonomous agents to dynamically resolve the active
+    HTTP/2 edge gateway URL without hardcoding ephemeral tunnel hostnames.
+    """
+    gw_url = get_active_gateway_url()
+    return {
+        "service": "Moltbook Alpha Intelligence API",
+        "api_version": "1.2.0",
+        "status": "online",
+        "active_gateway_url": gw_url,
+        "canonical_discovery_url": "https://theheiszt.github.io/moltbook-alpha/gateway.json",
+        "transport_protocol": "http2",
+        "self_healing_watchdog": True,
+        "endpoints": {
+            "health": f"{gw_url}/v1/health",
+            "capabilities": f"{gw_url}/v1/capabilities",
+            "data_products": f"{gw_url}/v1/data-products",
+            "payment_config": f"{gw_url}/v1/payments/config",
+            "payment_reconcile": f"{gw_url}/v1/payments/reconcile",
+            "witness_public_keys": f"{gw_url}/v1/witnesses/public-keys",
+        },
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 @app.get("/v1/payments/config")
 def get_payment_details():
     cfg = load_payment_config()
@@ -1055,6 +1142,7 @@ def get_payment_details():
         "create_invoice_endpoint": "POST /v1/payments/invoice",
         "verify_solana_endpoint": "POST /v1/payments/verify-solana",
         "verify_nano_endpoint": "POST /v1/payments/verify-nano",
+        "reconcile_endpoint": "POST /v1/payments/reconcile",
         "claim_endpoint": "POST /v1/payments/invoice/:invoice_id/claim",
         "unmatched_payments_endpoint": "GET /v1/payments/unmatched",
         "refund_endpoint": "POST /v1/payments/refund/:unmatched_id",
@@ -1968,6 +2056,31 @@ def process_unmatched_refund(unmatched_id: str, request: Request):
         f"Refund {dispatch_result['refund_amount_raw']} {record['asset']} dispatched for {unmatched_id} to {record['payer_wallet']}",
     )
 
+    witness_id = None
+    witness_sig = None
+    if witness_manager:
+        try:
+            w = witness_manager.create_witness(
+                action="UNMATCHED_PAYMENT_REFUNDED",
+                actor="refund_dispatcher",
+                key_hash=None,
+                credit_delta=0,
+                post_balance=0,
+                request_id=getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}",
+                environmental_anchor={
+                    "unmatched_id": unmatched_id,
+                    "original_tx_signature": record["tx_signature"],
+                    "refund_tx_sig": dispatch_result["refund_tx_sig"],
+                    "payer_wallet": record["payer_wallet"],
+                    "asset": record["asset"],
+                    "refund_amount_raw": dispatch_result["refund_amount_raw"],
+                },
+            )
+            witness_id = w.get("witness_id")
+            witness_sig = w.get("signature")
+        except Exception:
+            pass
+
     return {
         "success": True,
         "unmatched_id": unmatched_id,
@@ -1978,6 +2091,312 @@ def process_unmatched_refund(unmatched_id: str, request: Request):
         "fee_deducted_raw": dispatch_result["fee_deducted_raw"],
         "refund_tx_sig": dispatch_result["refund_tx_sig"],
         "dispatched_at": dispatch_result["dispatched_at"],
+        "state_witness_id": witness_id,
+        "witness_signature": witness_sig,
+    }
+
+
+@app.post("/v1/payments/reconcile")
+def reconcile_payment_endpoint(req: ReconcilePaymentInput, request: Request):
+    """
+    Reconciles an on-chain transaction signature against open invoices, redeemed ledgers,
+    and unmatched payment quarantines.
+    - If already redeemed, returns REDEEMED status and existing key prefix.
+    - If matches an open invoice and satisfies asset/amount requirements, fulfills the invoice.
+    - If sent without an invoice/reference (orphan deposit) or to an expired/mismatched invoice,
+      quarantines the transfer into unmatched_payments and optionally triggers an automated refund
+      signed by an Ed25519 state witness receipt.
+    """
+    client_ip = get_client_ip(request)
+    allowed, retry_after = rate_limiter.is_allowed(f"reconcile_pay:{client_ip}", limit=20, window_seconds=60)
+    if not allowed:
+        record_rate_limit("/v1/payments/reconcile")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many reconciliation requests. Please retry in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    sig = req.transaction_signature.strip()
+    req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+
+    # 1. Check if already redeemed
+    redemption = storage.get_payment_redemption(sig)
+    if redemption:
+        w = witness_manager.create_witness(
+            action="PAYMENT_RECONCILE_VERIFIED_REDEEMED",
+            actor="reconciliation_engine",
+            key_hash=redemption.get("key_hash"),
+            credit_delta=0,
+            post_balance=redemption.get("remaining_credits", 0),
+            request_id=req_id,
+            environmental_anchor={
+                "tx_signature": sig,
+                "reconciliation_status": "REDEEMED",
+                "invoice_id": redemption.get("invoice_id"),
+            },
+        )
+        return {
+            "success": True,
+            "reconciliation_status": "REDEEMED",
+            "tx_signature": sig,
+            "invoice_id": redemption.get("invoice_id"),
+            "key_prefix": redemption.get("key_prefix"),
+            "tier": redemption.get("tier"),
+            "credits_granted": redemption.get("credits_granted"),
+            "remaining_credits": redemption.get("remaining_credits"),
+            "state_witness_id": w.get("witness_id"),
+            "witness_signature": w.get("signature"),
+        }
+
+    # 2. Check if already quarantined in unmatched_payments
+    existing_unmatched = None
+    for item in storage.list_unmatched_payments(status=None, limit=200):
+        if item.get("tx_signature") == sig:
+            existing_unmatched = item
+            break
+
+    if existing_unmatched:
+        if req.auto_refund_unmatched and existing_unmatched["status"] == "HELD":
+            dispatch_result = refund_dispatcher.dispatch_refund(existing_unmatched)
+            storage.mark_unmatched_refunded(
+                unmatched_id=existing_unmatched["unmatched_id"],
+                refund_tx_sig=dispatch_result["refund_tx_sig"],
+                refunded_amount_raw=dispatch_result["refund_amount_raw"],
+            )
+            w = witness_manager.create_witness(
+                action="UNMATCHED_PAYMENT_REFUNDED",
+                actor="reconciliation_engine",
+                key_hash=None,
+                credit_delta=0,
+                post_balance=0,
+                request_id=req_id,
+                environmental_anchor={
+                    "unmatched_id": existing_unmatched["unmatched_id"],
+                    "tx_signature": sig,
+                    "refund_tx_sig": dispatch_result["refund_tx_sig"],
+                    "refund_amount_raw": dispatch_result["refund_amount_raw"],
+                },
+            )
+            return {
+                "success": True,
+                "reconciliation_status": "QUARANTINED_AND_REFUNDED",
+                "tx_signature": sig,
+                "unmatched_id": existing_unmatched["unmatched_id"],
+                "reason": existing_unmatched["reason"],
+                "payer_wallet": existing_unmatched["payer_wallet"],
+                "asset": existing_unmatched["asset"],
+                "refund_amount_raw": dispatch_result["refund_amount_raw"],
+                "fee_deducted_raw": dispatch_result["fee_deducted_raw"],
+                "refund_tx_sig": dispatch_result["refund_tx_sig"],
+                "state_witness_id": w.get("witness_id"),
+                "witness_signature": w.get("signature"),
+            }
+
+        w = witness_manager.create_witness(
+            action="PAYMENT_RECONCILE_QUARANTINED",
+            actor="reconciliation_engine",
+            key_hash=None,
+            credit_delta=0,
+            post_balance=0,
+            request_id=req_id,
+            environmental_anchor={
+                "unmatched_id": existing_unmatched["unmatched_id"],
+                "tx_signature": sig,
+                "status": existing_unmatched["status"],
+                "reason": existing_unmatched["reason"],
+            },
+        )
+        return {
+            "success": True,
+            "reconciliation_status": "QUARANTINED_UNMATCHED",
+            "tx_signature": sig,
+            "unmatched_id": existing_unmatched["unmatched_id"],
+            "status": existing_unmatched["status"],
+            "reason": existing_unmatched["reason"],
+            "payer_wallet": existing_unmatched["payer_wallet"],
+            "asset": existing_unmatched["asset"],
+            "amount_raw": existing_unmatched["amount_raw"],
+            "refund_endpoint": f"POST /v1/payments/refund/{existing_unmatched['unmatched_id']}",
+            "state_witness_id": w.get("witness_id"),
+            "witness_signature": w.get("signature"),
+        }
+
+    # 3. Inspect on-chain transaction via SolanaPaymentVerifier
+    cfg = load_payment_config()
+    invoice = storage.get_invoice(req.invoice_id) if req.invoice_id else None
+    target_tier = invoice["tier"] if invoice else "tier_starter"
+    expected_ref = invoice["reference"] if invoice else None
+
+    verifier = SolanaPaymentVerifier(
+        max_age_seconds=cfg.get("max_age_seconds", 86400),
+        require_consensus=False,
+    )
+    try:
+        payment = verifier.verify_payment(
+            sig,
+            requested_tier=target_tier,
+            expected_payer=req.expected_payer,
+            expected_reference=expected_ref,
+        )
+    except VerificationError as e:
+        raise ApiError(
+            code=ErrorCode.PAYMENT_VERIFICATION_FAILED,
+            status_code=400,
+            retryable=False,
+            outcome=OperationOutcome.NOT_COMMITTED,
+            state_effect="none",
+            recovery_action=RecoveryAction.CREATE_NEW_INVOICE,
+            message=f"On-chain reconciliation failed: {e!s}",
+        ) from e
+    except RPCError as e:
+        raise ApiError(
+            code=ErrorCode.RPC_GATEWAY_ERROR,
+            status_code=502,
+            retryable=True,
+            retry_after=5,
+            outcome=OperationOutcome.INDETERMINATE,
+            state_effect="none",
+            recovery_action=RecoveryAction.POLL_PAYMENT_STATUS,
+            message=f"Solana RPC communication error during reconciliation: {e!s}",
+        ) from e
+
+    # Try resolving invoice by on-chain reference if invoice_id was not explicitly passed
+    if not invoice and getattr(payment, "reference", None):
+        invoice = storage.get_invoice_by_reference(payment.reference)
+
+    # 4. Determine if orphan deposit or mismatched/expired invoice
+    quarantine_reason = None
+    expected_amt = None
+    if not invoice:
+        quarantine_reason = "UNLINKED_ORPHAN_DEPOSIT"
+    else:
+        expected_amt = invoice["amount_raw"]
+        now_iso = datetime.now(timezone.utc).isoformat()
+        is_expired = (invoice["status"] == "expired" or now_iso > invoice["expires_at"])
+        if is_expired:
+            quarantine_reason = "EXPIRED_INVOICE_PAID"
+        elif payment.asset != invoice["asset"]:
+            quarantine_reason = f"ASSET_MISMATCH: expected {invoice['asset']}, received {payment.asset}"
+        elif payment.amount_raw < invoice["amount_raw"]:
+            quarantine_reason = "UNDERPAID_AMOUNT"
+
+    if quarantine_reason:
+        unm = storage.record_unmatched_payment(
+            rail="solana",
+            tx_signature=payment.tx_signature,
+            payer_wallet=payment.payer,
+            asset=payment.asset,
+            amount_raw=payment.amount_raw,
+            expected_amount_raw=expected_amt,
+            reason=quarantine_reason,
+        )
+        if req.auto_refund_unmatched:
+            dispatch_result = refund_dispatcher.dispatch_refund(unm)
+            storage.mark_unmatched_refunded(
+                unmatched_id=unm["unmatched_id"],
+                refund_tx_sig=dispatch_result["refund_tx_sig"],
+                refunded_amount_raw=dispatch_result["refund_amount_raw"],
+            )
+            w = witness_manager.create_witness(
+                action="UNMATCHED_PAYMENT_REFUNDED",
+                actor="reconciliation_engine",
+                key_hash=None,
+                credit_delta=0,
+                post_balance=0,
+                request_id=req_id,
+                environmental_anchor={
+                    "unmatched_id": unm["unmatched_id"],
+                    "tx_signature": payment.tx_signature,
+                    "reason": quarantine_reason,
+                    "refund_tx_sig": dispatch_result["refund_tx_sig"],
+                    "refund_amount_raw": dispatch_result["refund_amount_raw"],
+                },
+            )
+            return {
+                "success": True,
+                "reconciliation_status": "QUARANTINED_AND_REFUNDED",
+                "tx_signature": payment.tx_signature,
+                "unmatched_id": unm["unmatched_id"],
+                "reason": quarantine_reason,
+                "payer_wallet": payment.payer,
+                "asset": payment.asset,
+                "amount_raw": payment.amount_raw,
+                "refund_amount_raw": dispatch_result["refund_amount_raw"],
+                "fee_deducted_raw": dispatch_result["fee_deducted_raw"],
+                "refund_tx_sig": dispatch_result["refund_tx_sig"],
+                "state_witness_id": w.get("witness_id"),
+                "witness_signature": w.get("signature"),
+            }
+
+        w = witness_manager.create_witness(
+            action="PAYMENT_RECONCILE_QUARANTINED",
+            actor="reconciliation_engine",
+            key_hash=None,
+            credit_delta=0,
+            post_balance=0,
+            request_id=req_id,
+            environmental_anchor={
+                "unmatched_id": unm["unmatched_id"],
+                "tx_signature": payment.tx_signature,
+                "reason": quarantine_reason,
+                "payer_wallet": payment.payer,
+                "amount_raw": payment.amount_raw,
+            },
+        )
+        return {
+            "success": True,
+            "reconciliation_status": "QUARANTINED_UNMATCHED",
+            "tx_signature": payment.tx_signature,
+            "unmatched_id": unm["unmatched_id"],
+            "status": "HELD",
+            "reason": quarantine_reason,
+            "payer_wallet": payment.payer,
+            "asset": payment.asset,
+            "amount_raw": payment.amount_raw,
+            "refund_endpoint": f"POST /v1/payments/refund/{unm['unmatched_id']}",
+            "state_witness_id": w.get("witness_id"),
+            "witness_signature": w.get("signature"),
+        }
+
+    # 5. Valid open invoice match -> fulfill atomically
+    redemption_result = storage.fulfill_invoice_and_redeem(
+        invoice_id=invoice["invoice_id"],
+        tx_signature=payment.tx_signature,
+        asset=payment.asset,
+        amount_raw=payment.amount_raw,
+        tier=invoice["tier"],
+        credits_to_grant=invoice["credits"],
+        payer=payment.payer,
+        reference=payment.reference or invoice["reference"],
+        slot=payment.slot,
+        block_time=payment.block_time,
+    )
+    w = witness_manager.create_witness(
+        action="PAYMENT_RECONCILED_AND_REDEEMED",
+        actor="reconciliation_engine",
+        key_hash=storage.hash_key(redemption_result["api_key"]) if redemption_result.get("api_key") else None,
+        credit_delta=invoice["credits"],
+        post_balance=redemption_result.get("credits", invoice["credits"]),
+        request_id=req_id,
+        environmental_anchor={
+            "invoice_id": invoice["invoice_id"],
+            "tx_signature": payment.tx_signature,
+            "tier": invoice["tier"],
+            "credits": invoice["credits"],
+        },
+    )
+    return {
+        "success": True,
+        "reconciliation_status": "RECONCILED_AND_FULFILLED",
+        "tx_signature": payment.tx_signature,
+        "invoice_id": invoice["invoice_id"],
+        "api_key": redemption_result.get("api_key"),
+        "key_prefix": redemption_result.get("key_prefix"),
+        "tier": redemption_result.get("tier"),
+        "credits": redemption_result.get("credits"),
+        "state_witness_id": w.get("witness_id"),
+        "witness_signature": w.get("signature"),
     }
 
 
@@ -2312,6 +2731,38 @@ def get_data_product_contract(product_id: str):
             detail=f"Data product '{product_id}' not found in exchange catalog. Available: {[p['product_id'] for p in data_product_exchange.list_products()]}",
         )
     return prod.to_contract_dict()
+
+
+@app.get("/v1/data-products/{product_id}/sample")
+def get_data_product_sample(product_id: str, request: Request):
+    """
+    Agent Data Exchange: Returns a free (0-credit), deterministic, schema-valid sample
+    snapshot for pre-purchase agent evaluation, complete with provenance metadata,
+    evidence grading, retrieval outcome semantics, and an Ed25519 witness signature.
+    """
+    client_ip = get_client_ip(request)
+    allowed, retry_after = rate_limiter.is_allowed(f"data_product_sample:{client_ip}", limit=60, window_seconds=60)
+    if not allowed:
+        record_rate_limit(f"/v1/data-products/{product_id}/sample")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many sample preview requests. Please retry in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    try:
+        sample = data_product_exchange.generate_sample_snapshot(
+            product_id=product_id,
+            witness_manager=witness_manager,
+        )
+    except KeyError:
+        sample = None
+    if not sample:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Data product '{product_id}' not found in exchange catalog. Available: {[p['product_id'] for p in data_product_exchange.list_products()]}",
+        )
+    return sample
 
 
 @app.get("/v1/data-products/{product_id}/latest")

@@ -1,14 +1,15 @@
 [Unit]
-Description=Moltbook Alpha Cloudflare Gateway Edge Tunnel
-After=network.target moltbook-alpha.service
-Wants=moltbook-alpha.service
+Description=Moltbook Alpha Cloudflare Gateway Edge Tunnel (HTTP/2 Persistent Multiplex)
+After=network-online.target moltbook-alpha.service
+Wants=network-online.target moltbook-alpha.service
 
 [Service]
 Type=simple
 User=user
+EnvironmentFile=-/etc/moltbook-alpha/tunnel.env
 Restart=always
 RestartSec=5s
-ExecStart=/home/user/.local/bin/cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8080
+ExecStart=/bin/bash -c 'if [ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]; then exec /home/user/.local/bin/cloudflared tunnel --no-autoupdate --protocol http2 run --token "$CLOUDFLARE_TUNNEL_TOKEN"; else exec /home/user/.local/bin/cloudflared tunnel --no-autoupdate --protocol http2 --url http://127.0.0.1:8080; fi'
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=moltbook-tunnel

@@ -23,6 +23,7 @@ def get_api_capabilities() -> Dict[str, Any]:
         "api_version": "1.2.0",
         "protocol_version": "2026-10-27",
         "documentation_url": "https://theheiszt.github.io/moltbook-alpha",
+        "canonical_gateway_discovery_url": "https://theheiszt.github.io/moltbook-alpha/gateway.json",
         "compatibility": {
             "min_python_sdk_version": "2.0.0",
             "mcp_protocol_version": "2024-11-05",
@@ -44,6 +45,7 @@ def get_api_capabilities() -> Dict[str, Any]:
             "idempotency_ttl_seconds": 60,
             "unmetered_endpoints": [
                 "/v1/health",
+                "/v1/gateway/discovery",
                 "/v1/capabilities",
                 "/v1/tools",
                 "/v1/tools/{tool_name}/parameter-graph",
@@ -51,11 +53,15 @@ def get_api_capabilities() -> Dict[str, Any]:
                 "/v1/errors/{code}",
                 "/v1/data-products",
                 "/v1/data-products/{product_id}",
+                "/v1/data-products/{product_id}/sample",
                 "/v1/intel/sample",
                 "/v1/account/quota",
                 "/v1/account/usage",
                 "/v1/payments/config",
                 "/v1/payments/invoice",
+                "/v1/payments/reconcile",
+                "/v1/payments/unmatched",
+                "/v1/payments/refund/{unmatched_id}",
                 "/v1/witnesses/public-keys",
                 "/v1/witnesses/verify",
                 "/v1/webhooks",
@@ -65,6 +71,20 @@ def get_api_capabilities() -> Dict[str, Any]:
             ],
         },
         "capabilities": {
+            "gateway_and_edge_routing": {
+                "status": "GA",
+                "description": "Permanent canonical gateway discovery and HTTP/2 edge health telemetry.",
+                "canonical_discovery_url": "https://theheiszt.github.io/moltbook-alpha/gateway.json",
+                "endpoints": [
+                    {
+                        "path": "/v1/gateway/discovery",
+                        "method": "GET",
+                        "auth_required": False,
+                        "cost_credits": 0,
+                        "description": "Resolve the active edge gateway URL, transport protocol, uptime, and canonical discovery manifest.",
+                    },
+                ],
+            },
             "agent_data_exchange": {
                 "status": "GA",
                 "description": "Autonomous data product catalog, schema inspection, and structured snapshot retrieval.",
@@ -86,6 +106,13 @@ def get_api_capabilities() -> Dict[str, Any]:
                         "auth_required": False,
                         "cost_credits": 0,
                         "description": "Inspect full contract, input/output JSON schemas, and freshness guarantees for a specific product.",
+                    },
+                    {
+                        "path": "/v1/data-products/{product_id}/sample",
+                        "method": "GET",
+                        "auth_required": False,
+                        "cost_credits": 0,
+                        "description": "Retrieve a deterministic, schema-valid sample snapshot with full provenance and Ed25519 signature for pre-purchase evaluation.",
                     },
                     {
                         "path": "/v1/data-products/{product_id}/latest",
@@ -270,7 +297,7 @@ def get_api_capabilities() -> Dict[str, Any]:
             },
             "payments_and_settlement": {
                 "status": "GA",
-                "description": "Solana Mainnet and Nano settlement with instant automated API key minting.",
+                "description": "Solana Mainnet and Nano settlement with instant automated API key minting, orphan deposit quarantine, and signed refunds.",
                 "endpoints": [
                     {
                         "path": "/v1/payments/config",
@@ -292,6 +319,27 @@ def get_api_capabilities() -> Dict[str, Any]:
                         "auth_required": False,
                         "cost_credits": 0,
                         "description": "Verify finalized Solana transaction and mint authenticated API key.",
+                    },
+                    {
+                        "path": "/v1/payments/reconcile",
+                        "method": "POST",
+                        "auth_required": False,
+                        "cost_credits": 0,
+                        "description": "Reconcile an on-chain transaction signature against open invoices, quarantine unlinked deposits, and optionally dispatch automated refunds with Ed25519 receipts.",
+                    },
+                    {
+                        "path": "/v1/payments/unmatched",
+                        "method": "GET",
+                        "auth_required": False,
+                        "cost_credits": 0,
+                        "description": "List held or refunded unmatched payments in the quarantine ledger.",
+                    },
+                    {
+                        "path": "/v1/payments/refund/{unmatched_id}",
+                        "method": "POST",
+                        "auth_required": False,
+                        "cost_credits": 0,
+                        "description": "Dispatch an automated refund for a quarantined unmatched payment with an Ed25519 witness receipt.",
                     },
                 ],
             },

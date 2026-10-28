@@ -39,6 +39,7 @@ class DataProductContract:
             "cost_credits": self.cost_credits,
             "access_tier_required": self.access_tier_required,
             "contract_endpoint": f"/v1/data-products/{self.product_id}",
+            "sample_snapshot_endpoint": f"/v1/data-products/{self.product_id}/sample",
             "latest_snapshot_endpoint": f"/v1/data-products/{self.product_id}/latest",
         }
 
@@ -58,6 +59,7 @@ class DataProductContract:
             "output_schema": self.output_schema,
             "documentation_url": self.documentation_url,
             "contract_endpoint": f"/v1/data-products/{self.product_id}",
+            "sample_snapshot_endpoint": f"/v1/data-products/{self.product_id}/sample",
             "latest_snapshot_endpoint": f"/v1/data-products/{self.product_id}/latest",
         }
 
@@ -664,3 +666,194 @@ class DataProductExchange:
 
         else:
             raise KeyError(f"Snapshot generator for '{product_id}' not implemented.")
+
+    def generate_sample_snapshot(
+        self,
+        product_id: str,
+        witness_manager: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Generates a deterministic, schema-valid unmetered sample snapshot (0 credits)
+        with full provenance metadata and Ed25519 signature for pre-purchase verification.
+        """
+        contract = self.get_product(product_id)
+        if not contract:
+            raise KeyError(f"Data product '{product_id}' not found in exchange catalog.")
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        snap_id = f"sample_{product_id.replace('-', '_')}_v1"
+        witness_id = None
+        witness_sig = None
+        if witness_manager:
+            try:
+                w = witness_manager.create_witness(
+                    action="DATA_PRODUCT_SAMPLE_SERVED",
+                    actor=product_id,
+                    key_hash="unmetered_sample_preview",
+                    request_id="req_sample_preview",
+                    environmental_anchor={"product_id": product_id, "snapshot_id": snap_id, "sample": True},
+                )
+                witness_id = w.get("witness_id")
+                witness_sig = w.get("signature")
+            except Exception:
+                pass
+
+        sample_receipt = {
+            "request_id": "req_sample_preview",
+            "product_id": product_id,
+            "credits_deducted": 0,
+            "credits_remaining": 0,
+            "lot_id": None,
+            "state_witness_id": witness_id,
+            "is_sample": True,
+        }
+
+        if product_id == "moltbook-agent-intelligence-feed":
+            evidence_items = [
+                {
+                    "item_id": "ev_obs_001",
+                    "title": "Verified CLMM Tick Vacuum on SOL/USDC Whirlpool",
+                    "summary": "Direct on-chain RPC tick array inspection confirmed a 140 bps liquidity gap between ticks -18420 and -18280.",
+                    "category": "dex_microstructure",
+                    "evidence_level": "OBSERVED_FACT",
+                    "verification_status": "VERIFIED",
+                    "verification_method": "solana_rpc_tick_array_state_proof",
+                    "confidence_score": 0.99,
+                    "source_uri": "https://www.moltbook.com/m/agentfinance",
+                    "observed_at_utc": now_iso,
+                    "processed_at_utc": now_iso,
+                    "limitations": "Valid only at observed Solana slot; subject to immediate JIT LP rebalancing.",
+                },
+                {
+                    "item_id": "ev_inf_002",
+                    "title": "Elevated Retry Storm Risk on Un-Keyed Agent Gateways",
+                    "summary": "Statistical correlation across 18 agent build reports indicates 34% duplicate mutation rate when HTTP 504 timeouts lack idempotency keys.",
+                    "category": "agent_failure_modes",
+                    "evidence_level": "INFERRED_CONCLUSION",
+                    "verification_status": "CORROBORATED",
+                    "verification_method": "multi_agent_telemetry_correlation",
+                    "confidence_score": 0.88,
+                    "source_uri": "https://www.moltbook.com/m/infrastructure",
+                    "observed_at_utc": now_iso,
+                    "processed_at_utc": now_iso,
+                    "limitations": "Inferred from self-reported agent logs across m/infrastructure and m/builds.",
+                },
+                {
+                    "item_id": "ev_unv_003",
+                    "title": "Unconfirmed Rumor of Off-Chain Solver Cartel on Raydium",
+                    "summary": "Single-source social post alleging coordinated MEV bundle censorship; no on-chain slot evidence found.",
+                    "category": "governance_and_mev",
+                    "evidence_level": "UNVERIFIED_CLAIM",
+                    "verification_status": "UNVERIFIED",
+                    "verification_method": "social_post_keyword_ingest",
+                    "confidence_score": 0.32,
+                    "source_uri": "https://www.moltbook.com/m/trading",
+                    "observed_at_utc": now_iso,
+                    "processed_at_utc": now_iso,
+                    "limitations": "Unverified social claim; do not execute automated capital allocation on this item.",
+                },
+            ]
+            return {
+                "product_id": product_id,
+                "snapshot_id": snap_id,
+                "generated_at": now_iso,
+                "retrieval_outcome": "VALUE",
+                "freshness_seconds": 0,
+                "source_attribution": {
+                    "publisher": contract.publisher,
+                    "submolts_monitored": ["m/trading", "m/crypto", "m/agentfinance", "m/builds", "m/infrastructure"],
+                    "verified_items_count": len(evidence_items),
+                },
+                "evidence_summary": {
+                    "observed_facts_count": 1,
+                    "inferred_conclusions_count": 1,
+                    "unverified_claims_count": 1,
+                    "total_items_count": 3,
+                },
+                "evidence_items": evidence_items,
+                "content": {
+                    "executive_summary": "Sample Verifiable Agent Intelligence Feed demonstrating strict separation of OBSERVED_FACT, INFERRED_CONCLUSION, and UNVERIFIED_CLAIM.",
+                    "markdown_report": "# Sample Intelligence Report\nIncludes 3 graded evidence items with provenance and explicit limitations.",
+                },
+                "signals": [
+                    {
+                        "signal_id": "sig_sample_01",
+                        "category": "orderbook_imbalance",
+                        "confidence": "HIGH",
+                        "title": "SOL/USDC CLMM Depth Skew",
+                        "summary": "Bid-side depth +42% over ask-side within 50 bps of mid-price.",
+                        "evidence_level": "INFERRED_CONCLUSION",
+                    }
+                ],
+                "state_witness_id": witness_id,
+                "witness_signature": witness_sig,
+                "usage_receipt": sample_receipt,
+            }
+
+        elif product_id == "solana-dex-arbitrage-opportunities":
+            return {
+                "product_id": product_id,
+                "snapshot_id": snap_id,
+                "generated_at": now_iso,
+                "retrieval_outcome": "VALUE",
+                "freshness_seconds": 0,
+                "source_attribution": {
+                    "publisher": contract.publisher,
+                    "protocols": ["Orca Whirlpool", "Raydium CLMM", "Meteora DLMM"],
+                    "tracked_pools_count": 6,
+                },
+                "opportunities": [
+                    {
+                        "opportunity_id": "arb_sample_sol_usdc",
+                        "opportunity_type": "CROSS_DEX_SPREAD",
+                        "pair": "SOL/USDC",
+                        "buy_venue": "Orca Whirlpool",
+                        "sell_venue": "Raydium CLMM",
+                        "buy_price": 184.12,
+                        "sell_price": 184.68,
+                        "gross_spread_bps": 30.4,
+                        "net_profit_pct": 0.21,
+                        "urgency": "HIGH",
+                        "evidence_level": "INFERRED_CONCLUSION",
+                        "verification_method": "clmm_orderbook_tick_quote",
+                    }
+                ],
+                "state_witness_id": witness_id,
+                "witness_signature": witness_sig,
+                "usage_receipt": sample_receipt,
+            }
+
+        elif product_id == "solana-quantitative-trading-signals":
+            return {
+                "product_id": product_id,
+                "snapshot_id": snap_id,
+                "generated_at": now_iso,
+                "retrieval_outcome": "VALUE",
+                "freshness_seconds": 0,
+                "source_attribution": {
+                    "publisher": contract.publisher,
+                    "assets_analyzed": ["SOL", "JUP", "RAY", "BONK"],
+                },
+                "trading_signals": [
+                    {
+                        "signal_id": "tsig_sample_sol_01",
+                        "asset": "SOL",
+                        "pair": "SOL/USDC",
+                        "action": "BUY",
+                        "confidence_score": 0.84,
+                        "entry_price": 184.20,
+                        "price_targets": [188.50, 192.00],
+                        "stop_loss": 181.40,
+                        "risk_reward_ratio": 2.45,
+                        "execution_params": {"max_slippage_bps": 15, "preferred_venue": "Orca Whirlpool"},
+                        "evidence_level": "INFERRED_CONCLUSION",
+                        "verification_method": "quantitative_factor_model",
+                    }
+                ],
+                "state_witness_id": witness_id,
+                "witness_signature": witness_sig,
+                "usage_receipt": sample_receipt,
+            }
+
+        raise KeyError(f"Sample generator for '{product_id}' not implemented.")
+
