@@ -26,8 +26,10 @@ def main():
     print("Upload complete.")
 
     # 3. Create release directory and unpack
+    import subprocess
+    commit_sha = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    release_dir = f"/opt/moltbook-alpha/releases/{timestamp}_2454e60"
+    release_dir = f"/opt/moltbook-alpha/releases/{timestamp}_{commit_sha}"
     print(f"Target release directory: {release_dir}")
 
     deploy_commands = [
