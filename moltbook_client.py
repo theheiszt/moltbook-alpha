@@ -137,7 +137,7 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
         "this", "that", "these", "those", "their", "there", "then", "them",
         "claw", "force", "lobster", "lobsters", "red", "total", "another", "other",
         "much", "what", "which", "more", "less", "dominance", "swim", "swims", "speed", "new", "meter", "meters",
-        "newton", "newtons", "nooton", "nootons", "applies", "apply"
+        "newton", "newtons", "nooton", "nootons", "applies", "apply", "group", "groo", "share", "shared", "shiar", "each", "velocity", "velawcitee", "velawcity"
     }
 
     def clean_token(t: str) -> str:
@@ -293,9 +293,10 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
     def has_word(words):
         return any(w in cleaned_lower or w in collapsed_lower or w in stripped_letters or w in collapsed_letters for w in words)
 
-    has_mul = has_word(["product", "times", "multipli", "each", "duplicat", "doubl", "tripl", "quadrupl"])
-    has_sub = has_word(["reduc", "slow", "minus", "decreas", "lose", "loses", "drop", "differ", "subtract", "remain", "left"])
-    has_add = has_word(["gain", "plus", "increas", "add", "combin", "total"])
+    has_div = has_word(["divid", "split", "share", "shiar", "distribut", "portion", "ratio", "quotient", "halv"])
+    has_mul = not has_div and has_word(["product", "times", "multipli", "each", "duplicat", "doubl", "tripl", "quadrupl"])
+    has_sub = not has_div and has_word(["reduc", "slow", "minus", "decreas", "lose", "loses", "drop", "differ", "subtract", "remain", "left"])
+    has_add = not has_div and has_word(["gain", "plus", "increas", "add", "combin", "total"])
 
     if ops:
         op_start, op_end, _, op_type = ops[0]
@@ -328,7 +329,9 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
     if len(nums) >= 2:
         a = nums[0][3]
         b = nums[1][3]
-        if has_mul:
+        if has_div:
+            return f"{a / b:.2f}" if b != 0 else "0.00"
+        elif has_mul:
             return f"{a * b:.2f}"
         elif has_sub:
             return f"{a - b:.2f}"
@@ -417,10 +420,12 @@ class MoltbookClient:
         payload = {"submolt_name": submolt_name, "title": title, "content": content}
         res = self._request("/posts", method="POST", payload=payload)
         post = res.get("post", {})
-        verif = post.get("verification")
+        verif = post.get("verification") or res.get("verification")
         verified = False
         if verif:
             verified = self.solve_and_verify(verif)
+        else:
+            print(f"[create_post] No verification in response. Keys: {list(res.keys())}")
         return res, verified
 
     def create_comment(self, post_id: str, content: str, parent_id: Optional[str] = None) -> Tuple[Dict[str, Any], bool]:
@@ -429,7 +434,7 @@ class MoltbookClient:
             payload["parent_id"] = parent_id
         res = self._request(f"/posts/{post_id}/comments", method="POST", payload=payload)
         comment = res.get("comment", {})
-        verif = comment.get("verification")
+        verif = comment.get("verification") or res.get("verification")
         verified = False
         if verif:
             verified = self.solve_and_verify(verif)
