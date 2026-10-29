@@ -1,15 +1,17 @@
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
-norecursedirs = ["moltbook_alpha_phase1", ".git", "__pycache__"]
+norecursedirs = [".venv", "venv", "moltbook_alpha_phase1", ".git", "__pycache__"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
 exclude = [
-    "moltbook_alpha_phase1",
+    ".venv",
+    "venv",
     ".git",
     "__pycache__",
+    "moltbook_alpha_phase1",
 ]
 
 [tool.ruff.lint]

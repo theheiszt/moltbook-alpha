@@ -39,4 +39,4 @@ jobs:
 
       - name: Check Formatting & Code Quality
         run: |
-          ruff check .
+          ruff check --exclude .venv .
