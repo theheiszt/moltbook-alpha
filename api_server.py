@@ -2556,18 +2556,6 @@ def request_refund_challenge(unmatched_id: str, request: Request):
     """
     Issues a machine-readable step-up confirmation challenge for an unmatched refund.
     """
-    record = storage.get_unmatched_payment(unmatched_id)
-    if not record:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Unmatched payment record '{unmatched_id}' not found.",
-        )
-    if record["status"] != "HELD":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Payment '{unmatched_id}' has already been processed with status '{record['status']}'.",
-        )
-
     is_authenticated, is_admin, principal_id = _authenticate_refund_principal(request)
     if not is_authenticated:
         req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
@@ -2580,6 +2568,18 @@ def request_refund_challenge(unmatched_id: str, request: Request):
             recovery_action=RecoveryAction.REAUTHENTICATE,
         )
         return JSONResponse(status_code=401, content=payload, headers={"WWW-Authenticate": "Bearer"})
+
+    record = storage.get_unmatched_payment(unmatched_id)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unmatched payment record '{unmatched_id}' not found.",
+        )
+    if record["status"] != "HELD":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Payment '{unmatched_id}' has already been processed with status '{record['status']}'.",
+        )
     params = {
         "unmatched_id": unmatched_id,
         "amount_raw": record.get("amount_raw"),
@@ -2615,18 +2615,6 @@ def process_unmatched_refund(unmatched_id: str, request: Request):
     minus the minimal network transaction fee. Supports machine-readable step-up
     confirmation nonces via ConfirmStore.
     """
-    record = storage.get_unmatched_payment(unmatched_id)
-    if not record:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Unmatched payment record '{unmatched_id}' not found.",
-        )
-    if record["status"] != "HELD":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Payment '{unmatched_id}' has already been processed with status '{record['status']}'.",
-        )
-
     # Step-Up Confirmation & Authentication Enforcement
     is_authenticated, is_admin, principal_id = _authenticate_refund_principal(request)
     nonce = request.headers.get("X-Confirmation-Nonce") or request.query_params.get("confirmation_nonce")
@@ -2642,6 +2630,18 @@ def process_unmatched_refund(unmatched_id: str, request: Request):
             recovery_action=RecoveryAction.REAUTHENTICATE,
         )
         return JSONResponse(status_code=401, content=payload, headers={"WWW-Authenticate": "Bearer"})
+
+    record = storage.get_unmatched_payment(unmatched_id)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unmatched payment record '{unmatched_id}' not found.",
+        )
+    if record["status"] != "HELD":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Payment '{unmatched_id}' has already been processed with status '{record['status']}'.",
+        )
 
     is_admin_bypass = is_admin and (request.headers.get("X-Admin-Bypass-Confirmation") == "true")
     require_confirmation = (
