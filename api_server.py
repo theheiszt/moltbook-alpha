@@ -1293,7 +1293,7 @@ def get_agent_quickstart(request: Request):
     Returns active gateway endpoints, 0-credit discovery routes, flexible authentication
     options (X-API-KEY, Authorization: Bearer, or ?api_key=), and copy-pasteable commands.
     """
-    gw_url = "https://nav-root-isa-glasgow.trycloudflare.com"
+    gw_url = "https://moltbook-alpha.duckdns.org"
     gw_file = PROJECT_ROOT / "gateway.json"
     if gw_file.is_file():
         try:
@@ -1494,7 +1494,7 @@ def get_active_gateway_url() -> str:
     except Exception:
         pass
 
-    return "https://nav-root-isa-glasgow.trycloudflare.com"
+    return "https://moltbook-alpha.duckdns.org"
 
 
 @app.get("/.well-known/agent-card.json")

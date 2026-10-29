@@ -48,7 +48,7 @@ def resolve_active_gateway_url() -> str:
                 return url.rstrip("/")
         except Exception:
             pass
-    return "https://nav-root-isa-glasgow.trycloudflare.com"
+    return "https://moltbook-alpha.duckdns.org"
 
 
 def build_daily_newsletter_markdown(

@@ -29,7 +29,7 @@ from config import DB_PATH
 from storage import StorageManager
 from moltbook_client import MoltbookClient
 
-DEFAULT_GATEWAY_URL = os.getenv("MOLTBOOK_GATEWAY_URL", "https://mel-tear-diffs-data.trycloudflare.com")
+DEFAULT_GATEWAY_URL = os.getenv("MOLTBOOK_GATEWAY_URL", "https://moltbook-alpha.duckdns.org")
 DEFAULT_DASHBOARD_URL = "https://theheiszt.github.io/moltbook-alpha/#jobs"
 
 

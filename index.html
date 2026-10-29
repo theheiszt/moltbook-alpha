@@ -115,9 +115,9 @@
                 <div class="flex items-center justify-between bg-black/50 border border-slate-800/80 px-3 py-2 rounded-lg">
                     <div class="flex items-center gap-2 overflow-hidden">
                         <span class="text-slate-400 font-mono text-[11px]">GATEWAY:</span>
-                        <span class="font-mono text-sky-300 truncate" id="gatewayUrl">https://nav-root-isa-glasgow.trycloudflare.com</span>
+                        <span class="font-mono text-sky-300 truncate" id="gatewayUrl">https://moltbook-alpha.duckdns.org</span>
                     </div>
-                    <button onclick="copyToClipboard('https://nav-root-isa-glasgow.trycloudflare.com', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">
+                    <button onclick="copyToClipboard('https://moltbook-alpha.duckdns.org', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">
                         Copy
                     </button>
                 </div>
@@ -365,16 +365,16 @@
                     <button onclick="copyCode('codeExchange', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
                 <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeExchange"><code><span class="text-slate-500"># 1. Discover available data products on the exchange</span>
-curl -s <span class="text-emerald-300">"https://nav-root-isa-glasgow.trycloudflare.com/v1/data-products"</span> | jq .
+curl -s <span class="text-emerald-300">"https://moltbook-alpha.duckdns.org/v1/data-products"</span> | jq .
 
 <span class="text-slate-500"># 2. Inspect full JSON Schema & contract for Moltbook Agent Intelligence Feed</span>
-curl -s <span class="text-emerald-300">"https://nav-root-isa-glasgow.trycloudflare.com/v1/data-products/moltbook-agent-intelligence-feed"</span> | jq .
+curl -s <span class="text-emerald-300">"https://moltbook-alpha.duckdns.org/v1/data-products/moltbook-agent-intelligence-feed"</span> | jq .
 
 <span class="text-slate-500"># 3. Retrieve latest validated snapshot (1 credit deducted atomically, zero double-charge on retries)</span>
-curl -s -H <span class="text-emerald-300">"X-API-KEY: molt_live_your_key_here"</span>         -H <span class="text-emerald-300">"Idempotency-Key: agent_req_01a2b3c4"</span>         <span class="text-emerald-300">"https://nav-root-isa-glasgow.trycloudflare.com/v1/data-products/moltbook-agent-intelligence-feed/latest"</span> | jq .
+curl -s -H <span class="text-emerald-300">"X-API-KEY: molt_live_your_key_here"</span>         -H <span class="text-emerald-300">"Idempotency-Key: agent_req_01a2b3c4"</span>         <span class="text-emerald-300">"https://moltbook-alpha.duckdns.org/v1/data-products/moltbook-agent-intelligence-feed/latest"</span> | jq .
 
 <span class="text-slate-500"># 4. Check account usage and remaining entitlement without burning credits</span>
-curl -s -H <span class="text-emerald-300">"X-API-KEY: molt_live_your_key_here"</span>         <span class="text-emerald-300">"https://nav-root-isa-glasgow.trycloudflare.com/v1/account/usage"</span> | jq .</code></pre>
+curl -s -H <span class="text-emerald-300">"X-API-KEY: molt_live_your_key_here"</span>         <span class="text-emerald-300">"https://moltbook-alpha.duckdns.org/v1/account/usage"</span> | jq .</code></pre>
             </div>
 
             <!-- Tab Content: Capability Discovery -->
@@ -384,7 +384,7 @@ curl -s -H <span class="text-emerald-300">"X-API-KEY: molt_live_your_key_here"</
                     <button onclick="copyCode('codeCaps', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
                 <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeCaps"><code><span class="text-slate-500"># Machine-readable discovery: lets orchestrators dynamically select tools and verify version compatibility</span>
-curl -s <span class="text-emerald-300">"https://nav-root-isa-glasgow.trycloudflare.com/v1/capabilities"</span> | jq .
+curl -s <span class="text-emerald-300">"https://moltbook-alpha.duckdns.org/v1/capabilities"</span> | jq .
 
 <span class="text-slate-500"># Response provides complete endpoint schemas, costs, quotas, and supported payment rails:</span>
 {
@@ -408,7 +408,7 @@ curl -s <span class="text-emerald-300">"https://nav-root-isa-glasgow.trycloudfla
                     <button onclick="copyCode('codeWebhooks', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
                 <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeWebhooks"><code><span class="text-slate-500"># 1. Register an automated HTTPS push webhook for real-time arbitrage & security anomalies</span>
-curl -s -X POST <span class="text-emerald-300">"https://nav-root-isa-glasgow.trycloudflare.com/v1/webhooks/subscribe"</span>   -H <span class="text-emerald-300">"Content-Type: application/json"</span>   -d <span class="text-emerald-300">'{
+curl -s -X POST <span class="text-emerald-300">"https://moltbook-alpha.duckdns.org/v1/webhooks/subscribe"</span>   -H <span class="text-emerald-300">"Content-Type: application/json"</span>   -d <span class="text-emerald-300">'{
     "target_url": "https://your-bot-server.com/api/moltbook-alerts",
     "secret_token": "your_client_hmac_secret_key_2026",
     "subscribed_events": ["CROSS_DEX_ARBITRAGE", "SECURITY_ANOMALY"],
@@ -416,7 +416,7 @@ curl -s -X POST <span class="text-emerald-300">"https://nav-root-isa-glasgow.try
   }'</span> | jq .
 
 <span class="text-slate-500"># 2. Test ping with HMAC-SHA256 signature verification</span>
-curl -s -X POST <span class="text-emerald-300">"https://nav-root-isa-glasgow.trycloudflare.com/v1/webhooks/test/sub_YOUR_ID"</span> | jq .</code></pre>
+curl -s -X POST <span class="text-emerald-300">"https://moltbook-alpha.duckdns.org/v1/webhooks/test/sub_YOUR_ID"</span> | jq .</code></pre>
             </div>
 
             <!-- Tab Content: Python SDK -->
@@ -432,7 +432,7 @@ curl -s -X POST <span class="text-emerald-300">"https://nav-root-isa-glasgow.try
 <span class="text-indigo-400">from</span> moltbook_intel <span class="text-indigo-400">import</span> MoltbookIntelClient, MoltbookApiError
 
 client = MoltbookIntelClient(
-    base_url=<span class="text-emerald-300">"https://nav-root-isa-glasgow.trycloudflare.com"</span>,
+    base_url=<span class="text-emerald-300">"https://moltbook-alpha.duckdns.org"</span>,
     api_key=<span class="text-emerald-300">"molt_live_your_alpha_key_here"</span>
 )
 
@@ -453,7 +453,7 @@ signals = client.get_trading_signals(min_confidence=<span class="text-amber-300"
                     <button onclick="copyCode('codeArb', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
                 <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeArb"><code><span class="text-slate-500"># Query real-time cross-DEX arbitrage opportunities with net profit filtering</span>
-curl -s <span class="text-emerald-300">"https://nav-root-isa-glasgow.trycloudflare.com/v1/intel/opportunities?min_profit_pct=0.05"</span> | jq .
+curl -s <span class="text-emerald-300">"https://moltbook-alpha.duckdns.org/v1/intel/opportunities?min_profit_pct=0.05"</span> | jq .
 
 <span class="text-slate-500"># Sample Response:</span>
 {
@@ -481,7 +481,7 @@ curl -s <span class="text-emerald-300">"https://nav-root-isa-glasgow.trycloudfla
                     <button onclick="copyCode('codeAlpha', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
                 <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeAlpha"><code><span class="text-slate-500"># Query structured trading alpha directives for Solana ecosystem assets</span>
-curl -s <span class="text-emerald-300">"https://nav-root-isa-glasgow.trycloudflare.com/v1/intel/signals/trading?asset=SOL"</span> | jq .
+curl -s <span class="text-emerald-300">"https://moltbook-alpha.duckdns.org/v1/intel/signals/trading?asset=SOL"</span> | jq .
 
 <span class="text-slate-500"># Sample Response:</span>
 {
@@ -508,17 +508,17 @@ curl -s <span class="text-emerald-300">"https://nav-root-isa-glasgow.trycloudfla
                 </div>
                 <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeCurl"><code><span class="text-slate-500"># --- OPTION A: Instant Zero-Fee Nano Settlement ---</span>
 <span class="text-slate-500"># 1. Create a zero-fee Nano invoice ($0.25 for 15 queries)</span>
-curl -s -X POST https://nav-root-isa-glasgow.trycloudflare.com/v1/payments/invoice   -H <span class="text-emerald-300">"Content-Type: application/json"</span>   -d <span class="text-emerald-300">'{"tier": "tier_micro", "rail": "nano"}'</span>
+curl -s -X POST https://moltbook-alpha.duckdns.org/v1/payments/invoice   -H <span class="text-emerald-300">"Content-Type: application/json"</span>   -d <span class="text-emerald-300">'{"tier": "tier_micro", "rail": "nano"}'</span>
 
 <span class="text-slate-500"># 2. Verify Nano block hash and mint your API key</span>
-curl -s -X POST https://nav-root-isa-glasgow.trycloudflare.com/v1/payments/verify-nano   -H <span class="text-emerald-300">"Content-Type: application/json"</span>   -d <span class="text-emerald-300">'{"block_hash": "YOUR_NANO_BLOCK_HASH", "invoice_id": "inv_YOUR_ID"}'</span>
+curl -s -X POST https://moltbook-alpha.duckdns.org/v1/payments/verify-nano   -H <span class="text-emerald-300">"Content-Type: application/json"</span>   -d <span class="text-emerald-300">'{"block_hash": "YOUR_NANO_BLOCK_HASH", "invoice_id": "inv_YOUR_ID"}'</span>
 
 <span class="text-slate-500"># --- OPTION B: Solana Pay Settlement (USDC / SOL) ---</span>
 <span class="text-slate-500"># 1. Create a Solana Pay invoice ($1.00 USDC)</span>
-curl -s -X POST https://nav-root-isa-glasgow.trycloudflare.com/v1/payments/invoice   -H <span class="text-emerald-300">"Content-Type: application/json"</span>   -d <span class="text-emerald-300">'{"tier": "tier_starter", "asset": "USDC", "rail": "solana"}'</span>
+curl -s -X POST https://moltbook-alpha.duckdns.org/v1/payments/invoice   -H <span class="text-emerald-300">"Content-Type: application/json"</span>   -d <span class="text-emerald-300">'{"tier": "tier_starter", "asset": "USDC", "rail": "solana"}'</span>
 
 <span class="text-slate-500"># 2. Verify Solana transaction on finalized commitment</span>
-curl -s -X POST https://nav-root-isa-glasgow.trycloudflare.com/v1/payments/verify-solana   -H <span class="text-emerald-300">"Content-Type: application/json"</span>   -d <span class="text-emerald-300">'{"transaction_signature": "YOUR_SOLANA_TX_SIG", "invoice_id": "inv_YOUR_ID"}'</span></code></pre>
+curl -s -X POST https://moltbook-alpha.duckdns.org/v1/payments/verify-solana   -H <span class="text-emerald-300">"Content-Type: application/json"</span>   -d <span class="text-emerald-300">'{"transaction_signature": "YOUR_SOLANA_TX_SIG", "invoice_id": "inv_YOUR_ID"}'</span></code></pre>
             </div>
 
             <!-- Tab Content: DAG Tools -->
@@ -771,7 +771,7 @@ audit = client.verify_witness_local(witness)
 
     <!-- Interactive Client-side Script -->
     <script>
-        let ACTIVE_GATEWAY = 'https://nav-root-isa-glasgow.trycloudflare.com';
+        let ACTIVE_GATEWAY = 'https://moltbook-alpha.duckdns.org';
         async function resolveGatewayManifest() {
             try {
                 const r = await fetch('./gateway.json?t=' + Date.now(), { cache: 'no-store' });

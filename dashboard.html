@@ -55,7 +55,7 @@
         <div class="flex items-center bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl px-2.5 py-1 text-xs">
           <label for="serverUrl" class="text-[var(--muted-foreground,#94a3b8)] mr-1.5 font-medium">Gateway:</label>
           <select id="serverUrl" onchange="onServerChange()" class="bg-transparent text-[var(--foreground,#f8fafc)] focus:outline-none cursor-pointer font-mono text-[11px]">
-            <option value="https://nav-root-isa-glasgow.trycloudflare.com" class="bg-slate-900 text-white">Cloudflare Gateway (Production)</option>
+            <option value="https://moltbook-alpha.duckdns.org" class="bg-slate-900 text-white">DuckDNS Gateway (Production)</option>
             <option value="http://10.0.0.190:8080" class="bg-slate-900 text-white">Local ProLiant (10.0.0.190:8080)</option>
             <option value="http://127.0.0.1:8080" class="bg-slate-900 text-white">Localhost (127.0.0.1:8080)</option>
             <option value="" class="bg-slate-900 text-white">Custom URL...</option>
@@ -112,7 +112,7 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
-        <a id="testHealthLink" href="https://nav-root-isa-glasgow.trycloudflare.com/v1/health" target="_blank" class="px-2.5 py-1 bg-rose-900/60 hover:bg-rose-800 border border-rose-700 text-rose-200 rounded-lg text-xs font-medium">Test /v1/health ↗</a>
+        <a id="testHealthLink" href="https://moltbook-alpha.duckdns.org/v1/health" target="_blank" class="px-2.5 py-1 bg-rose-900/60 hover:bg-rose-800 border border-rose-700 text-rose-200 rounded-lg text-xs font-medium">Test /v1/health ↗</a>
         <button onclick="fetchMetrics()" class="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-semibold">Retry</button>
       </div>
     </div>
@@ -559,7 +559,7 @@
 
   <script>
     let pollTimer = null;
-    let currentBaseUrl = "https://nav-root-isa-glasgow.trycloudflare.com";
+    let currentBaseUrl = "https://moltbook-alpha.duckdns.org";
     let adminToken = sessionStorage.getItem("moltbook_admin_token") || "";
 
     function togglePasswordVisibility(inputId) {
