@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi import FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
@@ -138,6 +139,7 @@ app.add_middleware(
     allow_headers=["*"],
     max_age=86400,
 )
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 # In-memory TTL cache for dashboard metrics (prevents SQLite lock contention from concurrent/rapid UI polling)
 _DASHBOARD_METRICS_CACHE_LOCK = threading.Lock()
@@ -176,6 +178,23 @@ async def request_tracing_middleware(request: Request, call_next):
 
     response = await call_next(request)
     response.headers["X-Request-ID"] = req_id
+
+    # Edge caching headers for unmetered static/discovery endpoints
+    if request.method == "GET" and response.status_code == 200:
+        path = request.url.path
+        if path in [
+            "/v1/health",
+            "/v1/quickstart",
+            "/v1/capabilities",
+            "/v1/intel/sample",
+            "/v1/sample",
+            "/.well-known/agent-card.json",
+            "/v1/payments/config",
+            "/v1/errors",
+        ] or (path.startswith("/v1/tools/") and path.endswith("/parameter-graph")):
+            response.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=60"
+            response.headers["Vary"] = "Accept-Encoding"
+
     return response
 
 
@@ -4029,6 +4048,14 @@ def get_sample_briefing_payload() -> Dict[str, Any]:
         "api_status_url": "/v1/health",
         "pricing_url": "/v1/payments/config",
     }
+
+
+@app.get("/v1/sample")
+def get_sample_alias(request: Request):
+    """
+    [UNMETERED - 0 CREDITS] Convenience alias for /v1/intel/sample.
+    """
+    return get_intel_sample(request)
 
 
 @app.get("/v1/intel/sample")

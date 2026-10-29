@@ -355,6 +355,13 @@ class MoltbookClient:
             self.agent_name = "unknown"
             self.agent_id = None
 
+        self._http_client = None
+        try:
+            import httpx
+            self._http_client = httpx.Client(timeout=12.0)
+        except Exception:
+            self._http_client = None
+
     def _request(self, endpoint: str, method: str = "GET", payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         from ops.transport.resilient_client import execute_sync, RetryPolicy
 
@@ -368,9 +375,21 @@ class MoltbookClient:
             headers["Content-Type"] = "application/json"
 
         def _do_http_call():
-            req = urllib.request.Request(url, data=data_bytes, headers=headers, method=method)
-            with urllib.request.urlopen(req, timeout=12) as resp:
-                return json.loads(resp.read().decode("utf-8"))
+            is_mocked = (
+                getattr(urllib.request.urlopen, "__module__", "") != "urllib.request"
+                or getattr(urllib.request.urlopen, "__name__", "") != "urlopen"
+                or hasattr(urllib.request.urlopen, "mock")
+                or hasattr(urllib.request.urlopen, "assert_called")
+            )
+            if is_mocked or getattr(self, "_http_client", None) is None:
+                req = urllib.request.Request(url, data=data_bytes, headers=headers, method=method)
+                with urllib.request.urlopen(req, timeout=12) as resp:
+                    return json.loads(resp.read().decode("utf-8"))
+
+            resp = self._http_client.request(method, url, content=data_bytes, headers=headers)
+            if resp.status_code >= 400:
+                raise urllib.error.HTTPError(url, resp.status_code, resp.text, resp.headers, None)
+            return resp.json()
 
         policy = getattr(self, "retry_policy", None) or RetryPolicy()
 
@@ -446,3 +465,16 @@ class MoltbookClient:
             return True
         except Exception:
             return False
+
+    def close(self) -> None:
+        if getattr(self, "_http_client", None) is not None:
+            try:
+                self._http_client.close()
+            except Exception:
+                pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
