@@ -32,9 +32,17 @@ fi
 
 # 2. HTTP /v1/health Probe
 if command -v curl >/dev/null 2>&1; then
-    HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 5 "$HEALTH_URL" || true)
-    HTTP_BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
-    HTTP_STATUS=$(echo "$HTTP_RESPONSE" | tail -n 1)
+    HTTP_STATUS="000"
+    HTTP_BODY=""
+    for attempt in 1 2 3 4 5; do
+        HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" --max-time 5 "$HEALTH_URL" || true)
+        HTTP_BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
+        HTTP_STATUS=$(echo "$HTTP_RESPONSE" | tail -n 1)
+        if [ "$HTTP_STATUS" = "200" ]; then
+            break
+        fi
+        sleep 2
+    done
 
     if [ "$HTTP_STATUS" = "200" ]; then
         if echo "$HTTP_BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then
@@ -62,7 +70,7 @@ fi
 # 3. Database File & Integrity Check
 if [ -f "$DB_FILE" ]; then
     if command -v sqlite3 >/dev/null 2>&1; then
-        INTEGRITY_CHECK=$(sqlite3 "$DB_FILE" "PRAGMA integrity_check;" 2>&1 || true)
+        INTEGRITY_CHECK=$(sqlite3 -cmd ".timeout 5000" "$DB_FILE" "PRAGMA integrity_check;" 2>&1 || true)
         if [ "$INTEGRITY_CHECK" = "ok" ]; then
             echo "[PASS] SQLite integrity check passed for ${DB_FILE}."
         else
@@ -72,7 +80,7 @@ if [ -f "$DB_FILE" ]; then
     elif command -v python3 >/dev/null 2>&1; then
         INTEGRITY_CHECK=$(python3 -c "
 import sqlite3
-con = sqlite3.connect('$DB_FILE')
+con = sqlite3.connect('$DB_FILE', timeout=5.0)
 res = con.execute('PRAGMA integrity_check;').fetchone()[0]
 print(res)
 con.close()
