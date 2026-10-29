@@ -63,7 +63,7 @@ def call_reconcile_endpoint(api_url: str, tx_sig: str, invoice_id: Optional[str]
     endpoints = [
         f"{api_url}/v1/payments/reconcile",
         "http://127.0.0.1:8080/v1/payments/reconcile",
-        "https://mel-tear-diffs-data.trycloudflare.com/v1/payments/reconcile",
+        "https://nav-root-isa-glasgow.trycloudflare.com/v1/payments/reconcile",
     ]
 
     for ep in endpoints:

@@ -15,7 +15,7 @@ from typing import Dict, Any, List
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-BASE_URL = "https://mel-tear-diffs-data.trycloudflare.com"
+BASE_URL = "https://nav-root-isa-glasgow.trycloudflare.com"
 
 INVOICE_SPECS: List[Dict[str, Any]] = [
     {"target_tier": "tier_starter", "asset": "SOL", "rail": "solana", "label": "Pilot Starter - Solana (0.005 SOL)"},

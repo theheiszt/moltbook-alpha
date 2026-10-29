@@ -48,7 +48,7 @@ def resolve_active_gateway_url() -> str:
                 return url.rstrip("/")
         except Exception:
             pass
-    return "https://mel-tear-diffs-data.trycloudflare.com"
+    return "https://nav-root-isa-glasgow.trycloudflare.com"
 
 
 def build_daily_newsletter_markdown(

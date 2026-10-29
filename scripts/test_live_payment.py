@@ -22,7 +22,7 @@ from solders.transaction import Transaction
 from solders.hash import Hash
 
 INVOICE_ID = "inv_ad2658e9ee8f168d60cf3747"
-GATEWAY_URL = "https://mel-tear-diffs-data.trycloudflare.com"
+GATEWAY_URL = "https://nav-root-isa-glasgow.trycloudflare.com"
 RPC_URL = "https://api.mainnet-beta.solana.com"
 WALLET_FILE = Path("data/trading_wallet.json")
 

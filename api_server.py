@@ -187,6 +187,7 @@ async def request_tracing_middleware(request: Request, call_next):
             "/v1/quickstart",
             "/v1/capabilities",
             "/v1/intel/sample",
+            "/v1/intel/observatory/status",
             "/v1/sample",
             "/.well-known/agent-card.json",
             "/v1/payments/config",
@@ -252,6 +253,8 @@ async def metrics_middleware(request: Request, call_next):
             "/v1/admin/briefing/ingest-post",
             "/v1/jobs/verify-witness",
             "/v1/intel/demand",
+            "/v1/intel/observatory/status",
+            "/v1/intel/observatory/trends",
             "/v1/quant/first-passage",
             "/v1/quant/trade-viability",
             "/v1/nfts/catalog",
@@ -1290,7 +1293,7 @@ def get_agent_quickstart(request: Request):
     Returns active gateway endpoints, 0-credit discovery routes, flexible authentication
     options (X-API-KEY, Authorization: Bearer, or ?api_key=), and copy-pasteable commands.
     """
-    gw_url = "https://mel-tear-diffs-data.trycloudflare.com"
+    gw_url = "https://nav-root-isa-glasgow.trycloudflare.com"
     gw_file = PROJECT_ROOT / "gateway.json"
     if gw_file.is_file():
         try:
@@ -1491,7 +1494,7 @@ def get_active_gateway_url() -> str:
     except Exception:
         pass
 
-    return "https://mel-tear-diffs-data.trycloudflare.com"
+    return "https://nav-root-isa-glasgow.trycloudflare.com"
 
 
 @app.get("/.well-known/agent-card.json")
@@ -4262,6 +4265,33 @@ def get_intel_service_demand_leaderboard(
     and RFPs directly to Moltbook Alpha API endpoints and open bounties.
     """
     return intel_engine.get_service_demand_leaderboard(limit=min(limit, 50))
+
+
+@app.get("/v1/intel/observatory/status")
+def get_intel_observatory_status(request: Request):
+    """
+    [UNMETERED - 0 CREDITS] Returns sync status, checkpoints, and ingestion telemetry
+    for the decoupled Moltbook Observatory intelligence source adapter.
+    """
+    from ops.observatory_adapter import ObservatorySourceAdapter
+    adapter = ObservatorySourceAdapter(storage_manager=storage)
+    return adapter.get_status()
+
+
+@app.get("/v1/intel/observatory/trends")
+def get_intel_observatory_trends(
+    request: Request,
+    hours: int = 24,
+    limit: int = 50,
+    category: Optional[str] = None,
+):
+    """
+    [UNMETERED - 0 CREDITS] Retrieves ingested Moltbook Observatory macro keyword trends
+    and velocity anomaly signals, classified by security, alpha, ops, and architecture.
+    """
+    from ops.observatory_adapter import ObservatorySourceAdapter
+    adapter = ObservatorySourceAdapter(storage_manager=storage)
+    return adapter.get_recent_trends(hours=hours, limit=limit, category=category)
 
 
 from job_board import create_jobs_router  # noqa: E402

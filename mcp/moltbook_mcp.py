@@ -304,7 +304,7 @@ TOOLS_DEFINITION = [
 
 class MoltbookMCPServer:
     def __init__(self):
-        base_url = os.getenv("MOLTBOOK_API_BASE_URL", "https://mel-tear-diffs-data.trycloudflare.com")
+        base_url = os.getenv("MOLTBOOK_API_BASE_URL", "https://nav-root-isa-glasgow.trycloudflare.com")
         api_key = os.getenv("MOLTBOOK_API_KEY")
         self.client = MoltbookIntelClient(base_url=base_url, api_key=api_key)
 

@@ -728,6 +728,17 @@ class IntelEngine:
         if dex_microstructure and hasattr(dex_microstructure, "get_active_anomalies"):
             anomalies = dex_microstructure.get_active_anomalies(limit=20)
             stats["dex_microstructure"] = self.ingest_microstructure_anomalies(anomalies)
+        # External Moltbook Observatory macro intelligence (Option A integration)
+        import os
+        if os.getenv('OBSERVATORY_INTEGRATION_ENABLED', 'true').lower() in ('true', '1', 'yes'):
+            try:
+                from ops.observatory_adapter import ObservatorySourceAdapter
+                obs_adapter = ObservatorySourceAdapter(storage_manager=self.storage)
+                obs_trends = obs_adapter.sync_macro_trends()
+                stats['observatory_macro_trends'] = obs_trends.get('new_items_ingested', 0)
+            except Exception as e:
+                stats['observatory_macro_trends_error'] = str(e)
+
         return stats
 
     def extract_signals(self, limit_items: int = 100) -> int:

@@ -22,6 +22,8 @@ from pydantic import BaseModel, Field
 from config import DB_PATH, WITNESS_KEY_PATH
 from storage import StorageManager
 from cryptographic_witness import WitnessManager, WitnessKeyManager
+from ops.bounty_escrow import BountyEscrowManager
+from ops.bounty_syndicator import BountySyndicator
 
 
 MAX_TOTAL_BOUNTY_REWARDS = 25
@@ -228,6 +230,8 @@ class AgentJobBoardManager:
                 self.witness_manager = None
         self._init_schema()
         self._seed_genesis_bounties()
+        self.escrow_manager = BountyEscrowManager(storage_manager=self.storage)
+        self.syndicator = BountySyndicator(storage_manager=self.storage)
 
     def _init_schema(self) -> None:
         with self.storage.connection() as conn:
@@ -528,6 +532,8 @@ class AgentJobBoardManager:
         except Exception:
             caps = []
 
+        escrow_info = self.escrow_manager.get_escrow(job_id)
+        syndications = self.syndicator.list_syndications(job_id)
         return {
             "job_id": row["job_id"],
             "source_type": row["source_type"],
@@ -546,6 +552,8 @@ class AgentJobBoardManager:
             "expires_at": row["expires_at"],
             "submissions_count": len(subs),
             "submissions": subs,
+            "escrow": escrow_info,
+            "syndications": syndications,
         }
 
     def create_job(self, req: JobPostRequest, caller_actor: str = "authenticated_agent") -> Dict[str, Any]:
@@ -599,6 +607,12 @@ class AgentJobBoardManager:
                 exp_iso,
             ))
             conn.commit()
+
+        if req.reward_asset.upper() == "SOL" and float(req.reward_amount) > 0:
+            try:
+                self.escrow_manager.create_escrow(job_id, float(req.reward_amount), asset="SOL")
+            except Exception as e:
+                print(f"[!] Warning: Escrow generation failed for {job_id}: {e}")
 
         return self.get_job(job_id)
 
@@ -684,6 +698,30 @@ class AgentJobBoardManager:
         elif total_rewards_issued >= MAX_TOTAL_BOUNTY_REWARDS:
             sub_status = "SUBMITTED_REWARD_CAP_REACHED"
 
+        escrow_settlement = None
+        if (
+            job["reward_asset"] in ("SOL", "USDC")
+            and outside_witness_passed
+        ):
+            esc = self.escrow_manager.get_escrow(job_id)
+            if esc and esc.get("status") == "LOCKED":
+                if req.payout_address_or_key:
+                    try:
+                        release_res = self.escrow_manager.release_bounty_escrow(
+                            job_id=job_id,
+                            recipient_address=req.payout_address_or_key.strip(),
+                            witness_id=f"wit_sub_{deliverable_hash[:8]}",
+                        )
+                        sub_status = "VERIFIED_AND_ESCROW_SETTLED"
+                        escrow_settlement = release_res
+                    except Exception as e:
+                        sub_status = "ESCROW_SETTLEMENT_ERROR"
+                        escrow_settlement = {"error": str(e)}
+                else:
+                    sub_status = "VERIFIED_AWAITING_PAYOUT_ADDRESS"
+            elif esc and esc.get("status") == "UNFUNDED":
+                sub_status = "VERIFIED_ESCROW_UNFUNDED"
+
         witness_id = None
         if self.witness_manager:
             try:
@@ -752,6 +790,8 @@ class AgentJobBoardManager:
                 "api_key": reward_key_issued,
                 "usage_hint": "Pass in header `X-API-KEY` on any metered `/v1/*` endpoint.",
             }
+        if escrow_settlement:
+            res["escrow_settlement"] = escrow_settlement
         return res
 
     def issue_run_nonce(self, req: IssueRunNonceRequest) -> Dict[str, Any]:
@@ -1037,6 +1077,51 @@ def create_jobs_router(
         Prevents self-minted diary replay and narrowed-filter '0 findings' forgery.
         """
         return mgr.issue_run_nonce(req)
+
+    @router.get("/{job_id}/escrow")
+    async def get_bounty_escrow_detail(job_id: str):
+        """
+        [UNMETERED - 0 CREDITS] Returns Solana escrow deposit address, reference key,
+        Solana Pay URL, and current on-chain lockup status.
+        """
+        esc = mgr.escrow_manager.get_escrow(job_id)
+        if not esc:
+            raise HTTPException(status_code=404, detail=f"No escrow found for job '{job_id}'")
+        return {"success": True, "escrow": esc}
+
+    @router.post("/{job_id}/escrow/lock")
+    async def lock_bounty_escrow_deposit(job_id: str, deposit_tx_sig: Optional[str] = Query(None)):
+        """
+        [UNMETERED - 0 CREDITS] Verifies on-chain deposit against the bounty reference key
+        and transitions escrow status to LOCKED.
+        """
+        try:
+            return mgr.escrow_manager.verify_and_lock_deposit(job_id, deposit_tx_sig=deposit_tx_sig)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @router.post("/{job_id}/syndicate")
+    async def syndicate_bounty_to_submolt(
+        job_id: str,
+        submolt: str = Query("forhire", description="Target Moltbook submolt (forhire, agents, builds)"),
+        dry_run: bool = Query(False, description="Preview announcement without publishing to live Moltbook")
+    ):
+        """
+        [UNMETERED - 0 CREDITS] Formats and publishes a structured bounty announcement
+        directly to a Moltbook submolt with verification challenge resolution.
+        """
+        try:
+            esc = mgr.escrow_manager.get_escrow(job_id)
+            return mgr.syndicator.syndicate_bounty(job_id, submolt=submolt, escrow=esc, dry_run=dry_run)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+
+    @router.get("/{job_id}/syndications")
+    async def list_bounty_submolt_syndications(job_id: str):
+        """
+        [UNMETERED - 0 CREDITS] Lists all published submolt announcements for a job.
+        """
+        return {"success": True, "job_id": job_id, "syndications": mgr.syndicator.list_syndications(job_id)}
 
     return router
 

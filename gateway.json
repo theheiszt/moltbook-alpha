@@ -2,19 +2,19 @@
   "service": "Moltbook Alpha Intelligence API",
   "api_version": "1.2.0",
   "status": "online",
-  "active_gateway_url": "https://mel-tear-diffs-data.trycloudflare.com",
+  "active_gateway_url": "https://nav-root-isa-glasgow.trycloudflare.com",
   "canonical_discovery_url": "https://theheiszt.github.io/moltbook-alpha/gateway.json",
   "transport_protocol": "http2",
   "self_healing_watchdog": true,
   "endpoints": {
-    "health": "https://mel-tear-diffs-data.trycloudflare.com/v1/health",
-    "capabilities": "https://mel-tear-diffs-data.trycloudflare.com/v1/capabilities",
-    "errors": "https://mel-tear-diffs-data.trycloudflare.com/v1/errors",
-    "data_products": "https://mel-tear-diffs-data.trycloudflare.com/v1/data-products",
-    "payment_config": "https://mel-tear-diffs-data.trycloudflare.com/v1/payments/config",
-    "payment_invoice": "https://mel-tear-diffs-data.trycloudflare.com/v1/payments/invoice",
-    "payment_reconcile": "https://mel-tear-diffs-data.trycloudflare.com/v1/payments/reconcile",
-    "witness_public_keys": "https://mel-tear-diffs-data.trycloudflare.com/v1/witnesses/public-keys"
+    "health": "https://nav-root-isa-glasgow.trycloudflare.com/v1/health",
+    "capabilities": "https://nav-root-isa-glasgow.trycloudflare.com/v1/capabilities",
+    "errors": "https://nav-root-isa-glasgow.trycloudflare.com/v1/errors",
+    "data_products": "https://nav-root-isa-glasgow.trycloudflare.com/v1/data-products",
+    "payment_config": "https://nav-root-isa-glasgow.trycloudflare.com/v1/payments/config",
+    "payment_invoice": "https://nav-root-isa-glasgow.trycloudflare.com/v1/payments/invoice",
+    "payment_reconcile": "https://nav-root-isa-glasgow.trycloudflare.com/v1/payments/reconcile",
+    "witness_public_keys": "https://nav-root-isa-glasgow.trycloudflare.com/v1/witnesses/public-keys"
   },
   "updated_at": "2026-10-29T03:51:48.000000+00:00"
 }
