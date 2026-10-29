@@ -53,11 +53,11 @@ class ConfirmationChallenge:
 class ConfirmStore:
     """Thread-safe in-memory store for single-use confirmation nonces."""
 
-    def __init__(self, default_ttl_seconds: float = 300.0):
+    def __init__(self, default_ttl_seconds: float = 300.0, strict_mode: bool = True):
         self.default_ttl_seconds = default_ttl_seconds
         self._challenges: Dict[str, ConfirmationChallenge] = {}
         self._lock = threading.Lock()
-        self.strict_mode: bool = False
+        self.strict_mode: bool = strict_mode
 
     @staticmethod
     def compute_fingerprint(action: str, principal_id: str, params: Dict[str, Any]) -> str:

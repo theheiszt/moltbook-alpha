@@ -44,6 +44,7 @@ class RetryPolicy:
     max_429_retries: int = 2
     max_retry_after: float = 10.0
     jitter: bool = True
+    retry_non_idempotent: bool = False
 
     def is_retryable(self, status_code: int, attempt: int) -> bool:
         """Determines if a given status code is eligible for retry on the current attempt."""
@@ -139,6 +140,8 @@ def execute_sync(
     *,
     policy: Optional[RetryPolicy] = None,
     on_retry: Optional[Callable[[int, Exception, float], None]] = None,
+    method: str = "GET",
+    idempotent: bool = True,
 ) -> T:
     """
     Executes a synchronous request callable with retry and backoff semantics.
@@ -158,6 +161,8 @@ def execute_sync(
                     if status_code in NON_RETRYABLE_4XX:
                         telemetry.record_fatal_client_error()
                     raise exc
+                if not idempotent and method.upper() in ("POST", "PATCH") and not pol.retry_non_idempotent:
+                    raise exc
             else:
                 # Connection or network-level exception
                 is_network_drop = isinstance(
@@ -171,6 +176,8 @@ def execute_sync(
                     ),
                 )
                 if not is_network_drop or attempt >= pol.max_retries:
+                    raise exc
+                if not idempotent and method.upper() in ("POST", "PATCH") and not pol.retry_non_idempotent:
                     raise exc
 
             # Calculate delay
@@ -187,6 +194,8 @@ async def execute_async(
     *,
     policy: Optional[RetryPolicy] = None,
     on_retry: Optional[Callable[[int, Exception, float], None]] = None,
+    method: str = "GET",
+    idempotent: bool = True,
 ) -> T:
     """
     Executes an asynchronous coroutine factory with retry and backoff semantics.
@@ -206,6 +215,8 @@ async def execute_async(
                     if status_code in NON_RETRYABLE_4XX:
                         telemetry.record_fatal_client_error()
                     raise exc
+                if not idempotent and method.upper() in ("POST", "PATCH") and not pol.retry_non_idempotent:
+                    raise exc
             else:
                 is_network_drop = isinstance(
                     exc,
@@ -217,6 +228,8 @@ async def execute_async(
                     ),
                 )
                 if not is_network_drop or attempt >= pol.max_retries:
+                    raise exc
+                if not idempotent and method.upper() in ("POST", "PATCH") and not pol.retry_non_idempotent:
                     raise exc
 
             delay = pol.compute_delay(status_code or 500, attempt, retry_after)

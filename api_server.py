@@ -2522,6 +2522,35 @@ def get_unmatched_payments(
     }
 
 
+def _authenticate_refund_principal(request: Request) -> tuple[bool, bool, Optional[str]]:
+    auth_header = request.headers.get("authorization", "")
+    bearer_token = auth_header[7:].strip() if auth_header.lower().startswith("bearer ") else ""
+    raw_api_key = request.headers.get("x-api-key") or request.query_params.get("api_key")
+    if not raw_api_key and bearer_token and not bearer_token.startswith("adm_sess_"):
+        raw_api_key = bearer_token
+    metrics_token = os.getenv("METRICS_BEARER_TOKEN", "").strip()
+
+    is_admin = False
+    if bearer_token and storage.validate_admin_session(bearer_token):
+        is_admin = True
+    elif metrics_token and bearer_token and hmac.compare_digest(bearer_token, metrics_token):
+        is_admin = True
+    elif raw_api_key:
+        key_info = storage.get_key_info(raw_api_key)
+        if key_info and key_info.get("tier") == "admin":
+            is_admin = True
+
+    if is_admin:
+        return True, True, f"admin:{getattr(request.client, 'host', 'operator')}"
+
+    if raw_api_key:
+        key_info = storage.get_key_info(raw_api_key)
+        if key_info and key_info.get("is_active"):
+            return True, False, key_info["key_hash"]
+
+    return False, False, None
+
+
 @app.post("/v1/payments/refund/{unmatched_id}/challenge")
 def request_refund_challenge(unmatched_id: str, request: Request):
     """
@@ -2539,7 +2568,18 @@ def request_refund_challenge(unmatched_id: str, request: Request):
             detail=f"Payment '{unmatched_id}' has already been processed with status '{record['status']}'.",
         )
 
-    principal_id = getattr(request.state, "key_hash", None) or (request.client.host if request.client else "unknown")
+    is_authenticated, is_admin, principal_id = _authenticate_refund_principal(request)
+    if not is_authenticated:
+        req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+        payload = format_error_payload(
+            code=ErrorCode.AUTHENTICATION_REQUIRED.value,
+            message="Authentication required: Valid API key or administrator session is required to request a refund challenge.",
+            request_id=req_id,
+            status_code=401,
+            details={"unmatched_id": unmatched_id},
+            recovery_action=RecoveryAction.REAUTHENTICATE,
+        )
+        return JSONResponse(status_code=401, content=payload, headers={"WWW-Authenticate": "Bearer"})
     params = {
         "unmatched_id": unmatched_id,
         "amount_raw": record.get("amount_raw"),
@@ -2587,14 +2627,32 @@ def process_unmatched_refund(unmatched_id: str, request: Request):
             detail=f"Payment '{unmatched_id}' has already been processed with status '{record['status']}'.",
         )
 
-    # Step-Up Confirmation Verification
+    # Step-Up Confirmation & Authentication Enforcement
+    is_authenticated, is_admin, principal_id = _authenticate_refund_principal(request)
     nonce = request.headers.get("X-Confirmation-Nonce") or request.query_params.get("confirmation_nonce")
+
+    if not is_authenticated and not nonce:
+        req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+        payload = format_error_payload(
+            code=ErrorCode.AUTHENTICATION_REQUIRED.value,
+            message="Authentication required: Valid API key or administrator session is required to initiate a refund.",
+            request_id=req_id,
+            status_code=401,
+            details={"unmatched_id": unmatched_id},
+            recovery_action=RecoveryAction.REAUTHENTICATE,
+        )
+        return JSONResponse(status_code=401, content=payload, headers={"WWW-Authenticate": "Bearer"})
+
+    is_admin_bypass = is_admin and (request.headers.get("X-Admin-Bypass-Confirmation") == "true")
     require_confirmation = (
-        request.headers.get("X-Require-Confirmation") == "true"
-        or request.query_params.get("require_confirmation") == "true"
-        or getattr(confirm_store, "strict_mode", False)
+        not is_admin_bypass
+        and (
+            getattr(confirm_store, "strict_mode", True)
+            or request.headers.get("X-Require-Confirmation") == "true"
+            or request.query_params.get("require_confirmation") == "true"
+        )
     )
-    principal_id = getattr(request.state, "key_hash", None) or (request.client.host if request.client else "unknown")
+    effective_principal = principal_id or getattr(request.state, "key_hash", None) or (request.client.host if request.client else "unknown")
     params = {
         "unmatched_id": unmatched_id,
         "amount_raw": record.get("amount_raw"),
@@ -2605,7 +2663,7 @@ def process_unmatched_refund(unmatched_id: str, request: Request):
     if require_confirmation and not nonce:
         challenge = confirm_store.issue(
             action="REFUND_PAYMENT",
-            principal_id=principal_id,
+            principal_id=effective_principal,
             params=params,
             consequence_summary={
                 "warning": "Executing this operation will permanently dispatch an on-chain refund from the treasury wallet.",
@@ -2639,7 +2697,7 @@ def process_unmatched_refund(unmatched_id: str, request: Request):
         ok, reason = confirm_store.verify_and_consume(
             nonce=nonce,
             action="REFUND_PAYMENT",
-            principal_id=principal_id,
+            principal_id=effective_principal,
             params=params,
         )
         if not ok:

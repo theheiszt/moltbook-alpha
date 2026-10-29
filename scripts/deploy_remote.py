@@ -48,7 +48,7 @@ def main():
         out = stdout.read().decode()
         err = stderr.read().decode()
         # Filter password prompt from err
-        clean_err = "\n".join([l for l in err.splitlines() if "[sudo] password for" not in l])
+        clean_err = "\n".join([line for line in err.splitlines() if "[sudo] password for" not in line])
         if out.strip():
             print("  STDOUT:", out.strip().encode("ascii", "replace").decode("ascii"))
         if clean_err.strip():

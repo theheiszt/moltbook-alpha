@@ -394,7 +394,8 @@ class MoltbookClient:
         policy = getattr(self, "retry_policy", None) or RetryPolicy()
 
         try:
-            return execute_sync(_do_http_call, policy=policy)
+            is_idemp = method.upper() in ("GET", "HEAD") or (isinstance(payload, dict) and "idempotency_key" in payload)
+            return execute_sync(_do_http_call, policy=policy, method=method, idempotent=is_idemp)
         except urllib.error.HTTPError as e:
             err_body = e.read().decode("utf-8") if hasattr(e, "read") else str(e)
             raise RuntimeError(f"HTTP {e.code} from {endpoint}: {err_body}") from e

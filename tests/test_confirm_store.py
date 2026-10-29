@@ -11,7 +11,7 @@ from ops.security.confirm_store import confirm_store, ConfirmStore
 
 def setup_function():
     confirm_store.clear()
-    confirm_store.strict_mode = False
+    confirm_store.strict_mode = True
 
 
 def test_confirm_store_unit_lifecycle():
@@ -86,6 +86,8 @@ def test_confirm_store_unit_expiration():
 
 def test_api_step_up_challenge_and_redemption_flow():
     client = TestClient(app)
+    api_key, _ = storage.create_api_key(tier="standard", credits=100)
+    auth_headers = {"x-api-key": api_key}
 
     # 1. Seed unmatched payments in HELD status
     payer = "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx"
@@ -111,10 +113,15 @@ def test_api_step_up_challenge_and_redemption_flow():
     )
     unm2_id = unm2["unmatched_id"]
 
-    # 2. First attempt with X-Require-Confirmation: true -> Expect HTTP 428 Precondition Required
+    # 2. Anonymous attempt -> Expect HTTP 401 Unauthorized
+    res_anon = client.post(f"/v1/payments/refund/{unm_id}")
+    assert res_anon.status_code == 401
+    assert res_anon.json()["code"] == "AUTHENTICATION_REQUIRED"
+
+    # 3. Authenticated attempt without nonce in strict mode -> Expect HTTP 428 Precondition Required
     res_chal = client.post(
         f"/v1/payments/refund/{unm_id}",
-        headers={"X-Require-Confirmation": "true"},
+        headers=auth_headers,
     )
     assert res_chal.status_code == 428
     data_chal = res_chal.json()
@@ -126,10 +133,10 @@ def test_api_step_up_challenge_and_redemption_flow():
     nonce = data_chal["recovery"]["challenge_nonce"]
     assert nonce.startswith("conf_")
 
-    # 3. Second attempt with X-Confirmation-Nonce header -> Expect HTTP 200 and successful refund
+    # 4. Confirm with nonce + auth -> Expect HTTP 200 and successful refund
     res_confirm = client.post(
         f"/v1/payments/refund/{unm_id}",
-        headers={"X-Confirmation-Nonce": nonce},
+        headers={**auth_headers, "X-Confirmation-Nonce": nonce},
     )
     assert res_confirm.status_code == 200
     data_confirm = res_confirm.json()
@@ -138,10 +145,10 @@ def test_api_step_up_challenge_and_redemption_flow():
     assert data_confirm["refund_amount_raw"] == 50_000_000 - 5000
     assert data_confirm["state_witness_id"].startswith("wit_")
 
-    # 4. Attempt to replay the burned nonce on another held payment -> Expect HTTP 410 Gone
+    # 5. Attempt to replay the burned nonce on another held payment -> Expect HTTP 410 Gone
     res_replay = client.post(
         f"/v1/payments/refund/{unm2_id}",
-        headers={"X-Confirmation-Nonce": nonce},
+        headers={**auth_headers, "X-Confirmation-Nonce": nonce},
     )
     assert res_replay.status_code == 410
     data_replay = res_replay.json()
@@ -151,6 +158,8 @@ def test_api_step_up_challenge_and_redemption_flow():
 
 def test_api_explicit_challenge_endpoint():
     client = TestClient(app)
+    api_key, _ = storage.create_api_key(tier="standard", credits=100)
+    auth_headers = {"x-api-key": api_key}
 
     # Seed unmatched payment
     payer = "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx"
@@ -165,8 +174,13 @@ def test_api_explicit_challenge_endpoint():
     )
     unm_id = unm["unmatched_id"]
 
-    # Request challenge via dedicated challenge endpoint
-    res_req = client.post(f"/v1/payments/refund/{unm_id}/challenge")
+    # Anonymous challenge request fails
+    res_anon_req = client.post(f"/v1/payments/refund/{unm_id}/challenge")
+    assert res_anon_req.status_code == 401
+    assert res_anon_req.json()["code"] == "AUTHENTICATION_REQUIRED"
+
+    # Authenticated request challenge via dedicated challenge endpoint
+    res_req = client.post(f"/v1/payments/refund/{unm_id}/challenge", headers=auth_headers)
     assert res_req.status_code == 200
     chal_data = res_req.json()
     nonce = chal_data["challenge_nonce"]
@@ -176,7 +190,7 @@ def test_api_explicit_challenge_endpoint():
     # Redeem challenge
     res_redeem = client.post(
         f"/v1/payments/refund/{unm_id}",
-        headers={"X-Confirmation-Nonce": nonce},
+        headers={**auth_headers, "X-Confirmation-Nonce": nonce},
     )
     assert res_redeem.status_code == 200
     assert res_redeem.json()["status"] == "REFUNDED"

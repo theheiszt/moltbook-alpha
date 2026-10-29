@@ -220,6 +220,30 @@ class SafeEgressTransport(httpx.AsyncBaseTransport):
         )
         response = await self._underlying.handle_async_request(request)
 
+        # Anti-DNS Rebinding: Verify actual connected peer socket IP post-connect
+        network_stream = response.extensions.get("network_stream")
+        if network_stream:
+            sock = network_stream.get_extra_info("socket")
+            if sock:
+                try:
+                    peer_addr = sock.getpeername()
+                    if peer_addr and len(peer_addr) > 0:
+                        peer_ip = ipaddress.ip_address(peer_addr[0])
+                        if is_ip_blocked(peer_ip):
+                            await response.aclose()
+                            egress_audit.record_block(
+                                str(request.url.host),
+                                target_str,
+                                f"Connected socket peer {peer_ip} in restricted network (DNS rebinding detected)",
+                            )
+                            raise EgressSecurityError(
+                                f"Connected socket peer IP '{peer_ip}' is in a restricted network. Possible DNS rebinding attempt."
+                            )
+                except EgressSecurityError:
+                    raise
+                except (ValueError, OSError):
+                    pass
+
         # Enforce response body size limit
         content_length = response.headers.get("Content-Length")
         if content_length and int(content_length) > self._max_response_bytes:

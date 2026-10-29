@@ -134,7 +134,11 @@ def test_reconcile_orphan_deposit_and_auto_refund():
         unmatched_id = b1["unmatched_id"]
 
         # 2. Refund via /v1/payments/refund/{unmatched_id} and verify Ed25519 witness receipt
-        r_ref = client.post(f"/v1/payments/refund/{unmatched_id}")
+        admin_key, _ = api_server.storage.create_api_key(tier="admin", credits=1000)
+        r_ref = client.post(
+            f"/v1/payments/refund/{unmatched_id}",
+            headers={"x-api-key": admin_key, "X-Admin-Bypass-Confirmation": "true"},
+        )
         assert r_ref.status_code == 200
         b_ref = r_ref.json()
         assert b_ref["status"] == "REFUNDED"

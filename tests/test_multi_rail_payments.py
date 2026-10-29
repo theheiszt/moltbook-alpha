@@ -189,8 +189,20 @@ def test_automated_refund_dispatcher_api():
     assert list_res.status_code == 200
     assert any(p["unmatched_id"] == unm_id for p in list_res.json()["unmatched_payments"])
 
-    # Trigger refund
-    ref_res = client.post(f"/v1/payments/refund/{unm_id}")
+    # Anonymous attempt fails with 401
+    anon_res = client.post(f"/v1/payments/refund/{unm_id}")
+    assert anon_res.status_code == 401
+    assert anon_res.json()["code"] == "AUTHENTICATION_REQUIRED"
+
+    # Trigger refund with admin bypass
+    storage = StorageManager(DB_PATH)
+    admin_key, _ = storage.create_api_key(tier="admin", credits=1000)
+    admin_headers = {
+        "x-api-key": admin_key,
+        "X-Admin-Bypass-Confirmation": "true",
+    }
+
+    ref_res = client.post(f"/v1/payments/refund/{unm_id}", headers=admin_headers)
     assert ref_res.status_code == 200
     ref_data = ref_res.json()
     assert ref_data["success"] is True
@@ -201,7 +213,7 @@ def test_automated_refund_dispatcher_api():
     assert ref_data["refund_tx_sig"].startswith("ref_tx_")
 
     # Double refund rejected
-    ref_res2 = client.post(f"/v1/payments/refund/{unm_id}")
+    ref_res2 = client.post(f"/v1/payments/refund/{unm_id}", headers=admin_headers)
     assert ref_res2.status_code == 400
 
 

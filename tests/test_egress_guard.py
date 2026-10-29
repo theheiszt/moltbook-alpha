@@ -142,3 +142,33 @@ def test_webhook_subscription_api_rejects_ssrf():
 
     # Cleanup
     client.delete(f"/v1/webhooks/{sub_id}")
+
+
+@pytest.mark.anyio
+async def test_safe_egress_transport_blocks_dns_rebinding_socket():
+    import unittest.mock as mock
+    import httpx
+    from ops.security.egress_guard import SafeEgressTransport
+
+    transport = SafeEgressTransport()
+
+    # Create mock response where socket peer IP is an internal private IP (e.g. 10.0.0.5)
+    mock_response = mock.MagicMock(spec=httpx.Response)
+    mock_response.headers = {}
+    mock_response.aclose = mock.AsyncMock()
+
+    mock_socket = mock.MagicMock()
+    mock_socket.getpeername.return_value = ("10.0.0.5", 443)
+
+    mock_stream = mock.MagicMock()
+    mock_stream.get_extra_info.side_effect = lambda key: mock_socket if key == "socket" else None
+
+    mock_response.extensions = {"network_stream": mock_stream}
+
+    with mock.patch.object(transport._underlying, "handle_async_request", return_value=mock_response):
+        req = httpx.Request("GET", "https://example.com/webhook")
+        with pytest.raises(EgressSecurityError) as exc_info:
+            await transport.handle_async_request(req)
+
+        assert "DNS rebinding" in str(exc_info.value)
+        mock_response.aclose.assert_awaited_once()
