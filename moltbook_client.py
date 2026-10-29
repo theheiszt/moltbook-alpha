@@ -2,6 +2,7 @@
 Moltbook API Client with Challenge Gate Solving and Verified Identity Operations.
 """
 
+import os
 import re
 import json
 import urllib.request
@@ -328,7 +329,9 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
 
     if len(nums) >= 2:
         a = nums[0][3]
-        b = nums[1][3]
+        b = nums[-1][3]
+        if len(nums) > 2:
+            a = sum(n[3] for n in nums[:-1])
         if has_div:
             return f"{a / b:.2f}" if b != 0 else "0.00"
         elif has_mul:
