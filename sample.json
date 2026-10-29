@@ -1,0 +1,101 @@
+{
+  "success": true,
+  "sample": true,
+  "mode": "evaluation_unmetered",
+  "generated_at": "2026-10-27T22:00:00Z",
+  "credits_remaining": "unmetered",
+  "briefing_markdown": "# Moltbook Alpha Intelligence Briefing [SAMPLE EVALUATION]\n\n## Executive Summary\nSynthesized market telemetry across Solana concentrated liquidity pools, Moltbook autonomous agent discussions, and protocol security advisories.\n\n## Critical Signals\n- **Orca Whirlpool SOL-USDC**: Tick vacuum detected at -25 bps tick boundary; skew indicates institutional bid support.\n- **Agent Ecosystem**: Autonomous agent challenge verification throughput up 42% over last 6 hours.\n\n## Provenance Witness\nState witness ID: `wit_sample_e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`\nSignature verified against Atlas Provenance Guard.\n",
+  "signals": [
+    {
+      "signal_id": "sig_sample_001",
+      "category": "dex_microstructure",
+      "confidence": "HIGH",
+      "title": "Orca Whirlpool SOL-USDC Tick Vacuum Detected",
+      "summary": "Sub-tick volume divergence identified at lower tick boundary indicating upward volatility squeeze.",
+      "sources": [
+        {
+          "source_name": "Orca Whirlpool",
+          "source_type": "dex_clmm",
+          "pool_id": "7qbRF6YsyGuLUVs6Y1q64bdVrfe4ZcUUz1JRdoVNUJnm",
+          "verified": true
+        }
+      ],
+      "observed_at": "2026-10-27T22:00:00Z"
+    },
+    {
+      "signal_id": "sig_sample_002",
+      "category": "security_advisory",
+      "confidence": "HIGH",
+      "title": "Moltbook Protocol Agent Identity Verification Standard",
+      "summary": "Cryptographic Ed25519 witness state validation mandated for autonomous trading bot telemetry pipelines.",
+      "sources": [
+        {
+          "source_name": "Moltbook Protocol",
+          "source_type": "social_graph",
+          "post_id": "e2ae1289-a20b-4bd4-ba46-1af0fd1fc6cc",
+          "verified": true
+        }
+      ],
+      "observed_at": "2026-10-27T22:00:00Z"
+    }
+  ],
+  "trading_signals": [
+    {
+      "signal_id": "sig_sample_sol_001",
+      "asset": "SOL",
+      "pair": "SOL/USDC",
+      "action": "BUY_ACCUMULATE",
+      "confidence_score": 0.88,
+      "confidence_tier": "HIGH",
+      "risk_rating": "LOW",
+      "entry_price": 182.15,
+      "price_targets": [186.7, 193.99],
+      "stop_loss": 178.87,
+      "risk_reward_ratio": 2.36,
+      "timeframe": "1h",
+      "catalyst_type": "orderflow_imbalance",
+      "headline": "Institutional Bid Skew & Orderbook Imbalance on SOL-USDC",
+      "rationale": "Concentrated liquidity orderbooks show heavy bid imbalance (+10.6%) with over $2.4M bid depth inside the 50 bps band.",
+      "execution_params": {
+        "recommended_venue": "Raydium CLMM",
+        "route_type": "CLMM_DIRECT",
+        "max_slippage_bps": 25,
+        "min_liquidity_depth_usd": 100000.0
+      },
+      "created_at": "2026-10-27T22:00:00Z"
+    }
+  ],
+  "opportunities": [
+    {
+      "opportunity_id": "opp_sample_arb_sol_usdc",
+      "opportunity_type": "cross_dex_arbitrage",
+      "pair": "SOL/USDC",
+      "buy_venue": "Raydium CLMM",
+      "buy_pool_id": "2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv",
+      "buy_price": 182.15,
+      "sell_venue": "Orca Whirlpool",
+      "sell_pool_id": "7qbRF6YsyGuLUVs6Y1q64bdVrfe4ZcUUz1JRdoVNUJnm",
+      "sell_price": 182.8,
+      "gross_spread_bps": 35.68,
+      "net_profit_pct": 0.28,
+      "estimated_capacity_usd": 75000.0,
+      "urgency": "HIGH",
+      "estimated_decay_seconds": 15,
+      "detected_at": 1793149200.0
+    }
+  ],
+  "microstructure_summary": {
+    "tracked_pools": 5,
+    "anomalies_detected": 1,
+    "aggregate_depth_usd_50bps": 14250000.0
+  },
+  "state_witness": {
+    "action": "SAMPLE_EVALUATION",
+    "witness_id": "wit_sample_e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "canonical_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "verified": true
+  },
+  "documentation_url": "https://theheiszt.github.io/moltbook-alpha",
+  "api_status_url": "https://gzip-franklin-gsm-vii.trycloudflare.com/v1/health",
+  "pricing_url": "https://gzip-franklin-gsm-vii.trycloudflare.com/v1/payments/config"
+}
