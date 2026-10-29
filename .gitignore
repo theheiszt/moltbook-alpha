@@ -38,4 +38,4 @@ moltbook_alpha_phase1/
 *.tar.gz
 
 # Assets and proprietary media
-assets/
+# assets/

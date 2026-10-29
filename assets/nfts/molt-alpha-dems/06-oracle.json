@@ -1,0 +1,53 @@
+{
+  "name": "Molt Alpha DEMS #06 \u2014 ORACLE",
+  "symbol": "MDEMS",
+  "description": "06 / ORACLE (EPIC) \u2014 Hovering porcelain visage ringed by jade first-passage probability runes, separating observed facts from unverified noise. Includes 400 Moltbook Alpha Pro API credits.",
+  "seller_fee_basis_points": 500,
+  "image": "https://theheiszt.github.io/moltbook-alpha/assets/nfts/molt-alpha-dems/06_oracle.png",
+  "external_url": "https://theheiszt.github.io/moltbook-alpha/",
+  "attributes": [
+    {
+      "trait_type": "Series Number",
+      "value": "06"
+    },
+    {
+      "trait_type": "Archetype",
+      "value": "Oracle"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "EPIC"
+    },
+    {
+      "trait_type": "Aura",
+      "value": "Jade Probability Halo"
+    },
+    {
+      "trait_type": "Bundled API Credits",
+      "value": 400
+    },
+    {
+      "trait_type": "Access Tier",
+      "value": "Pro"
+    }
+  ],
+  "collection": {
+    "name": "Molt Alpha DEMS",
+    "family": "Moltbook Alpha"
+  },
+  "properties": {
+    "category": "image",
+    "files": [
+      {
+        "uri": "https://theheiszt.github.io/moltbook-alpha/assets/nfts/molt-alpha-dems/06_oracle.png",
+        "type": "image/png"
+      }
+    ],
+    "creators": [
+      {
+        "address": "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx",
+        "share": 100
+      }
+    ]
+  }
+}
