@@ -2348,7 +2348,7 @@ class StorageManager:
         event_type: Optional[str] = None
     ) -> list[Dict[str, Any]]:
         """Retrieves recent audit log events."""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             cur = conn.cursor()
             if event_type:
                 cur.execute(
@@ -2425,7 +2425,7 @@ class StorageManager:
         """
         Aggregates conversion counts across funnel stages.
         """
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             cur = conn.cursor()
             if since_utc:
                 cur.execute(
@@ -2464,7 +2464,7 @@ class StorageManager:
         limit: int = 100,
         event_name: Optional[str] = None,
     ) -> list[Dict[str, Any]]:
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             cur = conn.cursor()
             if event_name:
                 cur.execute(
@@ -2518,7 +2518,7 @@ class StorageManager:
         iso_1h = (now - timedelta(hours=1)).isoformat()
         iso_24h = (now - timedelta(hours=24)).isoformat()
 
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             cur = conn.cursor()
 
             # 1. Total & Active Users
@@ -2703,7 +2703,7 @@ class StorageManager:
         Returns True if operational, raises StorageError or returns False on failure.
         """
         try:
-            with self._lock, self.connection() as conn:
+            with self.connection() as conn:
                 cur = conn.cursor()
                 cur.execute("SELECT 1")
                 row = cur.fetchone()
@@ -3052,7 +3052,7 @@ class StorageManager:
 
     def get_key_lots(self, key_hash: str) -> list[Dict[str, Any]]:
         """Retrieves all credit lots (active and inactive) for a key hash."""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             cur = conn.cursor()
             cur.execute(
                 """
@@ -3067,7 +3067,7 @@ class StorageManager:
 
     def get_credit_ledger(self, key_hash: Optional[str] = None, limit: int = 50) -> list[Dict[str, Any]]:
         """Retrieves audit trail events from credit_ledger_events."""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             cur = conn.cursor()
             if key_hash:
                 cur.execute(

@@ -2493,9 +2493,31 @@ def get_unmatched_payments(
         payer_wallet=payer_wallet,
         limit=min(limit, 100),
     )
+    now = datetime.now(timezone.utc)
+    ages = []
+    for r in records:
+        ts = r.get("created_at")
+        if ts:
+            try:
+                dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+                ages.append(max(0.0, (now - dt).total_seconds()))
+            except Exception:
+                pass
+    if ages:
+        oldest_age_sec = max(ages)
+        ages.sort()
+        p95_idx = int(0.95 * (len(ages) - 1))
+        p95_age_sec = ages[p95_idx]
+    else:
+        oldest_age_sec = 0.0
+        p95_age_sec = 0.0
+
     return {
         "count": len(records),
         "status_filter": status_filter,
+        "oldest_unmatched_age_seconds": round(oldest_age_sec, 2),
+        "p95_unmatched_age_seconds": round(p95_age_sec, 2),
+        "quarantine_alarm": oldest_age_sec > 3600.0,
         "unmatched_payments": records,
     }
 

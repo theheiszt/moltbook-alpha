@@ -293,6 +293,9 @@ def test_molt_alpha_dems_nft_catalog_and_lazy_mint_flow(tmp_path, monkeypatch):
 
 
 def test_agent_jobs_and_demand_leaderboard_flow():
+    with api_server.storage.connection() as conn:
+        with conn:
+            conn.execute("DELETE FROM agent_job_submissions WHERE worker_agent LIKE '@test_quant_agent_%'")
     # 1. Check Agent Service Demand Leaderboard
     dem_res = client.get("/v1/intel/demand")
     assert dem_res.status_code == 200
