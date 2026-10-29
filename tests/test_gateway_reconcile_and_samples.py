@@ -229,9 +229,20 @@ def test_molt_alpha_dems_nft_catalog_and_lazy_mint_flow(tmp_path, monkeypatch):
     assert "SCRIBE" in meta["name"]
     assert meta["seller_fee_basis_points"] == 500
 
-    img_res = client.get("/v1/nfts/assets/03_scribe.png")
-    assert img_res.status_code == 200
-    assert img_res.headers["content-type"] == "image/png"
+    # Ensure test asset exists for isolated test run
+    nft_collection.NFT_ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+    test_png = nft_collection.NFT_ASSETS_DIR / "03_scribe.png"
+    created_test_png = False
+    if not test_png.exists():
+        test_png.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82")
+        created_test_png = True
+    try:
+        img_res = client.get("/v1/nfts/assets/03_scribe.png")
+        assert img_res.status_code == 200
+        assert img_res.headers["content-type"] == "image/png"
+    finally:
+        if created_test_png and test_png.exists():
+            test_png.unlink()
 
     # 3. Create Lazy-Mint Order for 02-inscribe (0.02 SOL)
     buyer_wallet = "AyP2LbewqnYFeHaEiErnE9x5EosHPmHrQZaRuVDo4Pv3"

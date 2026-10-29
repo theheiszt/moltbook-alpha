@@ -122,7 +122,8 @@ def test_api_verify_solana_rate_limiting_triggers_429():
 
     # Rate limit for verify-solana is 10/min per IP
     test_sig = "5abcde" * 15  # 90 chars valid base58 length
-    payload = {"transaction_signature": test_sig, "target_tier": "tier_starter"}
+    inv = client.post("/v1/payments/invoice", json={"target_tier": "tier_starter"}).json()
+    payload = {"transaction_signature": test_sig, "invoice_id": inv["invoice_id"]}
 
     with patch("api_server.SolanaPaymentVerifier.verify_payment") as mock_verify:
         from payment_verifier import VerifiedPayment

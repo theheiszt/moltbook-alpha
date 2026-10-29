@@ -9,6 +9,11 @@ jobs:
   test:
     name: ProLiant Self-Hosted Linux Runner (Python 3.12)
     runs-on: [self-hosted, linux, proliant]
+    env:
+      CI: "true"
+      PYTHONPATH: .
+      MOLTBOOK_DATA_DIR: ${{ github.workspace }}/data
+      MOLTBOOK_REPORTS_DIR: ${{ github.workspace }}/reports
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -24,9 +29,13 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install -r requirements-dev.txt
 
+      - name: Run Diagnostics Pre-flight
+        run: |
+          python3 -m ops.doctor
+
       - name: Run Unit & Integration Tests
         run: |
-          pytest -q
+          python3 -m pytest -q
 
       - name: Check Formatting & Code Quality
         run: |

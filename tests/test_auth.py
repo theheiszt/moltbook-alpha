@@ -2,9 +2,25 @@
 Tests for API authentication, key validation, credit deduction, and demo gating.
 """
 
+import pytest
 from fastapi.testclient import TestClient
-
+from config import REPORTS_DIR
 from api_server import app, storage
+
+
+@pytest.fixture(autouse=True)
+def setup_test_briefing():
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    briefing_file = REPORTS_DIR / "latest_briefing.md"
+    existed = briefing_file.exists()
+    if not existed:
+        briefing_file.write_text("# Test Briefing\nSynthetic briefing for auth tests.", encoding="utf-8")
+    yield
+    if not existed and briefing_file.exists():
+        try:
+            briefing_file.unlink()
+        except OSError:
+            pass
 
 
 def test_missing_api_key_returns_402_with_payment_instructions():
