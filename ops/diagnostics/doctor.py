@@ -58,6 +58,14 @@ def check_python_environment() -> CheckResult:
 
 def check_database_integrity() -> CheckResult:
     if not DB_PATH.is_file():
+        try:
+            from storage import StorageManager
+            sm = StorageManager(DB_PATH)
+            sm.close()
+        except Exception as e:
+            return CheckResult("database_integrity", False, f"Database file not found at {DB_PATH} and auto-init failed: {e}")
+
+    if not DB_PATH.is_file():
         return CheckResult("database_integrity", False, f"Database file not found at {DB_PATH}")
 
     try:
