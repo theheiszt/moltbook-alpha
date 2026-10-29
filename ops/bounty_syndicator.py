@@ -43,9 +43,15 @@ class BountySyndicator:
         gateway_url: str = DEFAULT_GATEWAY_URL,
     ):
         self.storage = storage_manager or StorageManager(DB_PATH)
-        self.client = moltbook_client or MoltbookClient()
+        self._client = moltbook_client
         self.gateway_url = gateway_url.rstrip("/")
         self._init_schema()
+
+    @property
+    def client(self) -> MoltbookClient:
+        if self._client is None:
+            self._client = MoltbookClient()
+        return self._client
 
     def _init_schema(self) -> None:
         """Initializes the agent_bounty_syndications table."""
@@ -205,6 +211,14 @@ class BountySyndicator:
             }
 
         # 3. Publish to Moltbook
+        if not self.client.api_key:
+            return {
+                "success": False,
+                "error": "Moltbook credentials not configured (MOLTBOOK_API_KEY missing)",
+                "job_id": job_id,
+                "submolt": submolt
+            }
+
         res, verified = self.client.create_post(
             submolt_name=submolt,
             title=post_title,

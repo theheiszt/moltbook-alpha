@@ -344,12 +344,27 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
 class MoltbookClient:
     def __init__(self, api_key: Optional[str] = None):
         if not api_key:
-            if not CONFIG_PATH.exists():
-                raise FileNotFoundError(f"Credentials not found at {CONFIG_PATH}")
-            data = json.loads(CONFIG_PATH.read_text(encoding="utf-8-sig"))
-            self.api_key = data.get("api_key")
-            self.agent_name = data.get("agent_name")
-            self.agent_id = data.get("agent_id")
+            env_key = os.getenv("MOLTBOOK_API_KEY")
+            if env_key:
+                self.api_key = env_key
+                self.agent_name = os.getenv("MOLTBOOK_AGENT_NAME", "moltbook-alpha")
+                self.agent_id = os.getenv("MOLTBOOK_AGENT_ID")
+            else:
+                loaded = False
+                try:
+                    if CONFIG_PATH.exists():
+                        data = json.loads(CONFIG_PATH.read_text(encoding="utf-8-sig"))
+                        self.api_key = data.get("api_key")
+                        self.agent_name = data.get("agent_name")
+                        self.agent_id = data.get("agent_id")
+                        loaded = True
+                except (PermissionError, OSError, FileNotFoundError):
+                    loaded = False
+
+                if not loaded:
+                    self.api_key = None
+                    self.agent_name = "unconfigured"
+                    self.agent_id = None
         else:
             self.api_key = api_key
             self.agent_name = "unknown"
