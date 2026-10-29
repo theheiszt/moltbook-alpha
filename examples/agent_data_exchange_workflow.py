@@ -13,7 +13,6 @@ Demonstrates the end-to-end autonomous agent workflow:
 
 import os
 import sys
-import time
 import uuid
 from pathlib import Path
 
@@ -117,7 +116,7 @@ def run_agent_data_exchange_workflow(
         # ---------------------------------------------------------------------
         print("\n[*] Step 6: Inspecting evidence quality tiers and provenance citations...")
         ev_summary = snapshot.get("evidence_summary", {})
-        print(f"  [INFO] Evidence Summary:")
+        print("  [INFO] Evidence Summary:")
         print(f"         • Observed Facts:       {ev_summary.get('observed_facts_count')}")
         print(f"         • Inferred Conclusions: {ev_summary.get('inferred_conclusions_count')}")
         print(f"         • Unverified Claims:    {ev_summary.get('unverified_claims_count')}")
@@ -148,7 +147,7 @@ def run_agent_data_exchange_workflow(
         print(f"  [PASS] Post-retrieval Credits: {post_credits} (Expected: {pre_credits - 1})")
 
         # Test idempotency replay
-        replay_snap = client.get_data_product_latest(target_product, idempotency_key=idempotency_key)
+        client.get_data_product_latest(target_product, idempotency_key=idempotency_key)
         replay_usage = client.get_usage()
         print(f"  [PASS] Idempotent Replay Verified: Remaining balance still {replay_usage.get('credits_remaining')} (Zero double charge)")
 

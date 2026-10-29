@@ -9,9 +9,7 @@ from ops.security.egress_guard import (
     validate_outbound_url,
     EgressSecurityError,
     egress_audit,
-    is_ip_blocked,
 )
-import ipaddress
 from api_server import app
 
 
@@ -111,7 +109,7 @@ def test_audit_ring_buffer_records_blocks():
 
 def test_webhook_subscription_api_rejects_ssrf():
     client = TestClient(app)
-    
+
     # 1. Attempt to subscribe cloud metadata target
     res_meta = client.post("/v1/webhooks/subscribe", json={
         "target_url": "http://169.254.169.254/latest/meta-data/",

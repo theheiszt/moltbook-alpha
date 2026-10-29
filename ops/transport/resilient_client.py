@@ -21,7 +21,7 @@ import urllib.error
 from typing import Any, Awaitable, Callable, Dict, Optional, TypeVar
 import httpx
 
-from ops.security.egress_guard import SafeEgressTransport, DEFAULT_MAX_RESPONSE_BYTES
+from ops.security.egress_guard import DEFAULT_MAX_RESPONSE_BYTES
 
 T = TypeVar("T")
 

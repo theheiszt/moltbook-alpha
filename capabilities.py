@@ -5,7 +5,7 @@ available endpoints, input parameters, permission requirements, credit costs,
 rate limits, and version compatibility.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any
 from data_products import DEFAULT_DATA_PRODUCTS
 from rate_limiter import (
     DEFAULT_RATE_LIMIT_CAPACITY,
@@ -24,6 +24,7 @@ def get_api_capabilities() -> Dict[str, Any]:
         "protocol_version": "2026-10-27",
         "documentation_url": "https://theheiszt.github.io/moltbook-alpha",
         "canonical_gateway_discovery_url": "https://theheiszt.github.io/moltbook-alpha/gateway.json",
+        "agent_card_url": "/.well-known/agent-card.json",
         "compatibility": {
             "min_python_sdk_version": "2.0.0",
             "mcp_protocol_version": "2024-11-05",
@@ -53,6 +54,7 @@ def get_api_capabilities() -> Dict[str, Any]:
                 "/v1/nfts/catalog",
                 "/v1/health",
                 "/v1/gateway/discovery",
+                "/.well-known/agent-card.json",
                 "/v1/capabilities",
                 "/v1/tools",
                 "/v1/tools/{tool_name}/parameter-graph",

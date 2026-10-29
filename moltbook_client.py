@@ -311,8 +311,8 @@ def solve_arithmetic_challenge(challenge_text: str) -> Optional[str]:
                 b = after[0][3]
                 res = a / b if b != 0 else 0
             elif op_type == "+":
-                a = sum(n[3] for n in before) if (len(before) > 1 and (has_add or "total" in cleaned_lower)) else before[-1][3]
-                b = sum(n[3] for n in after) if (len(after) > 1 and (has_add or "total" in cleaned_lower)) else after[0][3]
+                a = before[-1][3]
+                b = after[0][3]
                 res = a + b
             elif op_type == "-":
                 a = before[0][3] if len(before) == 1 else sum(n[3] for n in before)

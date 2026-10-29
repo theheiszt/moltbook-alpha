@@ -792,7 +792,6 @@ class MicrostructureBroadcaster:
         timeout_seconds: float = 5.0,
     ) -> Dict[str, Any]:
         """Dispatches an HTTP POST webhook signed with HMAC-SHA256."""
-        import httpx
 
         envelope = {
             "event": event_type,

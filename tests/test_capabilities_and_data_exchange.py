@@ -17,7 +17,6 @@ from fastapi.testclient import TestClient
 from api_server import app, storage
 from mcp.moltbook_mcp import MoltbookMCPServer
 from capabilities import get_api_capabilities
-from data_products import DEFAULT_DATA_PRODUCTS, DataProductExchange
 
 
 @pytest.fixture

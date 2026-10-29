@@ -7,17 +7,14 @@ Verifies the three core community audit demands:
    persisting across server restarts and connection dropouts.
 """
 
-import json
 import time
 import uuid
 import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 
-from pathlib import Path
 from storage import StorageManager
-from api_server import app, storage
-from capabilities import get_api_capabilities
+from api_server import app
 from data_products import DEFAULT_DATA_PRODUCTS
 from rate_limiter import (
     DEFAULT_RATE_LIMIT_CAPACITY,

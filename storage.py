@@ -2317,11 +2317,15 @@ class StorageManager:
         detail: str,
         ip_address: Optional[str] = None
     ) -> int:
-        """Records an event in the audit_logs table for security forensics."""
+        """Records an event in the audit_logs table for security forensics with zero-leak secret scrubbing."""
+        from ops.security.credential_redactor import credential_redactor
+
         now_iso = datetime.now(timezone.utc).isoformat()
         entry_detail = detail
         if ip_address:
             entry_detail = f"{detail} [client_ip: {ip_address}]"
+
+        scrubbed_detail = credential_redactor.redact_text(entry_detail)
 
         with self._lock, self.connection() as conn:
             with conn:
@@ -2331,7 +2335,7 @@ class StorageManager:
                     INSERT INTO audit_logs (event_type, detail, created_at)
                     VALUES (?, ?, ?)
                     """,
-                    (event_type, entry_detail, now_iso)
+                    (event_type, scrubbed_detail, now_iso)
                 )
                 return cur.lastrowid
 

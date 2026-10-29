@@ -8,7 +8,6 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
-import pytest
 
 from ops.trading.scalper_bot import SpreadScalperBot
 

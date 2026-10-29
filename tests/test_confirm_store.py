@@ -4,9 +4,8 @@ Unit and API integration tests for Machine-Readable Step-Up Authorization Nonces
 
 import time
 from starlette.testclient import TestClient
-import pytest
 
-from api_server import app, storage, refund_dispatcher
+from api_server import app, storage
 from ops.security.confirm_store import confirm_store, ConfirmStore
 
 

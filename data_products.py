@@ -4,10 +4,9 @@ Provides autonomous agents with machine-readable discovery, contract schemas,
 pricing terms, freshness guarantees, and structured data snapshots.
 """
 
-import time
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass

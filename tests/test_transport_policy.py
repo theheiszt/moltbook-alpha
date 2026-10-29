@@ -6,7 +6,6 @@ import io
 import urllib.error
 import urllib.request
 import pytest
-import httpx
 
 from ops.transport.resilient_client import (
     RetryPolicy,
@@ -14,7 +13,6 @@ from ops.transport.resilient_client import (
     execute_async,
     parse_retry_after_header,
     telemetry,
-    NON_RETRYABLE_4XX,
 )
 from moltbook_client import MoltbookClient
 

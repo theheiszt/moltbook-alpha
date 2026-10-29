@@ -99,7 +99,7 @@ def validate_outbound_url(
 ) -> str:
     """
     Validates that a URL is safe for outbound communication.
-    
+
     Guarantees:
       1. Protocol scheme must be http or https (or https-only if allow_http=False).
       2. Hostname must be non-empty and cannot be 'localhost'.
@@ -219,13 +219,13 @@ class SafeEgressTransport(httpx.AsyncBaseTransport):
             resolve_dns=True,
         )
         response = await self._underlying.handle_async_request(request)
-        
+
         # Enforce response body size limit
         content_length = response.headers.get("Content-Length")
         if content_length and int(content_length) > self._max_response_bytes:
             await response.aclose()
             raise EgressSecurityError(f"Response size ({content_length} bytes) exceeds limit ({self._max_response_bytes} bytes).")
-            
+
         return response
 
     async def aclose(self) -> None:

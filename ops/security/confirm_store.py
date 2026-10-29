@@ -110,7 +110,7 @@ class ConfirmStore:
     ) -> Tuple[bool, str]:
         """
         Atomically verifies and burns a confirmation challenge.
-        
+
         Returns:
           (True, "OK") if verified and consumed.
           (False, reason_message) on failure (invalid, expired, consumed, or fingerprint mismatch).

@@ -11,7 +11,7 @@ import pytest
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
-from api_server import app, storage
+from api_server import app
 from capabilities import get_api_capabilities
 from sdk.moltbook_intel import MoltbookIntelClient
 

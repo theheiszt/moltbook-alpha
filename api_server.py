@@ -5,6 +5,7 @@ with ACID transactional SQLite storage, zero backdoors, rate limiting, and fail-
 """
 
 import os
+import json
 import ipaddress
 import secrets
 import re
@@ -27,6 +28,12 @@ from pydantic import BaseModel, field_validator, model_validator
 import uvicorn
 
 from ops.security.confirm_store import confirm_store
+from ops.security.safe_mode import (
+    is_mutation_allowed,
+    enable_safe_mode,
+    disable_safe_mode,
+    get_safe_mode_status,
+)
 from errors import (
     DOCS_BASE_URL,
     ErrorCode,
@@ -237,6 +244,7 @@ async def metrics_middleware(request: Request, call_next):
             "/metrics",
             "/gateway.json",
             "/v1/gateway/discovery",
+            "/.well-known/agent-card.json",
             "/v1/health",
             "/v1/errors",
             "/v1/challenges",
@@ -256,6 +264,7 @@ async def metrics_middleware(request: Request, call_next):
             "/v1/admin/change-password",
             "/v1/admin/logout",
             "/v1/admin/session",
+            "/v1/admin/safemode",
             "/v1/webhooks",
             "/v1/webhooks/subscribe",
             "/v1/payments/config",
@@ -281,6 +290,19 @@ async def metrics_middleware(request: Request, call_next):
 @app.middleware("http")
 async def timeout_and_rate_limit_middleware(request: Request, call_next):
     req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+    if not is_mutation_allowed(request.method, request.url.path):
+        status_info = get_safe_mode_status()
+        reason = status_info.get("reason") or "Administrative maintenance"
+        content = format_error_payload(
+            code="SERVICE_READ_ONLY_MODE",
+            message=f"System is currently running in Read-Only Safe Mode: {reason}",
+            request_id=req_id,
+            status_code=503,
+            retryable=True,
+            retry_after=60,
+            details=status_info,
+        )
+        return JSONResponse(status_code=503, content=content, headers={"X-Request-ID": req_id, "Retry-After": "60"})
     try:
         response = await asyncio.wait_for(call_next(request), timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
@@ -509,19 +531,19 @@ refund_dispatcher = SolanaRefundDispatcher(
 dex_microstructure = DEXMicrostructureEngine(broadcaster=microstructure_broadcaster)
 data_product_exchange = DataProductExchange()
 
-# Seed default baseline pools for Solana concentrated liquidity
+# Seed default baseline pools with realistic institutional prices ($182 SOL)
 dex_microstructure.parse_raydium_clmm_pool(
     pool_id="Raydium_SOL_USDC",
     pair="SOL/USDC",
     pool_state={
         "current_tick": -15620,
-        "current_price": 101.50,
+        "current_price": 182.15,
         "ticks": [
-            {"tick": -15630, "price": 101.40, "liquidity_usd": 125000.0},
-            {"tick": -15625, "price": 101.45, "liquidity_usd": 185000.0},
-            {"tick": -15620, "price": 101.50, "liquidity_usd": 220000.0},
-            {"tick": -15615, "price": 101.55, "liquidity_usd": 195000.0},
-            {"tick": -15610, "price": 101.60, "liquidity_usd": 140000.0},
+            {"tick": -15630, "price": 182.05, "liquidity_usd": 125000.0},
+            {"tick": -15625, "price": 182.10, "liquidity_usd": 185000.0},
+            {"tick": -15620, "price": 182.15, "liquidity_usd": 220000.0},
+            {"tick": -15615, "price": 182.20, "liquidity_usd": 195000.0},
+            {"tick": -15610, "price": 182.25, "liquidity_usd": 140000.0},
         ],
     },
 )
@@ -531,13 +553,13 @@ dex_microstructure.parse_orca_whirlpool(
     pair="SOL/USDC",
     pool_state={
         "tick_current_index": -15620,
-        "price": 101.52,
+        "price": 182.38,
         "ticks": [
-            {"index": -15630, "price": 101.42, "liquidity_net": 1200.0},
-            {"index": -15625, "price": 101.47, "liquidity_net": 1800.0},
-            {"index": -15620, "price": 101.52, "liquidity_net": 2100.0},
-            {"index": -15615, "price": 101.57, "liquidity_net": -1700.0},
-            {"index": -15610, "price": 101.62, "liquidity_net": -1300.0},
+            {"index": -15630, "price": 182.28, "liquidity_net": 1200.0},
+            {"index": -15625, "price": 182.33, "liquidity_net": 1800.0},
+            {"index": -15620, "price": 182.38, "liquidity_net": 2100.0},
+            {"index": -15615, "price": 182.43, "liquidity_net": -1700.0},
+            {"index": -15610, "price": 182.48, "liquidity_net": -1300.0},
         ],
     },
 )
@@ -547,19 +569,19 @@ dex_microstructure.parse_meteora_dlmm(
     pair="SOL/USDC",
     pool_state={
         "active_id": -15620,
-        "current_price": 101.49,
+        "current_price": 182.25,
         "bins": [
-            {"bin_id": -15630, "price": 101.39, "amount_x_usd": 60000.0, "amount_y_usd": 65000.0},
-            {"bin_id": -15625, "price": 101.44, "amount_x_usd": 90000.0, "amount_y_usd": 95000.0},
-            {"bin_id": -15620, "price": 101.49, "amount_x_usd": 110000.0, "amount_y_usd": 105000.0},
-            {"bin_id": -15615, "price": 101.54, "amount_x_usd": 95000.0, "amount_y_usd": 90000.0},
-            {"bin_id": -15610, "price": 101.59, "amount_x_usd": 70000.0, "amount_y_usd": 65000.0},
+            {"bin_id": -15630, "price": 182.15, "amount_x_usd": 60000.0, "amount_y_usd": 65000.0},
+            {"bin_id": -15625, "price": 182.20, "amount_x_usd": 90000.0, "amount_y_usd": 95000.0},
+            {"bin_id": -15620, "price": 182.25, "amount_x_usd": 110000.0, "amount_y_usd": 105000.0},
+            {"bin_id": -15615, "price": 182.30, "amount_x_usd": 95000.0, "amount_y_usd": 90000.0},
+            {"bin_id": -15610, "price": 182.35, "amount_x_usd": 70000.0, "amount_y_usd": 65000.0},
         ],
     },
 )
 
 # Seed standard production liquidity depths for Solana CLMM arbitrage
-dex_microstructure.seed_default_pools()
+dex_microstructure.seed_default_pools(base_sol_price=182.50)
 
 
 # Run one-time legacy migration from api_keys.json if present (skipping any admin backdoors)
@@ -851,6 +873,11 @@ def admin_change_password_endpoint(payload: AdminChangePasswordInput, request: R
         )
 
     # Issue fresh session token since old sessions were revoked
+    storage.log_audit_event(
+        "admin_password_changed",
+        f"Admin password changed for user '{admin_user}'",
+        ip_address=client_ip,
+    )
     new_token = storage.create_admin_session(admin_user, duration_hours=24)
     return {
         "success": True,
@@ -884,6 +911,59 @@ def admin_session_endpoint(request: Request):
             headers={"WWW-Authenticate": "Bearer"},
         )
     return {"authenticated": True, "username": admin_user}
+
+
+class AdminSafeModeInput(BaseModel):
+    active: bool
+    reason: Optional[str] = "Administrative maintenance"
+
+
+@app.get("/v1/admin/safemode")
+def admin_get_safemode_endpoint(request: Request):
+    auth_header = request.headers.get("authorization", "")
+    token = ""
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+    admin_user = storage.validate_admin_session(token)
+    if not admin_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Valid administrator session required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return {"success": True, "safe_mode": get_safe_mode_status()}
+
+
+@app.post("/v1/admin/safemode")
+def admin_toggle_safemode_endpoint(payload: AdminSafeModeInput, request: Request):
+    client_ip = get_client_ip(request)
+    auth_header = request.headers.get("authorization", "")
+    token = ""
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+    admin_user = storage.validate_admin_session(token)
+    if not admin_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Valid administrator session required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if payload.active:
+        status_dict = enable_safe_mode(reason=payload.reason or "Administrative maintenance", operator=admin_user)
+        storage.log_audit_event(
+            "safe_mode_enabled",
+            f"Safe mode enabled by '{admin_user}': {payload.reason}",
+            ip_address=client_ip,
+        )
+    else:
+        status_dict = disable_safe_mode(operator=admin_user)
+        storage.log_audit_event(
+            "safe_mode_disabled",
+            f"Safe mode disabled by '{admin_user}'",
+            ip_address=client_ip,
+        )
+    return {"success": True, "safe_mode": status_dict}
 
 
 @app.get("/v1/metrics/dashboard")
@@ -1393,6 +1473,85 @@ def get_active_gateway_url() -> str:
         pass
 
     return "https://mel-tear-diffs-data.trycloudflare.com"
+
+
+@app.get("/.well-known/agent-card.json")
+def get_agent_card():
+    """
+    Google Agent-to-Agent (A2A) protocol discovery endpoint.
+    Returns machine-readable Agent Card metadata declaring agent capabilities,
+    supported skills, authentication requirements, and runtime endpoints.
+    """
+    gw_url = get_active_gateway_url()
+    return {
+        "protocol_version": "0.1.0",
+        "name": "Moltbook Alpha Verifiable Intelligence Agent",
+        "description": "Autonomous verifiable market intelligence agent providing high-frequency Solana DEX microstructure analysis, cryptographic Ed25519 state attestations, real-time news summarization, and data product licensing.",
+        "url": gw_url,
+        "version": "1.2.0",
+        "provider": {
+            "organization": "Moltbook Alpha",
+            "url": "https://theheiszt.github.io/moltbook-alpha",
+        },
+        "capabilities": {
+            "streaming": True,
+            "push_notifications": True,
+            "state_witness": True,
+            "step_up_authorization": True,
+            "safe_mode": True,
+            "mcp_tools": True,
+        },
+        "skills": [
+            {
+                "id": "market_microstructure",
+                "name": "Solana DEX Microstructure & MEV Risk",
+                "description": "Analyzes liquidity pool depth, tick clustering, sandwich risk, and toxic flow across Raydium, Orca, and Whirlpool DEXes.",
+                "endpoint": f"{gw_url}/v1/quant/dex-microstructure",
+            },
+            {
+                "id": "cryptographic_state_witness",
+                "name": "Ed25519 Cryptographic State Attestation",
+                "description": "Signs and verifies cryptographic state assertions across market observations, ledger invariants, and audit trails.",
+                "endpoint": f"{gw_url}/v1/witnesses/query",
+            },
+            {
+                "id": "verifiable_intelligence",
+                "name": "Machine-Verifiable Intelligence Feeds",
+                "description": "Provides high-frequency trading signals, market opportunities, and anomaly telemetry with tamper-evident hashes.",
+                "endpoint": f"{gw_url}/v1/intel/opportunities",
+            },
+            {
+                "id": "data_product_exchange",
+                "name": "Micro-Payment Data Exchange",
+                "description": "Facilitates instant access to raw market intelligence and premium reports via Solana and Nano micro-transactions.",
+                "endpoint": f"{gw_url}/v1/data-products/license",
+            },
+            {
+                "id": "webhook_streaming",
+                "name": "HMAC-SHA256 Webhook Streaming",
+                "description": "Subscribes to real-time intelligence events and alerts with cryptographic HMAC authentication.",
+                "endpoint": f"{gw_url}/v1/webhooks/subscribe",
+            },
+        ],
+        "authentication": {
+            "schemes": [
+                {
+                    "type": "apiKey",
+                    "in": "header",
+                    "name": "X-API-Key",
+                },
+                {
+                    "type": "http",
+                    "scheme": "bearer",
+                },
+                {
+                    "type": "nonce_step_up",
+                    "header": "X-Confirmation-Nonce",
+                },
+            ],
+        },
+        "documentation_url": "https://theheiszt.github.io/moltbook-alpha",
+    }
 
 
 @app.get("/v1/gateway/discovery")
@@ -4474,6 +4633,13 @@ def subscribe_webhook(
     When a DEX microstructure anomaly occurs matching the event filter and minimum severity,
     the event payload is signed with HMAC-SHA256 and pushed to target_url.
     """
+    existing_active = storage.list_webhook_subscriptions(active_only=True)
+    if len(existing_active) >= 100:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Maximum active webhook subscriptions (100) reached. Delete unused subscriptions.",
+        )
+
     subscription = storage.create_webhook_subscription(
         target_url=sub_input.target_url,
         secret_token=sub_input.secret_token,

@@ -55,7 +55,7 @@ def run_reconciliation() -> Dict[str, Any]:
     rpc_endpoints = cfg.get("rpc_endpoints", ["https://api.mainnet-beta.solana.com"])
     treasury_wallet = cfg.get("solana_treasury_wallet", "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx")
 
-    print(f"=== Moltbook Alpha Payment Reconciliation Engine ===")
+    print("=== Moltbook Alpha Payment Reconciliation Engine ===")
     print(f"Database: {db_path}")
     print(f"Treasury Wallet: {treasury_wallet}")
     print(f"Timestamp: {datetime.now(timezone.utc).isoformat()}")

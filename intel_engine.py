@@ -1360,9 +1360,8 @@ class IntelEngine:
                     pass
 
         # Check for active microstructure tick vacuums or depth imbalances
-        anomalies = []
         if dex_microstructure and hasattr(dex_microstructure, "get_active_anomalies"):
-            anomalies = dex_microstructure.get_active_anomalies(limit=10)
+            dex_microstructure.get_active_anomalies(limit=10)
 
         # Build candidate signals
         sol_p = prices["SOL"]
@@ -1468,8 +1467,8 @@ class IntelEngine:
                 "catalyst_type": "spoofed_ask_wall",
                 "headline": "Orderbook Asymmetry & Downward Slippage Pressure on BONK",
                 "rationale": (
-                    f"Heavy spoofed ask wall detected at +35 bps boundary on high-beta meme coin pool. "
-                    f"Bid liquidity thinned out by 38% in the last 15-minute sampling window."
+                    "Heavy spoofed ask wall detected at +35 bps boundary on high-beta meme coin pool. "
+                    "Bid liquidity thinned out by 38% in the last 15-minute sampling window."
                 ),
                 "execution_params": {
                     "recommended_venue": "Meteora DLMM",

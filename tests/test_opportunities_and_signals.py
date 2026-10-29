@@ -15,9 +15,7 @@ from fastapi.testclient import TestClient
 from ops.trading.dex_microstructure import (
     DEXMicrostructureEngine,
     DEXProtocol,
-    TickLiquidityDepth,
     MicrostructureAnomaly,
-    ArbitrageOpportunity,
 )
 from intel_engine import IntelEngine
 from storage import StorageManager
