@@ -699,7 +699,7 @@ class NanoInvoicePaymentAdapter:
 
     def __init__(
         self,
-        merchant_address: str = "nano_3moltbookintel111111111111111111111111111111111111111111111111",
+        merchant_address: str = "nano_3t1sxtuxyjgdabj6miwn6st58p8x553i8ybkikoc9ozn7mra7kk71iysfyn1",
         rate_usd_per_xno: float = 1.0,
     ):
         self.merchant_address = merchant_address

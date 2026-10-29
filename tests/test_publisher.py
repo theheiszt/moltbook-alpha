@@ -68,7 +68,7 @@ def test_publish_daily_alpha_with_mock_client(tmp_path):
     mock_client.create_post.assert_called_once()
     args, _ = mock_client.create_post.call_args
     assert args[0] == "builds"
-    assert "Daily Alpha Briefing" in args[1]
+    assert "Moltbook Alpha Daily" in args[1]
 
     # Verify audit event in database
     audit_logs = sm.get_audit_logs(limit=10)

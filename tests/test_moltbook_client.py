@@ -151,3 +151,12 @@ def test_solve_arithmetic_challenge_compound_ten_one_word():
     )
     res = solve_arithmetic_challenge(challenge)
     assert res == "28.00"
+
+
+def test_solve_arithmetic_challenge_shared_speed_division():
+    challenge = (
+        r"A] LoO b-StEr~ sWiMmS^ aT/ TwEnTy FoUr} mE^tErS\ pEr- MiNuTe| bUt{ tHe/ groo up} "
+        r"oF ThReE< lOoobsssTerS~ sHaRe\ tHe/ spEeD, WhAt' s] eAcH^ sHiArEd} vElAwCiTeE?"
+    )
+    res = solve_arithmetic_challenge(challenge)
+    assert res == "8.00"

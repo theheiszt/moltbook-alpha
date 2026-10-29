@@ -16,6 +16,9 @@ from .crypto import verify_witness_payload_offline
 from .dag_resolver import ToolDAGResolver
 
 
+CANONICAL_GATEWAY_DISCOVERY_URL = "https://theheiszt.github.io/moltbook-alpha/gateway.json"
+
+
 class MoltbookIntelClient:
     """
     Official Python Client for the Moltbook Alpha Market Intelligence & Payment API.
@@ -30,6 +33,7 @@ class MoltbookIntelClient:
         max_retries: int = 3,
         auto_retry: bool = True,
         retry_deadline: float = 30.0,
+        discovery_url: str = CANONICAL_GATEWAY_DISCOVERY_URL,
     ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -37,7 +41,26 @@ class MoltbookIntelClient:
         self.max_retries = max_retries
         self.auto_retry = auto_retry
         self.retry_deadline = retry_deadline
+        self.discovery_url = discovery_url
         self._cached_server_pub_key: Optional[str] = None
+
+    def discover_gateway(self, discovery_url: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Resolves the active HTTP/2 edge gateway URL from the canonical GitHub Pages
+        discovery manifest (gateway.json) and updates self.base_url in-place.
+        """
+        target = discovery_url or self.discovery_url
+        req = urllib.request.Request(
+            target,
+            headers={"User-Agent": "MoltbookIntelSDK/1.2", "Accept": "application/json"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            manifest = json.loads(resp.read().decode("utf-8"))
+        active_url = str(manifest.get("active_gateway_url", "")).strip()
+        if active_url.startswith("http"):
+            self.base_url = active_url.rstrip("/")
+        return manifest
 
     def _request(
         self,
@@ -169,6 +192,10 @@ class MoltbookIntelClient:
     def get_data_product(self, product_id: str) -> Dict[str, Any]:
         """Inspects complete contract, JSON schemas, freshness, and pricing metadata for a specific data product."""
         return self._request(f"/v1/data-products/{urllib.parse.quote(product_id)}")
+
+    def get_data_product_sample(self, product_id: str) -> Dict[str, Any]:
+        """Fetches an unmetered (0-credit) schema-valid sample snapshot with provenance and Ed25519 witness signature."""
+        return self._request(f"/v1/data-products/{urllib.parse.quote(product_id)}/sample")
 
     def get_data_product_latest(
         self,
@@ -326,6 +353,25 @@ class MoltbookIntelClient:
         }
         return self._request("/v1/payments/verify-solana", method="POST", payload=payload)
 
+    def reconcile_payment(
+        self,
+        transaction_signature: str,
+        invoice_id: Optional[str] = None,
+        expected_payer: Optional[str] = None,
+        auto_refund_unmatched: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Reconciles an on-chain transaction signature against open invoices or quarantines/refunds
+        unlinked orphan deposits with an Ed25519 cryptographic state witness receipt.
+        """
+        payload = {
+            "transaction_signature": transaction_signature,
+            "invoice_id": invoice_id,
+            "expected_payer": expected_payer,
+            "auto_refund_unmatched": auto_refund_unmatched,
+        }
+        return self._request("/v1/payments/reconcile", method="POST", payload=payload)
+
     # Cryptographic State Witnesses
     def get_witness_public_keys(self) -> Dict[str, Any]:
         """Fetches active Ed25519 public keys used for signing cryptographic state witnesses."""
@@ -359,3 +405,37 @@ class MoltbookIntelClient:
             target_pub = self._cached_server_pub_key
 
         return verify_witness_payload_offline(witness, target_pub)
+
+    # Outbound Webhook Push Subscriptions
+    def subscribe_webhook(
+        self,
+        target_url: str,
+        secret_token: str,
+        subscribed_events: Optional[List[str]] = None,
+        min_severity: str = "MEDIUM",
+    ) -> Dict[str, Any]:
+        """
+        Registers an automated HTTPS webhook subscription.
+        Event payloads matching subscribed_events and min_severity are signed with HMAC-SHA256 and pushed to target_url.
+        """
+        payload = {
+            "target_url": target_url,
+            "secret_token": secret_token,
+            "subscribed_events": subscribed_events or ["CROSS_DEX_ARBITRAGE", "SECURITY_ANOMALY"],
+            "min_severity": min_severity,
+        }
+        return self._request("/v1/webhooks/subscribe", method="POST", payload=payload)
+
+    def list_webhooks(self, active_only: bool = True) -> List[Dict[str, Any]]:
+        """Lists active webhook subscriptions with masked secret tokens."""
+        res = self._request(f"/v1/webhooks?active_only={'true' if active_only else 'false'}")
+        return res.get("subscriptions", [])
+
+    def delete_webhook(self, subscription_id: str) -> Dict[str, Any]:
+        """Deregisters a webhook callback subscription."""
+        return self._request(f"/v1/webhooks/{urllib.parse.quote(subscription_id)}", method="DELETE")
+
+    def test_webhook(self, subscription_id: str) -> Dict[str, Any]:
+        """Dispatches an HMAC-SHA256 signed test verification ping to verify receiver connectivity."""
+        return self._request(f"/v1/webhooks/test/{urllib.parse.quote(subscription_id)}", method="POST")
+

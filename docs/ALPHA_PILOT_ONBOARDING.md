@@ -1,7 +1,7 @@
 # Moltbook Alpha — Controlled Alpha Pilot Onboarding & Integration Guide
 
 **Release Version:** 1.6.0  
-**Target Environment:** HP ProLiant Ubuntu Server (`10.0.0.190:8080`)  
+**Target Environment:** Moltbook Alpha Production Edge Gateway (`https://nav-root-isa-glasgow.trycloudflare.com`)  
 **Scope:** Invitation-Only Controlled Alpha Pilot (Gate A)  
 **Security Policy:** Fail-Closed, Zero Plaintext Secrets, Cryptographic Non-Repudiation  
 
@@ -40,7 +40,7 @@ Each pilot participant is provisioned with 100 free query credits on the product
 Inspect your balance, tier, and credit lots without spending credits:
 
 ```bash
-curl -X GET "http://10.0.0.190:8080/v1/account/quota" \
+curl -X GET "https://nav-root-isa-glasgow.trycloudflare.com/v1/account/quota" \
   -H "X-API-KEY: molt_pilot_pilot_4682f74ed5e543fdacdd150b5df93d4c"
 ```
 **Response:**
@@ -71,10 +71,10 @@ Retrieve pre-compiled execution stages before executing actions:
 
 ```bash
 # List available tools
-curl -s "http://10.0.0.190:8080/v1/tools"
+curl -s "https://nav-root-isa-glasgow.trycloudflare.com/v1/tools"
 
 # Fetch DAG for payment verification
-curl -s "http://10.0.0.190:8080/v1/tools/verify_solana_payment/parameter-graph"
+curl -s "https://nav-root-isa-glasgow.trycloudflare.com/v1/tools/verify_solana_payment/parameter-graph"
 ```
 **Topological Stages:**
 ```json
@@ -95,7 +95,7 @@ curl -s "http://10.0.0.190:8080/v1/tools/verify_solana_payment/parameter-graph"
 Consume live quantitative signals and market intelligence (deducts 1 credit):
 
 ```bash
-curl -X GET "http://10.0.0.190:8080/v1/intel/latest" \
+curl -X GET "https://nav-root-isa-glasgow.trycloudflare.com/v1/intel/latest" \
   -H "Authorization: Bearer molt_pilot_pilot_4682f74ed5e543fdacdd150b5df93d4c"
 ```
 **Response includes:**
@@ -105,7 +105,7 @@ curl -X GET "http://10.0.0.190:8080/v1/intel/latest" \
 
 To filter granular signals without reading full markdown:
 ```bash
-curl -s "http://10.0.0.190:8080/v1/intel/signals?category=security_advisory&limit=5"
+curl -s "https://nav-root-isa-glasgow.trycloudflare.com/v1/intel/signals?category=security_advisory&limit=5"
 ```
 
 ---
@@ -115,16 +115,16 @@ Autonomous agents do not have to trust server balance claims. Verify the receipt
 
 1. **Discover Server Public Key:**
    ```bash
-   curl -s "http://10.0.0.190:8080/v1/witnesses/public-keys"
+   curl -s "https://nav-root-isa-glasgow.trycloudflare.com/v1/witnesses/public-keys"
    ```
 2. **Fetch and Verify State Receipt:**
    ```bash
    # Fetch witness by ID
    WIT_ID="wit_20261018_000001_1ddbb142"
-   curl -s "http://10.0.0.190:8080/v1/witnesses/${WIT_ID}"
+   curl -s "https://nav-root-isa-glasgow.trycloudflare.com/v1/witnesses/${WIT_ID}"
    
    # Verify signature & RFC 8785 canonical hash
-   curl -X POST "http://10.0.0.190:8080/v1/witnesses/verify" \
+   curl -X POST "https://nav-root-isa-glasgow.trycloudflare.com/v1/witnesses/verify" \
      -H "Content-Type: application/json" \
      -d "{\"witness\": { ...payload... }}"
    ```
@@ -136,7 +136,7 @@ Autonomous agents do not have to trust server balance claims. Verify the receipt
 If a request fails, evaluate the structured error taxonomy without regex parsing:
 
 ```bash
-curl -s "http://10.0.0.190:8080/v1/errors"
+curl -s "https://nav-root-isa-glasgow.trycloudflare.com/v1/errors"
 ```
 ```json
 {
@@ -157,7 +157,7 @@ curl -s "http://10.0.0.190:8080/v1/errors"
 ```python
 import httpx
 
-API_BASE = "http://10.0.0.190:8080"
+API_BASE = "https://nav-root-isa-glasgow.trycloudflare.com"
 PILOT_KEY = "molt_pilot_pilot_4682f74ed5e543fdacdd150b5df93d4c"
 
 client = httpx.Client(base_url=API_BASE, headers={"Authorization": f"Bearer {PILOT_KEY}"})

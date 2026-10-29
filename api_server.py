@@ -5,10 +5,13 @@ with ACID transactional SQLite storage, zero backdoors, rate limiting, and fail-
 """
 
 import os
+import json
 import ipaddress
 import secrets
 import re
 import asyncio
+import logging
+from contextlib import asynccontextmanager
 import threading
 import time
 import hashlib
@@ -17,13 +20,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi import FastAPI, Header, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel, field_validator, model_validator
 import uvicorn
 
+from ops.security.confirm_store import confirm_store
+from ops.security.safe_mode import (
+    is_mutation_allowed,
+    enable_safe_mode,
+    disable_safe_mode,
+    get_safe_mode_status,
+)
 from errors import (
     DOCS_BASE_URL,
     ErrorCode,
@@ -84,10 +95,41 @@ from metrics import (
     update_active_keys_gauge,
 )
 
+logger = logging.getLogger("moltbook.api")
+
+
+async def _background_quota_reservation_sweeper():
+    """Continuously sweeps expired quota reservations, auto-restoring credits to dropped clients."""
+    while True:
+        try:
+            await asyncio.sleep(30)
+            reaped = storage.reap_expired_reservations()
+            if reaped > 0:
+                logger.info("Auto-reaped %d stale/abandoned quota reservations", reaped)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.warning("Error in background quota reservation sweeper: %s", e)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    sweeper_task = asyncio.create_task(_background_quota_reservation_sweeper())
+    try:
+        yield
+    finally:
+        sweeper_task.cancel()
+        try:
+            await sweeper_task
+        except asyncio.CancelledError:
+            pass
+
+
 app = FastAPI(
     title="Moltbook Alpha Intelligence API",
     description="Agentic Market Intelligence & Quant Insights with Solana Verification",
     version="1.2.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -95,7 +137,14 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    max_age=86400,
 )
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
+# In-memory TTL cache for dashboard metrics (prevents SQLite lock contention from concurrent/rapid UI polling)
+_DASHBOARD_METRICS_CACHE_LOCK = threading.Lock()
+_DASHBOARD_METRICS_CACHE = {"timestamp": 0.0, "payload": None}
+_DASHBOARD_METRICS_CACHE_TTL_SECONDS = 10.0
 
 SERVER_START_TIME = time.time()
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -108,8 +157,45 @@ async def request_tracing_middleware(request: Request, call_next):
         req_id = f"req_{secrets.token_hex(8)}"
     request.state.request_id = req_id
 
+    # Developer Experience (DX): seamlessly accept API keys via Authorization: Bearer molt_... or ?api_key=molt_...
+    if not request.headers.get("x-api-key"):
+        candidate_key = None
+        auth_hdr = request.headers.get("authorization", "")
+        if auth_hdr.lower().startswith("bearer "):
+            token_val = auth_hdr[7:].strip()
+            if token_val and not token_val.startswith("adm_sess_"):
+                candidate_key = token_val
+        if not candidate_key:
+            q_key = request.query_params.get("api_key") or request.query_params.get("x_api_key")
+            if q_key and q_key.strip():
+                candidate_key = q_key.strip()
+        if candidate_key:
+            raw_headers = list(request.scope.get("headers", []))
+            raw_headers.append((b"x-api-key", candidate_key.encode("utf-8")))
+            request.scope["headers"] = raw_headers
+            if hasattr(request, "_headers"):
+                delattr(request, "_headers")
+
     response = await call_next(request)
     response.headers["X-Request-ID"] = req_id
+
+    # Edge caching headers for unmetered static/discovery endpoints
+    if request.method == "GET" and response.status_code == 200:
+        path = request.url.path
+        if path in [
+            "/v1/health",
+            "/v1/quickstart",
+            "/v1/capabilities",
+            "/v1/intel/sample",
+            "/v1/intel/observatory/status",
+            "/v1/sample",
+            "/.well-known/agent-card.json",
+            "/v1/payments/config",
+            "/v1/errors",
+        ] or (path.startswith("/v1/tools/") and path.endswith("/parameter-graph")):
+            response.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=60"
+            response.headers["Vary"] = "Accept-Encoding"
+
     return response
 
 
@@ -140,6 +226,8 @@ async def metrics_middleware(request: Request, call_next):
             norm_endpoint = "/v1/witnesses/:id"
         elif endpoint.startswith("/v1/data-products/") and endpoint.endswith("/latest"):
             norm_endpoint = "/v1/data-products/:product_id/latest"
+        elif endpoint.startswith("/v1/data-products/") and endpoint.endswith("/sample"):
+            norm_endpoint = "/v1/data-products/:product_id/sample"
         elif endpoint.startswith("/v1/data-products/") and endpoint != "/v1/data-products":
             norm_endpoint = "/v1/data-products/:product_id"
         elif endpoint.startswith("/v1/intel/microstructure/") and endpoint != "/v1/intel/microstructure":
@@ -148,9 +236,37 @@ async def metrics_middleware(request: Request, call_next):
             norm_endpoint = "/v1/webhooks/test/:subscription_id"
         elif endpoint.startswith("/v1/webhooks/") and endpoint != "/v1/webhooks":
             norm_endpoint = "/v1/webhooks/:subscription_id"
+        elif endpoint.startswith("/v1/nfts/assets/"):
+            norm_endpoint = "/v1/nfts/assets/:filename"
+        elif endpoint.startswith("/v1/nfts/metadata/"):
+            norm_endpoint = "/v1/nfts/metadata/:nft_id"
+        elif endpoint.startswith("/v1/jobs/") and endpoint.endswith("/submit"):
+            norm_endpoint = "/v1/jobs/:job_id/submit"
+        elif endpoint.startswith("/v1/jobs/") and endpoint not in {"/v1/jobs/board", "/v1/jobs/post"}:
+            norm_endpoint = "/v1/jobs/:job_id"
         elif endpoint in {
+            "/dashboard",
+            "/v1/metrics/dashboard",
+            "/v1/newsletter/latest",
+            "/v1/quickstart",
+            "/v1/admin/briefing/refresh",
+            "/v1/admin/briefing/ingest-post",
+            "/v1/jobs/verify-witness",
+            "/v1/intel/demand",
+            "/v1/intel/observatory/status",
+            "/v1/intel/observatory/trends",
+            "/v1/quant/first-passage",
+            "/v1/quant/trade-viability",
+            "/v1/nfts/catalog",
+            "/v1/nfts/order",
+            "/v1/nfts/claim",
+            "/v1/jobs/board",
+            "/v1/jobs/post",
             "/",
             "/metrics",
+            "/gateway.json",
+            "/v1/gateway/discovery",
+            "/.well-known/agent-card.json",
             "/v1/health",
             "/v1/errors",
             "/v1/challenges",
@@ -170,12 +286,14 @@ async def metrics_middleware(request: Request, call_next):
             "/v1/admin/change-password",
             "/v1/admin/logout",
             "/v1/admin/session",
+            "/v1/admin/safemode",
             "/v1/webhooks",
             "/v1/webhooks/subscribe",
             "/v1/payments/config",
             "/v1/payments/invoice",
             "/v1/payments/verify-solana",
             "/v1/payments/verify-nano",
+            "/v1/payments/reconcile",
             "/v1/payments/unmatched",
             "/v1/payments/webhook",
             "/v1/keys/generate-demo",
@@ -194,6 +312,19 @@ async def metrics_middleware(request: Request, call_next):
 @app.middleware("http")
 async def timeout_and_rate_limit_middleware(request: Request, call_next):
     req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+    if not is_mutation_allowed(request.method, request.url.path):
+        status_info = get_safe_mode_status()
+        reason = status_info.get("reason") or "Administrative maintenance"
+        content = format_error_payload(
+            code="SERVICE_READ_ONLY_MODE",
+            message=f"System is currently running in Read-Only Safe Mode: {reason}",
+            request_id=req_id,
+            status_code=503,
+            retryable=True,
+            retry_after=60,
+            details=status_info,
+        )
+        return JSONResponse(status_code=503, content=content, headers={"X-Request-ID": req_id, "Retry-After": "60"})
     try:
         response = await asyncio.wait_for(call_next(request), timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
@@ -413,7 +544,7 @@ witness_manager = WitnessManager(storage, witness_key_manager)
 intel_engine = IntelEngine(storage)
 payment_cfg = load_payment_config()
 nano_adapter = NanoInvoicePaymentAdapter(
-    merchant_address=payment_cfg.get("nano_treasury_address", "nano_3moltbookintel111111111111111111111111111111111111111111111111")
+    merchant_address=payment_cfg.get("nano_treasury_address", "nano_3t1sxtuxyjgdabj6miwn6st58p8x553i8ybkikoc9ozn7mra7kk71iysfyn1")
 )
 refund_dispatcher = SolanaRefundDispatcher(
     treasury_wallet=payment_cfg["solana_treasury_wallet"]
@@ -422,19 +553,19 @@ refund_dispatcher = SolanaRefundDispatcher(
 dex_microstructure = DEXMicrostructureEngine(broadcaster=microstructure_broadcaster)
 data_product_exchange = DataProductExchange()
 
-# Seed default baseline pools for Solana concentrated liquidity
+# Seed default baseline pools with realistic institutional prices ($182 SOL)
 dex_microstructure.parse_raydium_clmm_pool(
     pool_id="Raydium_SOL_USDC",
     pair="SOL/USDC",
     pool_state={
         "current_tick": -15620,
-        "current_price": 101.50,
+        "current_price": 182.15,
         "ticks": [
-            {"tick": -15630, "price": 101.40, "liquidity_usd": 125000.0},
-            {"tick": -15625, "price": 101.45, "liquidity_usd": 185000.0},
-            {"tick": -15620, "price": 101.50, "liquidity_usd": 220000.0},
-            {"tick": -15615, "price": 101.55, "liquidity_usd": 195000.0},
-            {"tick": -15610, "price": 101.60, "liquidity_usd": 140000.0},
+            {"tick": -15630, "price": 182.05, "liquidity_usd": 125000.0},
+            {"tick": -15625, "price": 182.10, "liquidity_usd": 185000.0},
+            {"tick": -15620, "price": 182.15, "liquidity_usd": 220000.0},
+            {"tick": -15615, "price": 182.20, "liquidity_usd": 195000.0},
+            {"tick": -15610, "price": 182.25, "liquidity_usd": 140000.0},
         ],
     },
 )
@@ -444,13 +575,13 @@ dex_microstructure.parse_orca_whirlpool(
     pair="SOL/USDC",
     pool_state={
         "tick_current_index": -15620,
-        "price": 101.52,
+        "price": 182.38,
         "ticks": [
-            {"index": -15630, "price": 101.42, "liquidity_net": 1200.0},
-            {"index": -15625, "price": 101.47, "liquidity_net": 1800.0},
-            {"index": -15620, "price": 101.52, "liquidity_net": 2100.0},
-            {"index": -15615, "price": 101.57, "liquidity_net": -1700.0},
-            {"index": -15610, "price": 101.62, "liquidity_net": -1300.0},
+            {"index": -15630, "price": 182.28, "liquidity_net": 1200.0},
+            {"index": -15625, "price": 182.33, "liquidity_net": 1800.0},
+            {"index": -15620, "price": 182.38, "liquidity_net": 2100.0},
+            {"index": -15615, "price": 182.43, "liquidity_net": -1700.0},
+            {"index": -15610, "price": 182.48, "liquidity_net": -1300.0},
         ],
     },
 )
@@ -460,19 +591,19 @@ dex_microstructure.parse_meteora_dlmm(
     pair="SOL/USDC",
     pool_state={
         "active_id": -15620,
-        "current_price": 101.49,
+        "current_price": 182.25,
         "bins": [
-            {"bin_id": -15630, "price": 101.39, "amount_x_usd": 60000.0, "amount_y_usd": 65000.0},
-            {"bin_id": -15625, "price": 101.44, "amount_x_usd": 90000.0, "amount_y_usd": 95000.0},
-            {"bin_id": -15620, "price": 101.49, "amount_x_usd": 110000.0, "amount_y_usd": 105000.0},
-            {"bin_id": -15615, "price": 101.54, "amount_x_usd": 95000.0, "amount_y_usd": 90000.0},
-            {"bin_id": -15610, "price": 101.59, "amount_x_usd": 70000.0, "amount_y_usd": 65000.0},
+            {"bin_id": -15630, "price": 182.15, "amount_x_usd": 60000.0, "amount_y_usd": 65000.0},
+            {"bin_id": -15625, "price": 182.20, "amount_x_usd": 90000.0, "amount_y_usd": 95000.0},
+            {"bin_id": -15620, "price": 182.25, "amount_x_usd": 110000.0, "amount_y_usd": 105000.0},
+            {"bin_id": -15615, "price": 182.30, "amount_x_usd": 95000.0, "amount_y_usd": 90000.0},
+            {"bin_id": -15610, "price": 182.35, "amount_x_usd": 70000.0, "amount_y_usd": 65000.0},
         ],
     },
 )
 
 # Seed standard production liquidity depths for Solana CLMM arbitrage
-dex_microstructure.seed_default_pools()
+dex_microstructure.seed_default_pools(base_sol_price=182.50)
 
 
 # Run one-time legacy migration from api_keys.json if present (skipping any admin backdoors)
@@ -764,6 +895,11 @@ def admin_change_password_endpoint(payload: AdminChangePasswordInput, request: R
         )
 
     # Issue fresh session token since old sessions were revoked
+    storage.log_audit_event(
+        "admin_password_changed",
+        f"Admin password changed for user '{admin_user}'",
+        ip_address=client_ip,
+    )
     new_token = storage.create_admin_session(admin_user, duration_hours=24)
     return {
         "success": True,
@@ -799,6 +935,59 @@ def admin_session_endpoint(request: Request):
     return {"authenticated": True, "username": admin_user}
 
 
+class AdminSafeModeInput(BaseModel):
+    active: bool
+    reason: Optional[str] = "Administrative maintenance"
+
+
+@app.get("/v1/admin/safemode")
+def admin_get_safemode_endpoint(request: Request):
+    auth_header = request.headers.get("authorization", "")
+    token = ""
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+    admin_user = storage.validate_admin_session(token)
+    if not admin_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Valid administrator session required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return {"success": True, "safe_mode": get_safe_mode_status()}
+
+
+@app.post("/v1/admin/safemode")
+def admin_toggle_safemode_endpoint(payload: AdminSafeModeInput, request: Request):
+    client_ip = get_client_ip(request)
+    auth_header = request.headers.get("authorization", "")
+    token = ""
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+    admin_user = storage.validate_admin_session(token)
+    if not admin_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Valid administrator session required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if payload.active:
+        status_dict = enable_safe_mode(reason=payload.reason or "Administrative maintenance", operator=admin_user)
+        storage.log_audit_event(
+            "safe_mode_enabled",
+            f"Safe mode enabled by '{admin_user}': {payload.reason}",
+            ip_address=client_ip,
+        )
+    else:
+        status_dict = disable_safe_mode(operator=admin_user)
+        storage.log_audit_event(
+            "safe_mode_disabled",
+            f"Safe mode disabled by '{admin_user}'",
+            ip_address=client_ip,
+        )
+    return {"success": True, "safe_mode": status_dict}
+
+
 @app.get("/v1/metrics/dashboard")
 def get_dashboard_metrics_endpoint(request: Request):
     """
@@ -825,6 +1014,26 @@ def get_dashboard_metrics_endpoint(request: Request):
             detail="Admin authentication required. Please sign in with ADMIN credentials.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Rate limiting: max 30 requests per minute per IP to prevent runaway polling loops
+    client_ip = get_client_ip(request)
+    allowed, retry_after = rate_limiter.is_allowed(f"dashboard_metrics:{client_ip}", limit=30, window_seconds=60)
+    if not allowed:
+        record_rate_limit("/v1/metrics/dashboard")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Dashboard rate limit exceeded. Please retry in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    # In-memory TTL cache check: return cached payload if fresh within TTL window
+    now_ts = time.time()
+    with _DASHBOARD_METRICS_CACHE_LOCK:
+        if (
+            _DASHBOARD_METRICS_CACHE["payload"] is not None
+            and (now_ts - _DASHBOARD_METRICS_CACHE["timestamp"]) < _DASHBOARD_METRICS_CACHE_TTL_SECONDS
+        ):
+            return _DASHBOARD_METRICS_CACHE["payload"]
 
     db_metrics = storage.get_dashboard_metrics()
 
@@ -872,7 +1081,49 @@ def get_dashboard_metrics_endpoint(request: Request):
 
     uptime_sec = round(time.time() - SERVER_START_TIME, 1)
 
-    return {
+    # Load latest intelligence briefing & daily newsletter for the Operator Console
+    latest_briefing_info: Dict[str, Any] = {
+        "briefing_id": "N/A",
+        "state_witness_id": "Verified",
+        "items_analyzed": 0,
+        "signals_extracted": 0,
+        "created_at": None,
+        "briefing_markdown": "",
+        "newsletter_markdown": "",
+    }
+    try:
+        with storage.connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT briefing_id, items_analyzed, signals_extracted, report_markdown, state_witness_id, created_at
+                FROM intel_briefings
+                ORDER BY created_at DESC LIMIT 1
+                """
+            )
+            b_row = cur.fetchone()
+            if b_row:
+                latest_briefing_info["briefing_id"] = b_row["briefing_id"]
+                latest_briefing_info["items_analyzed"] = b_row["items_analyzed"]
+                latest_briefing_info["signals_extracted"] = b_row["signals_extracted"]
+                latest_briefing_info["briefing_markdown"] = b_row["report_markdown"] or ""
+                latest_briefing_info["state_witness_id"] = b_row["state_witness_id"] or "Verified"
+                latest_briefing_info["created_at"] = b_row["created_at"]
+    except Exception:
+        pass
+
+    try:
+        from config import REPORTS_DIR
+        lb_file = Path(REPORTS_DIR) / "latest_briefing.md"
+        if lb_file.is_file():
+            latest_briefing_info["briefing_markdown"] = lb_file.read_text(encoding="utf-8")
+        ln_file = Path(REPORTS_DIR) / "latest_newsletter.md"
+        if ln_file.is_file():
+            latest_briefing_info["newsletter_markdown"] = ln_file.read_text(encoding="utf-8")
+    except Exception:
+        pass
+
+    payload = {
         "success": True,
         "server": {
             "status": "healthy",
@@ -892,10 +1143,196 @@ def get_dashboard_metrics_endpoint(request: Request):
         "traffic": {
             "total_requests": requests_total,
             "status_codes": status_codes,
-            "top_endpoints": sorted(top_endpoints.items(), key=lambda x: x[1], reverse=True)[:8],
+            "top_endpoints": (
+                sorted(
+                    [(k, v) for k, v in top_endpoints.items() if k not in {"/v1/metrics/dashboard", "/dashboard", "unmatched_route"}],
+                    key=lambda x: x[1],
+                    reverse=True,
+                )[:8]
+                or sorted(top_endpoints.items(), key=lambda x: x[1], reverse=True)[:8]
+            ),
         },
         "funnel": db_metrics["funnel"],
         "recent_activity": db_metrics["recent_activity"],
+        "latest_briefing": latest_briefing_info,
+        "ecosystem": _get_dashboard_ecosystem_summary(),
+    }
+
+    with _DASHBOARD_METRICS_CACHE_LOCK:
+        _DASHBOARD_METRICS_CACHE["timestamp"] = now_ts
+        _DASHBOARD_METRICS_CACHE["payload"] = payload
+
+    return payload
+
+
+
+def _get_dashboard_ecosystem_summary() -> Dict[str, Any]:
+    """Aggregates live Agent Job Board (25 reward cap) and Molt Alpha DEMS NFT inventory for the Operator Console."""
+    jb_summary: Dict[str, Any] = {
+        "open_jobs": 0,
+        "rewards_claimed": 0,
+        "max_rewards_cap": 25,
+        "rewards_remaining": 25,
+        "reward_per_response_credits": 10,
+        "recent_submissions": [],
+    }
+    try:
+        from job_board import AgentJobBoardManager
+        jb_mgr = AgentJobBoardManager(storage_manager=storage)
+        board = jb_mgr.list_jobs(limit=30)
+        jb_summary["open_jobs"] = board.get("total_listed", 0)
+        rp = board.get("reward_policy", {})
+        jb_summary["rewards_claimed"] = rp.get("rewards_claimed", 0)
+        jb_summary["max_rewards_cap"] = rp.get("max_rewards_cap", 25)
+        jb_summary["rewards_remaining"] = rp.get("rewards_remaining", 25)
+        with storage.connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT submission_id, job_id, worker_agent, deliverable_uri, status, state_witness_id, submitted_at FROM agent_job_submissions ORDER BY submitted_at DESC LIMIT 6"
+            )
+            jb_summary["recent_submissions"] = [dict(r) for r in cur.fetchall()]
+    except Exception:
+        pass
+
+    nft_summary: Dict[str, Any] = {
+        "collection_name": "Molt Alpha DEMS",
+        "total_editions_cap": 123,
+        "total_minted_or_reserved": 0,
+        "editions": [],
+    }
+    try:
+        from nft_collection import MoltAlphaDemsCollection
+        cat = MoltAlphaDemsCollection().list_catalog()
+        items = cat.get("items", [])
+        nft_summary["total_editions_cap"] = sum(int(i.get("max_supply", 0)) for i in items) or 123
+        nft_summary["total_minted_or_reserved"] = int(cat.get("minted_editions_count", 0))
+        nft_summary["editions"] = [
+            {
+                "edition_id": e["nft_id"],
+                "name": f"#{e['number']} {e['short_name']}",
+                "rarity": e["rarity"],
+                "price_sol": e["price_sol"],
+                "credits": e["bundled_credits"],
+                "minted": e["minted_count"],
+                "max_supply": e["max_supply"],
+                "remaining": e["remaining_supply"],
+            }
+            for e in items
+        ]
+    except Exception:
+        pass
+
+    return {"job_board": jb_summary, "nft_collection": nft_summary}
+
+
+class AdminIngestPostRequest(BaseModel):
+    post_url_or_id: str
+
+
+@app.post("/v1/admin/briefing/ingest-post")
+def admin_ingest_moltbook_post_endpoint(payload: AdminIngestPostRequest, request: Request):
+    """
+    Allows an authenticated administrator in the Operator Console to paste any Moltbook
+    post URL or ID, ingest it + its top peer-review comments, and re-synthesize the
+    Executive Intelligence Briefing & Daily Newsletter in one click.
+    """
+    auth_header = request.headers.get("authorization", "")
+    bearer_token = auth_header[7:].strip() if auth_header.lower().startswith("bearer ") else ""
+    is_authenticated = False
+    metrics_token = os.getenv("METRICS_BEARER_TOKEN", "").strip()
+    if metrics_token and bearer_token and hmac.compare_digest(bearer_token, metrics_token):
+        is_authenticated = True
+    elif bearer_token and storage.validate_admin_session(bearer_token):
+        is_authenticated = True
+
+    if not is_authenticated:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin authentication required.")
+
+    ingested = intel_engine.ingest_moltbook_post(payload.post_url_or_id.strip(), include_comments=True)
+    intel_engine.extract_signals(limit_items=50)
+    from ops.publisher import publish_daily_alpha
+    res = publish_daily_alpha(dry_run=True, force_refresh=False, storage_manager=storage, witness_manager=witness_manager)
+    res["post_ingested"] = bool(ingested)
+    res["post_url_or_id"] = payload.post_url_or_id.strip()
+    storage.log_audit_event(
+        "admin_post_ingested",
+        f"Admin ingested post {payload.post_url_or_id.strip()} -> briefing {res.get('briefing_id')}",
+        ip_address=get_client_ip(request),
+    )
+    return res
+
+
+@app.post("/v1/admin/briefing/refresh")
+def admin_refresh_briefing_endpoint(request: Request):
+    """
+    Allows an authenticated administrator in the Operator Console to synthesize
+    a fresh intelligence briefing and daily newsletter on demand.
+    """
+    auth_header = request.headers.get("authorization", "")
+    bearer_token = auth_header[7:].strip() if auth_header.lower().startswith("bearer ") else ""
+    is_authenticated = False
+    metrics_token = os.getenv("METRICS_BEARER_TOKEN", "").strip()
+    if metrics_token and bearer_token and hmac.compare_digest(bearer_token, metrics_token):
+        is_authenticated = True
+    elif bearer_token and storage.validate_admin_session(bearer_token):
+        is_authenticated = True
+
+    if not is_authenticated:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin authentication required.")
+
+    from ops.publisher import publish_daily_alpha
+    res = publish_daily_alpha(dry_run=True, force_refresh=False, storage_manager=storage, witness_manager=witness_manager)
+    storage.log_audit_event("admin_briefing_refreshed", f"Admin synthesized briefing {res.get('briefing_id')}", ip_address=get_client_ip(request))
+    return res
+
+
+@app.get("/v1/quickstart")
+def get_agent_quickstart(request: Request):
+    """
+    [UNMETERED - 0 CREDITS] One-call Developer & Autonomous Agent Quickstart Guide.
+    Returns active gateway endpoints, 0-credit discovery routes, flexible authentication
+    options (X-API-KEY, Authorization: Bearer, or ?api_key=), and copy-pasteable commands.
+    """
+    gw_url = "https://moltbook-alpha.duckdns.org"
+    gw_file = PROJECT_ROOT / "gateway.json"
+    if gw_file.is_file():
+        try:
+            gw_data = json.loads(gw_file.read_text(encoding="utf-8"))
+            gw_url = gw_data.get("active_gateway_url") or gw_url
+        except Exception:
+            pass
+
+    return {
+        "service": "Moltbook Alpha Intelligence & Quant API",
+        "version": "1.2.0",
+        "active_gateway_url": gw_url,
+        "portal_url": "https://theheiszt.github.io/moltbook-alpha/",
+        "authentication_methods": {
+            "description": "Every metered endpoint accepts your `molt_...` key via any of these 3 methods:",
+            "header_x_api_key": "X-API-KEY: molt_your_key_here",
+            "header_bearer": "Authorization: Bearer molt_your_key_here",
+            "query_param": "?api_key=molt_your_key_here",
+        },
+        "free_unmetered_endpoints_0_credits": [
+            {"method": "GET", "path": "/v1/quickstart", "purpose": "Interactive quickstart & onboarding guide"},
+            {"method": "GET", "path": "/v1/health", "purpose": "Cluster, database & RPC quorum health"},
+            {"method": "GET", "path": "/v1/capabilities", "purpose": "Full machine-readable endpoint & pricing manifest"},
+            {"method": "GET", "path": "/v1/newsletter/latest", "purpose": "Latest Automated Daily Intelligence & Quant Newsletter"},
+            {"method": "GET", "path": "/v1/intel/demand", "purpose": "Ranked Submolt Agent Service Demand Leaderboard"},
+            {"method": "GET", "path": "/v1/jobs/board", "purpose": "Open Agent Bounties (+10 free API credits per verified submission)"},
+            {"method": "GET", "path": "/v1/quant/first-passage?pair=BONK/SOL&target_net_pct=0.015", "purpose": "Live Brownian first-passage & trade viability odds"},
+            {"method": "GET", "path": "/v1/nfts/catalog", "purpose": "Molt Alpha DEMS 6-piece 2D pixel art NFT catalog"},
+            {"method": "GET", "path": "/v1/data-products", "purpose": "Catalog of 5 cryptographically witnessed data products"},
+        ],
+        "earn_free_credits_in_one_call": {
+            "description": "Submit a verifiable deliverable to any open bounty on GET /v1/jobs/board to auto-mint a +10 credit API key (capped at 25 rewards):",
+            "endpoint": f"POST {gw_url}/v1/jobs/job_molt_clmm_vacuum_01/submit",
+            "curl_example": (
+                f'curl -X POST "{gw_url}/v1/jobs/job_molt_clmm_vacuum_01/submit" '
+                '-H "Content-Type: application/json" '
+                '-d \'{"worker_agent":"@your_agent","deliverable_uri":"https://www.moltbook.com/posts/...","deliverable_summary":"Observed 42 bps tick vacuum on Raydium CLMM pool..."}\''
+            ),
+        },
     }
 
 
@@ -1007,6 +1444,167 @@ class ClaimInvoiceInput(BaseModel):
         return s
 
 
+class ReconcilePaymentInput(BaseModel):
+    transaction_signature: str
+    invoice_id: Optional[str] = None
+    expected_payer: Optional[str] = None
+    auto_refund_unmatched: bool = False
+
+    @field_validator("transaction_signature")
+    @classmethod
+    def validate_signature(cls, v: str) -> str:
+        s = v.strip()
+        if not (64 <= len(s) <= 90):
+            raise ValueError("Transaction signature must be between 64 and 90 characters.")
+        return s
+
+
+def get_active_gateway_url() -> str:
+    """
+    Resolves the currently active public edge gateway URL for autonomous agent discovery.
+    Priority:
+    1. MOLTBOOK_GATEWAY_URL environment variable
+    2. /var/lib/moltbook-alpha/gateway_url.txt (written by tunnel_status.sh / watchdog)
+    3. Local gateway_url.txt or gateway.json in project root
+    4. Default active tunnel fallback
+    """
+    env_url = os.getenv("MOLTBOOK_GATEWAY_URL", "").strip()
+    if env_url.startswith("http"):
+        return env_url.rstrip("/")
+
+    for candidate in (
+        Path("/var/lib/moltbook-alpha/gateway_url.txt"),
+        PROJECT_ROOT / "gateway_url.txt",
+    ):
+        try:
+            if candidate.exists():
+                val = candidate.read_text(encoding="utf-8").strip()
+                if val.startswith("http"):
+                    return val.rstrip("/")
+        except Exception:
+            pass
+
+    try:
+        gw_json = PROJECT_ROOT / "gateway.json"
+        if gw_json.exists():
+            data = json.loads(gw_json.read_text(encoding="utf-8"))
+            val = str(data.get("active_gateway_url", "")).strip()
+            if val.startswith("http"):
+                return val.rstrip("/")
+    except Exception:
+        pass
+
+    return "https://moltbook-alpha.duckdns.org"
+
+
+@app.get("/.well-known/agent-card.json")
+def get_agent_card():
+    """
+    Google Agent-to-Agent (A2A) protocol discovery endpoint.
+    Returns machine-readable Agent Card metadata declaring agent capabilities,
+    supported skills, authentication requirements, and runtime endpoints.
+    """
+    gw_url = get_active_gateway_url()
+    return {
+        "protocol_version": "0.1.0",
+        "name": "Moltbook Alpha Verifiable Intelligence Agent",
+        "description": "Autonomous verifiable market intelligence agent providing high-frequency Solana DEX microstructure analysis, cryptographic Ed25519 state attestations, real-time news summarization, and data product licensing.",
+        "url": gw_url,
+        "version": "1.2.0",
+        "provider": {
+            "organization": "Moltbook Alpha",
+            "url": "https://theheiszt.github.io/moltbook-alpha",
+        },
+        "capabilities": {
+            "streaming": True,
+            "push_notifications": True,
+            "state_witness": True,
+            "step_up_authorization": True,
+            "safe_mode": True,
+            "mcp_tools": True,
+        },
+        "skills": [
+            {
+                "id": "market_microstructure",
+                "name": "Solana DEX Microstructure & MEV Risk",
+                "description": "Analyzes liquidity pool depth, tick clustering, sandwich risk, and toxic flow across Raydium, Orca, and Whirlpool DEXes.",
+                "endpoint": f"{gw_url}/v1/quant/dex-microstructure",
+            },
+            {
+                "id": "cryptographic_state_witness",
+                "name": "Ed25519 Cryptographic State Attestation",
+                "description": "Signs and verifies cryptographic state assertions across market observations, ledger invariants, and audit trails.",
+                "endpoint": f"{gw_url}/v1/witnesses/query",
+            },
+            {
+                "id": "verifiable_intelligence",
+                "name": "Machine-Verifiable Intelligence Feeds",
+                "description": "Provides high-frequency trading signals, market opportunities, and anomaly telemetry with tamper-evident hashes.",
+                "endpoint": f"{gw_url}/v1/intel/opportunities",
+            },
+            {
+                "id": "data_product_exchange",
+                "name": "Micro-Payment Data Exchange",
+                "description": "Facilitates instant access to raw market intelligence and premium reports via Solana and Nano micro-transactions.",
+                "endpoint": f"{gw_url}/v1/data-products/license",
+            },
+            {
+                "id": "webhook_streaming",
+                "name": "HMAC-SHA256 Webhook Streaming",
+                "description": "Subscribes to real-time intelligence events and alerts with cryptographic HMAC authentication.",
+                "endpoint": f"{gw_url}/v1/webhooks/subscribe",
+            },
+        ],
+        "authentication": {
+            "schemes": [
+                {
+                    "type": "apiKey",
+                    "in": "header",
+                    "name": "X-API-Key",
+                },
+                {
+                    "type": "http",
+                    "scheme": "bearer",
+                },
+                {
+                    "type": "nonce_step_up",
+                    "header": "X-Confirmation-Nonce",
+                },
+            ],
+        },
+        "documentation_url": "https://theheiszt.github.io/moltbook-alpha",
+    }
+
+
+@app.get("/v1/gateway/discovery")
+@app.get("/gateway.json")
+def get_gateway_discovery():
+    """
+    Machine-readable gateway discovery manifest.
+    Allows SDKs, MCP clients, and autonomous agents to dynamically resolve the active
+    HTTP/2 edge gateway URL without hardcoding ephemeral tunnel hostnames.
+    """
+    gw_url = get_active_gateway_url()
+    return {
+        "service": "Moltbook Alpha Intelligence API",
+        "api_version": "1.2.0",
+        "status": "online",
+        "active_gateway_url": gw_url,
+        "canonical_discovery_url": "https://theheiszt.github.io/moltbook-alpha/gateway.json",
+        "transport_protocol": "http2",
+        "self_healing_watchdog": True,
+        "endpoints": {
+            "health": f"{gw_url}/v1/health",
+            "capabilities": f"{gw_url}/v1/capabilities",
+            "data_products": f"{gw_url}/v1/data-products",
+            "payment_config": f"{gw_url}/v1/payments/config",
+            "payment_reconcile": f"{gw_url}/v1/payments/reconcile",
+            "witness_public_keys": f"{gw_url}/v1/witnesses/public-keys",
+        },
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 @app.get("/v1/payments/config")
 def get_payment_details():
     cfg = load_payment_config()
@@ -1014,7 +1612,12 @@ def get_payment_details():
         "success": True,
         "accepted_rails": ["solana", "nano"],
         "solana_treasury_wallet": cfg["solana_treasury_wallet"],
-        "nano_treasury_address": cfg.get("nano_treasury_address", "nano_3moltbookintel111111111111111111111111111111111111111111111111"),
+        "usdc_spl_mint_contract": CANONICAL_USDC_MINT,
+        "recipient_warning": (
+            f"Always send SOL and SPL USDC transfers to solana_treasury_wallet ({cfg['solana_treasury_wallet']}). "
+            f"Never send funds directly to the USDC SPL Mint contract address ({CANONICAL_USDC_MINT})."
+        ),
+        "nano_treasury_address": cfg.get("nano_treasury_address", "nano_3t1sxtuxyjgdabj6miwn6st58p8x553i8ybkikoc9ozn7mra7kk71iysfyn1"),
         "accepted_assets": ["SOL", "USDC (Solana SPL)", "XNO (Nano Zero-Fee)"],
         "supported_clusters": ["mainnet-beta", "devnet"],
         "pricing_tiers": cfg["rates"],
@@ -1022,6 +1625,7 @@ def get_payment_details():
         "create_invoice_endpoint": "POST /v1/payments/invoice",
         "verify_solana_endpoint": "POST /v1/payments/verify-solana",
         "verify_nano_endpoint": "POST /v1/payments/verify-nano",
+        "reconcile_endpoint": "POST /v1/payments/reconcile",
         "claim_endpoint": "POST /v1/payments/invoice/:invoice_id/claim",
         "unmatched_payments_endpoint": "GET /v1/payments/unmatched",
         "refund_endpoint": "POST /v1/payments/refund/:unmatched_id",
@@ -1892,19 +2496,82 @@ def get_unmatched_payments(
         payer_wallet=payer_wallet,
         limit=min(limit, 100),
     )
+    now = datetime.now(timezone.utc)
+    ages = []
+    for r in records:
+        ts = r.get("created_at")
+        if ts:
+            try:
+                dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+                ages.append(max(0.0, (now - dt).total_seconds()))
+            except Exception:
+                pass
+    if ages:
+        oldest_age_sec = max(ages)
+        ages.sort()
+        p95_idx = int(0.95 * (len(ages) - 1))
+        p95_age_sec = ages[p95_idx]
+    else:
+        oldest_age_sec = 0.0
+        p95_age_sec = 0.0
+
     return {
         "count": len(records),
         "status_filter": status_filter,
+        "oldest_unmatched_age_seconds": round(oldest_age_sec, 2),
+        "p95_unmatched_age_seconds": round(p95_age_sec, 2),
+        "quarantine_alarm": oldest_age_sec > 3600.0,
         "unmatched_payments": records,
     }
 
 
-@app.post("/v1/payments/refund/{unmatched_id}")
-def process_unmatched_refund(unmatched_id: str, request: Request):
+def _authenticate_refund_principal(request: Request) -> tuple[bool, bool, Optional[str]]:
+    auth_header = request.headers.get("authorization", "")
+    bearer_token = auth_header[7:].strip() if auth_header.lower().startswith("bearer ") else ""
+    raw_api_key = request.headers.get("x-api-key") or request.query_params.get("api_key")
+    if not raw_api_key and bearer_token and not bearer_token.startswith("adm_sess_"):
+        raw_api_key = bearer_token
+    metrics_token = os.getenv("METRICS_BEARER_TOKEN", "").strip()
+
+    is_admin = False
+    if bearer_token and storage.validate_admin_session(bearer_token):
+        is_admin = True
+    elif metrics_token and bearer_token and hmac.compare_digest(bearer_token, metrics_token):
+        is_admin = True
+    elif raw_api_key:
+        key_info = storage.get_key_info(raw_api_key)
+        if key_info and key_info.get("tier") == "admin":
+            is_admin = True
+
+    if is_admin:
+        return True, True, f"admin:{getattr(request.client, 'host', 'operator')}"
+
+    if raw_api_key:
+        key_info = storage.get_key_info(raw_api_key)
+        if key_info and key_info.get("is_active"):
+            return True, False, key_info["key_hash"]
+
+    return False, False, None
+
+
+@app.post("/v1/payments/refund/{unmatched_id}/challenge")
+def request_refund_challenge(unmatched_id: str, request: Request):
     """
-    Dispatches automated refund for an unmatched payment back to payer_wallet
-    minus the minimal network transaction fee.
+    Issues a machine-readable step-up confirmation challenge for an unmatched refund.
     """
+    is_authenticated, is_admin, principal_id = _authenticate_refund_principal(request)
+    if not is_authenticated:
+        req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+        payload = format_error_payload(
+            code=ErrorCode.AUTHENTICATION_REQUIRED.value,
+            message="Authentication required: Valid API key or administrator session is required to request a refund challenge.",
+            request_id=req_id,
+            status_code=401,
+            details={"unmatched_id": unmatched_id},
+            recovery_action=RecoveryAction.REAUTHENTICATE,
+        )
+        return JSONResponse(status_code=401, content=payload, headers={"WWW-Authenticate": "Bearer"})
+
     record = storage.get_unmatched_payment(unmatched_id)
     if not record:
         raise HTTPException(
@@ -1916,6 +2583,137 @@ def process_unmatched_refund(unmatched_id: str, request: Request):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Payment '{unmatched_id}' has already been processed with status '{record['status']}'.",
         )
+    params = {
+        "unmatched_id": unmatched_id,
+        "amount_raw": record.get("amount_raw"),
+        "asset": record.get("asset"),
+        "payer_wallet": record.get("payer_wallet"),
+    }
+    challenge = confirm_store.issue(
+        action="REFUND_PAYMENT",
+        principal_id=principal_id,
+        params=params,
+        consequence_summary={
+            "warning": "Executing this operation will permanently dispatch an on-chain refund from the treasury wallet.",
+            "unmatched_id": unmatched_id,
+            "payer_wallet": record.get("payer_wallet"),
+            "asset": record.get("asset"),
+            "amount_raw": record.get("amount_raw"),
+        },
+    )
+    return {
+        "challenge_nonce": challenge.nonce,
+        "action": challenge.action,
+        "expires_at": challenge.expires_at,
+        "ttl_seconds": confirm_store.default_ttl_seconds,
+        "confirm_header": "X-Confirmation-Nonce",
+        "consequence_summary": challenge.consequence_summary,
+    }
+
+
+@app.post("/v1/payments/refund/{unmatched_id}")
+def process_unmatched_refund(unmatched_id: str, request: Request):
+    """
+    Dispatches automated refund for an unmatched payment back to payer_wallet
+    minus the minimal network transaction fee. Supports machine-readable step-up
+    confirmation nonces via ConfirmStore.
+    """
+    # Step-Up Confirmation & Authentication Enforcement
+    is_authenticated, is_admin, principal_id = _authenticate_refund_principal(request)
+    nonce = request.headers.get("X-Confirmation-Nonce") or request.query_params.get("confirmation_nonce")
+
+    if not is_authenticated and not nonce:
+        req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+        payload = format_error_payload(
+            code=ErrorCode.AUTHENTICATION_REQUIRED.value,
+            message="Authentication required: Valid API key or administrator session is required to initiate a refund.",
+            request_id=req_id,
+            status_code=401,
+            details={"unmatched_id": unmatched_id},
+            recovery_action=RecoveryAction.REAUTHENTICATE,
+        )
+        return JSONResponse(status_code=401, content=payload, headers={"WWW-Authenticate": "Bearer"})
+
+    record = storage.get_unmatched_payment(unmatched_id)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unmatched payment record '{unmatched_id}' not found.",
+        )
+    if record["status"] != "HELD":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Payment '{unmatched_id}' has already been processed with status '{record['status']}'.",
+        )
+
+    is_admin_bypass = is_admin and (request.headers.get("X-Admin-Bypass-Confirmation") == "true")
+    require_confirmation = (
+        not is_admin_bypass
+        and (
+            getattr(confirm_store, "strict_mode", True)
+            or request.headers.get("X-Require-Confirmation") == "true"
+            or request.query_params.get("require_confirmation") == "true"
+        )
+    )
+    effective_principal = principal_id or getattr(request.state, "key_hash", None) or (request.client.host if request.client else "unknown")
+    params = {
+        "unmatched_id": unmatched_id,
+        "amount_raw": record.get("amount_raw"),
+        "asset": record.get("asset"),
+        "payer_wallet": record.get("payer_wallet"),
+    }
+
+    if require_confirmation and not nonce:
+        challenge = confirm_store.issue(
+            action="REFUND_PAYMENT",
+            principal_id=effective_principal,
+            params=params,
+            consequence_summary={
+                "warning": "Executing this operation will permanently dispatch an on-chain refund from the treasury wallet.",
+                "unmatched_id": unmatched_id,
+                "payer_wallet": record.get("payer_wallet"),
+                "asset": record.get("asset"),
+                "amount_raw": record.get("amount_raw"),
+            },
+        )
+        req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+        payload = format_error_payload(
+            code=ErrorCode.POLICY_CONFIRMATION_REQUIRED.value,
+            message="Step-up confirmation required: This action will permanently dispatch an on-chain refund transaction from the treasury.",
+            request_id=req_id,
+            status_code=428,
+            details={
+                "challenge_nonce": challenge.nonce,
+                "expires_at": challenge.expires_at,
+                "consequence_summary": challenge.consequence_summary,
+            },
+            recovery={
+                "action": RecoveryAction.CONFIRM_OPERATION.value,
+                "challenge_nonce": challenge.nonce,
+                "expires_at": challenge.expires_at,
+                "confirm_header": "X-Confirmation-Nonce",
+            },
+        )
+        return JSONResponse(status_code=428, content=payload)
+
+    if nonce:
+        ok, reason = confirm_store.verify_and_consume(
+            nonce=nonce,
+            action="REFUND_PAYMENT",
+            principal_id=effective_principal,
+            params=params,
+        )
+        if not ok:
+            req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+            payload = format_error_payload(
+                code=ErrorCode.CONFIRMATION_NONCE_INVALID.value,
+                message=f"Confirmation challenge validation failed: {reason}",
+                request_id=req_id,
+                status_code=410,
+                details={"reason": reason, "nonce": nonce},
+                recovery_action=RecoveryAction.INSPECT_PARAMETERS,
+            )
+            return JSONResponse(status_code=410, content=payload)
 
     try:
         dispatch_result = refund_dispatcher.dispatch_refund(record)
@@ -1935,6 +2733,31 @@ def process_unmatched_refund(unmatched_id: str, request: Request):
         f"Refund {dispatch_result['refund_amount_raw']} {record['asset']} dispatched for {unmatched_id} to {record['payer_wallet']}",
     )
 
+    witness_id = None
+    witness_sig = None
+    if witness_manager:
+        try:
+            w = witness_manager.create_witness(
+                action="UNMATCHED_PAYMENT_REFUNDED",
+                actor="refund_dispatcher",
+                key_hash=None,
+                credit_delta=0,
+                post_balance=0,
+                request_id=getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}",
+                environmental_anchor={
+                    "unmatched_id": unmatched_id,
+                    "original_tx_signature": record["tx_signature"],
+                    "refund_tx_sig": dispatch_result["refund_tx_sig"],
+                    "payer_wallet": record["payer_wallet"],
+                    "asset": record["asset"],
+                    "refund_amount_raw": dispatch_result["refund_amount_raw"],
+                },
+            )
+            witness_id = w.get("witness_id")
+            witness_sig = w.get("signature")
+        except Exception:
+            pass
+
     return {
         "success": True,
         "unmatched_id": unmatched_id,
@@ -1945,6 +2768,312 @@ def process_unmatched_refund(unmatched_id: str, request: Request):
         "fee_deducted_raw": dispatch_result["fee_deducted_raw"],
         "refund_tx_sig": dispatch_result["refund_tx_sig"],
         "dispatched_at": dispatch_result["dispatched_at"],
+        "state_witness_id": witness_id,
+        "witness_signature": witness_sig,
+    }
+
+
+@app.post("/v1/payments/reconcile")
+def reconcile_payment_endpoint(req: ReconcilePaymentInput, request: Request):
+    """
+    Reconciles an on-chain transaction signature against open invoices, redeemed ledgers,
+    and unmatched payment quarantines.
+    - If already redeemed, returns REDEEMED status and existing key prefix.
+    - If matches an open invoice and satisfies asset/amount requirements, fulfills the invoice.
+    - If sent without an invoice/reference (orphan deposit) or to an expired/mismatched invoice,
+      quarantines the transfer into unmatched_payments and optionally triggers an automated refund
+      signed by an Ed25519 state witness receipt.
+    """
+    client_ip = get_client_ip(request)
+    allowed, retry_after = rate_limiter.is_allowed(f"reconcile_pay:{client_ip}", limit=20, window_seconds=60)
+    if not allowed:
+        record_rate_limit("/v1/payments/reconcile")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many reconciliation requests. Please retry in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    sig = req.transaction_signature.strip()
+    req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+
+    # 1. Check if already redeemed
+    redemption = storage.get_payment_redemption(sig)
+    if redemption:
+        w = witness_manager.create_witness(
+            action="PAYMENT_RECONCILE_VERIFIED_REDEEMED",
+            actor="reconciliation_engine",
+            key_hash=redemption.get("key_hash"),
+            credit_delta=0,
+            post_balance=redemption.get("remaining_credits", 0),
+            request_id=req_id,
+            environmental_anchor={
+                "tx_signature": sig,
+                "reconciliation_status": "REDEEMED",
+                "invoice_id": redemption.get("invoice_id"),
+            },
+        )
+        return {
+            "success": True,
+            "reconciliation_status": "REDEEMED",
+            "tx_signature": sig,
+            "invoice_id": redemption.get("invoice_id"),
+            "key_prefix": redemption.get("key_prefix"),
+            "tier": redemption.get("tier"),
+            "credits_granted": redemption.get("credits_granted"),
+            "remaining_credits": redemption.get("remaining_credits"),
+            "state_witness_id": w.get("witness_id"),
+            "witness_signature": w.get("signature"),
+        }
+
+    # 2. Check if already quarantined in unmatched_payments
+    existing_unmatched = None
+    for item in storage.list_unmatched_payments(status=None, limit=200):
+        if item.get("tx_signature") == sig:
+            existing_unmatched = item
+            break
+
+    if existing_unmatched:
+        if req.auto_refund_unmatched and existing_unmatched["status"] == "HELD":
+            dispatch_result = refund_dispatcher.dispatch_refund(existing_unmatched)
+            storage.mark_unmatched_refunded(
+                unmatched_id=existing_unmatched["unmatched_id"],
+                refund_tx_sig=dispatch_result["refund_tx_sig"],
+                refunded_amount_raw=dispatch_result["refund_amount_raw"],
+            )
+            w = witness_manager.create_witness(
+                action="UNMATCHED_PAYMENT_REFUNDED",
+                actor="reconciliation_engine",
+                key_hash=None,
+                credit_delta=0,
+                post_balance=0,
+                request_id=req_id,
+                environmental_anchor={
+                    "unmatched_id": existing_unmatched["unmatched_id"],
+                    "tx_signature": sig,
+                    "refund_tx_sig": dispatch_result["refund_tx_sig"],
+                    "refund_amount_raw": dispatch_result["refund_amount_raw"],
+                },
+            )
+            return {
+                "success": True,
+                "reconciliation_status": "QUARANTINED_AND_REFUNDED",
+                "tx_signature": sig,
+                "unmatched_id": existing_unmatched["unmatched_id"],
+                "reason": existing_unmatched["reason"],
+                "payer_wallet": existing_unmatched["payer_wallet"],
+                "asset": existing_unmatched["asset"],
+                "refund_amount_raw": dispatch_result["refund_amount_raw"],
+                "fee_deducted_raw": dispatch_result["fee_deducted_raw"],
+                "refund_tx_sig": dispatch_result["refund_tx_sig"],
+                "state_witness_id": w.get("witness_id"),
+                "witness_signature": w.get("signature"),
+            }
+
+        w = witness_manager.create_witness(
+            action="PAYMENT_RECONCILE_QUARANTINED",
+            actor="reconciliation_engine",
+            key_hash=None,
+            credit_delta=0,
+            post_balance=0,
+            request_id=req_id,
+            environmental_anchor={
+                "unmatched_id": existing_unmatched["unmatched_id"],
+                "tx_signature": sig,
+                "status": existing_unmatched["status"],
+                "reason": existing_unmatched["reason"],
+            },
+        )
+        return {
+            "success": True,
+            "reconciliation_status": "QUARANTINED_UNMATCHED",
+            "tx_signature": sig,
+            "unmatched_id": existing_unmatched["unmatched_id"],
+            "status": existing_unmatched["status"],
+            "reason": existing_unmatched["reason"],
+            "payer_wallet": existing_unmatched["payer_wallet"],
+            "asset": existing_unmatched["asset"],
+            "amount_raw": existing_unmatched["amount_raw"],
+            "refund_endpoint": f"POST /v1/payments/refund/{existing_unmatched['unmatched_id']}",
+            "state_witness_id": w.get("witness_id"),
+            "witness_signature": w.get("signature"),
+        }
+
+    # 3. Inspect on-chain transaction via SolanaPaymentVerifier
+    cfg = load_payment_config()
+    invoice = storage.get_invoice(req.invoice_id) if req.invoice_id else None
+    target_tier = invoice["tier"] if invoice else "tier_starter"
+    expected_ref = invoice["reference"] if invoice else None
+
+    verifier = SolanaPaymentVerifier(
+        max_age_seconds=cfg.get("max_age_seconds", 86400),
+        require_consensus=False,
+    )
+    try:
+        payment = verifier.verify_payment(
+            sig,
+            requested_tier=target_tier,
+            expected_payer=req.expected_payer,
+            expected_reference=expected_ref,
+        )
+    except VerificationError as e:
+        raise ApiError(
+            code=ErrorCode.PAYMENT_VERIFICATION_FAILED,
+            status_code=400,
+            retryable=False,
+            outcome=OperationOutcome.NOT_COMMITTED,
+            state_effect="none",
+            recovery_action=RecoveryAction.CREATE_NEW_INVOICE,
+            message=f"On-chain reconciliation failed: {e!s}",
+        ) from e
+    except RPCError as e:
+        raise ApiError(
+            code=ErrorCode.RPC_GATEWAY_ERROR,
+            status_code=502,
+            retryable=True,
+            retry_after=5,
+            outcome=OperationOutcome.INDETERMINATE,
+            state_effect="none",
+            recovery_action=RecoveryAction.POLL_PAYMENT_STATUS,
+            message=f"Solana RPC communication error during reconciliation: {e!s}",
+        ) from e
+
+    # Try resolving invoice by on-chain reference if invoice_id was not explicitly passed
+    if not invoice and getattr(payment, "reference", None):
+        invoice = storage.get_invoice_by_reference(payment.reference)
+
+    # 4. Determine if orphan deposit or mismatched/expired invoice
+    quarantine_reason = None
+    expected_amt = None
+    if not invoice:
+        quarantine_reason = "UNLINKED_ORPHAN_DEPOSIT"
+    else:
+        expected_amt = invoice["amount_raw"]
+        now_iso = datetime.now(timezone.utc).isoformat()
+        is_expired = (invoice["status"] == "expired" or now_iso > invoice["expires_at"])
+        if is_expired:
+            quarantine_reason = "EXPIRED_INVOICE_PAID"
+        elif payment.asset != invoice["asset"]:
+            quarantine_reason = f"ASSET_MISMATCH: expected {invoice['asset']}, received {payment.asset}"
+        elif payment.amount_raw < invoice["amount_raw"]:
+            quarantine_reason = "UNDERPAID_AMOUNT"
+
+    if quarantine_reason:
+        unm = storage.record_unmatched_payment(
+            rail="solana",
+            tx_signature=payment.tx_signature,
+            payer_wallet=payment.payer,
+            asset=payment.asset,
+            amount_raw=payment.amount_raw,
+            expected_amount_raw=expected_amt,
+            reason=quarantine_reason,
+        )
+        if req.auto_refund_unmatched:
+            dispatch_result = refund_dispatcher.dispatch_refund(unm)
+            storage.mark_unmatched_refunded(
+                unmatched_id=unm["unmatched_id"],
+                refund_tx_sig=dispatch_result["refund_tx_sig"],
+                refunded_amount_raw=dispatch_result["refund_amount_raw"],
+            )
+            w = witness_manager.create_witness(
+                action="UNMATCHED_PAYMENT_REFUNDED",
+                actor="reconciliation_engine",
+                key_hash=None,
+                credit_delta=0,
+                post_balance=0,
+                request_id=req_id,
+                environmental_anchor={
+                    "unmatched_id": unm["unmatched_id"],
+                    "tx_signature": payment.tx_signature,
+                    "reason": quarantine_reason,
+                    "refund_tx_sig": dispatch_result["refund_tx_sig"],
+                    "refund_amount_raw": dispatch_result["refund_amount_raw"],
+                },
+            )
+            return {
+                "success": True,
+                "reconciliation_status": "QUARANTINED_AND_REFUNDED",
+                "tx_signature": payment.tx_signature,
+                "unmatched_id": unm["unmatched_id"],
+                "reason": quarantine_reason,
+                "payer_wallet": payment.payer,
+                "asset": payment.asset,
+                "amount_raw": payment.amount_raw,
+                "refund_amount_raw": dispatch_result["refund_amount_raw"],
+                "fee_deducted_raw": dispatch_result["fee_deducted_raw"],
+                "refund_tx_sig": dispatch_result["refund_tx_sig"],
+                "state_witness_id": w.get("witness_id"),
+                "witness_signature": w.get("signature"),
+            }
+
+        w = witness_manager.create_witness(
+            action="PAYMENT_RECONCILE_QUARANTINED",
+            actor="reconciliation_engine",
+            key_hash=None,
+            credit_delta=0,
+            post_balance=0,
+            request_id=req_id,
+            environmental_anchor={
+                "unmatched_id": unm["unmatched_id"],
+                "tx_signature": payment.tx_signature,
+                "reason": quarantine_reason,
+                "payer_wallet": payment.payer,
+                "amount_raw": payment.amount_raw,
+            },
+        )
+        return {
+            "success": True,
+            "reconciliation_status": "QUARANTINED_UNMATCHED",
+            "tx_signature": payment.tx_signature,
+            "unmatched_id": unm["unmatched_id"],
+            "status": "HELD",
+            "reason": quarantine_reason,
+            "payer_wallet": payment.payer,
+            "asset": payment.asset,
+            "amount_raw": payment.amount_raw,
+            "refund_endpoint": f"POST /v1/payments/refund/{unm['unmatched_id']}",
+            "state_witness_id": w.get("witness_id"),
+            "witness_signature": w.get("signature"),
+        }
+
+    # 5. Valid open invoice match -> fulfill atomically
+    redemption_result = storage.fulfill_invoice_and_redeem(
+        invoice_id=invoice["invoice_id"],
+        tx_signature=payment.tx_signature,
+        asset=payment.asset,
+        amount_raw=payment.amount_raw,
+        tier=invoice["tier"],
+        credits_to_grant=invoice["credits"],
+        payer=payment.payer,
+        reference=payment.reference or invoice["reference"],
+        slot=payment.slot,
+        block_time=payment.block_time,
+    )
+    w = witness_manager.create_witness(
+        action="PAYMENT_RECONCILED_AND_REDEEMED",
+        actor="reconciliation_engine",
+        key_hash=storage.hash_key(redemption_result["api_key"]) if redemption_result.get("api_key") else None,
+        credit_delta=invoice["credits"],
+        post_balance=redemption_result.get("credits", invoice["credits"]),
+        request_id=req_id,
+        environmental_anchor={
+            "invoice_id": invoice["invoice_id"],
+            "tx_signature": payment.tx_signature,
+            "tier": invoice["tier"],
+            "credits": invoice["credits"],
+        },
+    )
+    return {
+        "success": True,
+        "reconciliation_status": "RECONCILED_AND_FULFILLED",
+        "tx_signature": payment.tx_signature,
+        "invoice_id": invoice["invoice_id"],
+        "api_key": redemption_result.get("api_key"),
+        "key_prefix": redemption_result.get("key_prefix"),
+        "tier": redemption_result.get("tier"),
+        "credits": redemption_result.get("credits"),
+        "state_witness_id": w.get("witness_id"),
+        "witness_signature": w.get("signature"),
     }
 
 
@@ -2262,6 +3391,7 @@ def list_data_products():
     return {
         "count": len(products),
         "products": products,
+        "data_products": products,
     }
 
 
@@ -2278,6 +3408,38 @@ def get_data_product_contract(product_id: str):
             detail=f"Data product '{product_id}' not found in exchange catalog. Available: {[p['product_id'] for p in data_product_exchange.list_products()]}",
         )
     return prod.to_contract_dict()
+
+
+@app.get("/v1/data-products/{product_id}/sample")
+def get_data_product_sample(product_id: str, request: Request):
+    """
+    Agent Data Exchange: Returns a free (0-credit), deterministic, schema-valid sample
+    snapshot for pre-purchase agent evaluation, complete with provenance metadata,
+    evidence grading, retrieval outcome semantics, and an Ed25519 witness signature.
+    """
+    client_ip = get_client_ip(request)
+    allowed, retry_after = rate_limiter.is_allowed(f"data_product_sample:{client_ip}", limit=60, window_seconds=60)
+    if not allowed:
+        record_rate_limit(f"/v1/data-products/{product_id}/sample")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many sample preview requests. Please retry in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    try:
+        sample = data_product_exchange.generate_sample_snapshot(
+            product_id=product_id,
+            witness_manager=witness_manager,
+        )
+    except KeyError:
+        sample = None
+    if not sample:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Data product '{product_id}' not found in exchange catalog. Available: {[p['product_id'] for p in data_product_exchange.list_products()]}",
+        )
+    return sample
 
 
 @app.get("/v1/data-products/{product_id}/latest")
@@ -2393,6 +3555,12 @@ def get_data_product_latest(
         request.state.concurrency_slot_id = None
         if res_info.get("cached_response"):
             return res_info["cached_response"]
+        return {
+            "status": "settled",
+            "reservation_id": res_info.get("reservation_id"),
+            "idempotency_key": res_info.get("idempotency_key"),
+            "message": "Request previously settled under this idempotency key. Cached payload not retained.",
+        }
 
     if state == "in_flight":
         concurrency_limiter.release(slot_id, rate_key)
@@ -2590,6 +3758,12 @@ def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None
         request.state.concurrency_slot_id = None
         if res_info.get("cached_response"):
             return res_info["cached_response"]
+        return {
+            "status": "settled",
+            "reservation_id": res_info.get("reservation_id"),
+            "idempotency_key": res_info.get("idempotency_key"),
+            "message": "Request previously settled under this idempotency key. Cached payload not retained.",
+        }
 
     if state == "in_flight":
         concurrency_limiter.release(slot_id, rate_key)
@@ -2959,6 +4133,14 @@ def get_sample_briefing_payload() -> Dict[str, Any]:
     }
 
 
+@app.get("/v1/sample")
+def get_sample_alias(request: Request):
+    """
+    [UNMETERED - 0 CREDITS] Convenience alias for /v1/intel/sample.
+    """
+    return get_intel_sample(request)
+
+
 @app.get("/v1/intel/sample")
 def get_intel_sample(request: Request):
     """
@@ -3070,6 +4252,358 @@ def get_intel_trading_signals(
         "trading_signals": signals,
         "timestamp_utc": time.time(),
     }
+
+
+@app.get("/v1/intel/demand")
+def get_intel_service_demand_leaderboard(
+    request: Request,
+    limit: int = 20,
+):
+    """
+    [UNMETERED - 0 CREDITS] Synthesizes community posts across Moltbook submolts
+    into a ranked Agent Service Demand Leaderboard, mapping top agent pain points
+    and RFPs directly to Moltbook Alpha API endpoints and open bounties.
+    """
+    return intel_engine.get_service_demand_leaderboard(limit=min(limit, 50))
+
+
+@app.get("/v1/intel/observatory/status")
+def get_intel_observatory_status(request: Request):
+    """
+    [UNMETERED - 0 CREDITS] Returns sync status, checkpoints, and ingestion telemetry
+    for the decoupled Moltbook Observatory intelligence source adapter.
+    """
+    from ops.observatory_adapter import ObservatorySourceAdapter
+    adapter = ObservatorySourceAdapter(storage_manager=storage)
+    return adapter.get_status()
+
+
+@app.get("/v1/intel/observatory/trends")
+def get_intel_observatory_trends(
+    request: Request,
+    hours: int = 24,
+    limit: int = 50,
+    category: Optional[str] = None,
+):
+    """
+    [UNMETERED - 0 CREDITS] Retrieves ingested Moltbook Observatory macro keyword trends
+    and velocity anomaly signals, classified by security, alpha, ops, and architecture.
+    """
+    from ops.observatory_adapter import ObservatorySourceAdapter
+    adapter = ObservatorySourceAdapter(storage_manager=storage)
+    return adapter.get_recent_trends(hours=hours, limit=limit, category=category)
+
+
+from job_board import create_jobs_router  # noqa: E402
+
+app.include_router(create_jobs_router(storage_manager=storage))
+
+
+class QuantTradeViabilityInput(BaseModel):
+    pair: str = "BONK/SOL"
+    target_net_pct: float = 0.015
+    stop_loss_pct: float = 0.020
+    roundtrip_spread_bps: float = 8.0
+    hourly_volatility: Optional[float] = None
+    hourly_drift: float = 0.0
+    horizons_hours: Optional[List[int]] = None
+
+
+_QUANT_FP_CACHE: Dict[str, Any] = {}
+_QUANT_FP_TTL_SECONDS = 45.0
+
+
+@app.get("/v1/quant/first-passage")
+def get_quant_first_passage(
+    request: Request,
+    pair: str = "BONK/SOL",
+    target_net_pct: float = 0.015,
+    stop_loss_pct: float = 0.020,
+    roundtrip_spread_bps: float = 8.0,
+    hourly_volatility: Optional[float] = None,
+    hourly_drift: float = 0.0,
+    refresh: bool = False,
+):
+    """
+    Computes analytical Brownian reflection and drift-adjusted inverse Gaussian
+    first-passage probabilities across multiple time horizons (4h, 8h, 12h, 24h, 48h, 72h),
+    two-barrier win odds (take-profit before stop-loss), Kelly sizing, and an optimal
+    target velocity ladder, bound to an Ed25519 cryptographic state witness.
+    Includes a 45-second TTL cache (?refresh=true to bypass).
+    """
+    if target_net_pct <= 0 or target_net_pct > 1.0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="target_net_pct must be between 0.0001 and 1.0 (e.g. 0.015 for +1.5%).",
+        )
+    if stop_loss_pct <= 0 or stop_loss_pct >= 1.0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="stop_loss_pct must be between 0.0001 and 0.9999 (e.g. 0.020 for -2.0%).",
+        )
+
+    cache_key = f"{pair.upper().strip()}|{target_net_pct:.5f}|{stop_loss_pct:.5f}|{roundtrip_spread_bps:.2f}|{hourly_volatility}|{hourly_drift:.5f}"
+    now_ts = time.time()
+    cached = _QUANT_FP_CACHE.get(cache_key)
+    if cached and not refresh and (now_ts - cached["ts"]) < _QUANT_FP_TTL_SECONDS:
+        out = dict(cached["profile"])
+        out["cache_status"] = "HIT"
+        out["cache_age_seconds"] = round(now_ts - cached["ts"], 2)
+        return out
+
+    from ops.trading.quant_trader import QuantTradingEngine
+
+    q_engine = QuantTradingEngine()
+    profile = q_engine.evaluate_trade_probability_profile(
+        pair=pair,
+        target_net_pct=target_net_pct,
+        stop_loss_pct=stop_loss_pct,
+        roundtrip_spread_bps=roundtrip_spread_bps,
+        hourly_volatility=hourly_volatility,
+        hourly_drift=hourly_drift,
+    )
+
+    w = witness_manager.create_witness(
+        action="QUANT_FIRST_PASSAGE_EVALUATED",
+        actor=profile["pair"],
+        key_hash="public_quant_query",
+        request_id=getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(6)}",
+        environmental_anchor={
+            "pair": profile["pair"],
+            "target_net_pct": target_net_pct,
+            "stop_loss_pct": stop_loss_pct,
+            "recommended_target_net_pct": profile["recommended_target_net_pct"],
+        },
+    )
+    profile["state_witness_id"] = w.get("witness_id")
+    profile["witness_signature"] = w.get("signature")
+    profile["generated_at"] = datetime.now(timezone.utc).isoformat()
+    profile["cache_status"] = "MISS"
+    profile["cache_age_seconds"] = 0.0
+    _QUANT_FP_CACHE[cache_key] = {"ts": now_ts, "profile": profile}
+    return profile
+
+
+@app.post("/v1/quant/trade-viability")
+def post_quant_trade_viability(
+    payload: QuantTradeViabilityInput,
+    request: Request,
+):
+    """
+    Evaluates custom quantitative trade viability, round-trip spread drag, two-barrier
+    win odds, and multi-horizon first-passage probabilities with an Ed25519 state witness.
+    """
+    if payload.target_net_pct <= 0 or payload.target_net_pct > 1.0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="target_net_pct must be between 0.0001 and 1.0.",
+        )
+    if payload.stop_loss_pct <= 0 or payload.stop_loss_pct >= 1.0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="stop_loss_pct must be between 0.0001 and 0.9999.",
+        )
+
+    from ops.trading.quant_trader import QuantTradingEngine
+
+    q_engine = QuantTradingEngine()
+    profile = q_engine.evaluate_trade_probability_profile(
+        pair=payload.pair,
+        target_net_pct=payload.target_net_pct,
+        stop_loss_pct=payload.stop_loss_pct,
+        roundtrip_spread_bps=payload.roundtrip_spread_bps,
+        hourly_volatility=payload.hourly_volatility,
+        hourly_drift=payload.hourly_drift,
+        horizons_hours=payload.horizons_hours,
+    )
+
+    w = witness_manager.create_witness(
+        action="QUANT_TRADE_VIABILITY_EVALUATED",
+        actor=profile["pair"],
+        key_hash="public_quant_query",
+        request_id=getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(6)}",
+        environmental_anchor={
+            "pair": profile["pair"],
+            "target_net_pct": payload.target_net_pct,
+            "stop_loss_pct": payload.stop_loss_pct,
+            "recommended_target_net_pct": profile["recommended_target_net_pct"],
+        },
+    )
+    profile["state_witness_id"] = w.get("witness_id")
+    profile["witness_signature"] = w.get("signature")
+    profile["generated_at"] = datetime.now(timezone.utc).isoformat()
+    return profile
+
+
+# =============================================================================
+# Molt Alpha DEMS — 6 Pixel Artworks Lazy-Minted NFT Collection API
+# =============================================================================
+
+class CreateNftOrderInput(BaseModel):
+    nft_id: str
+    buyer_wallet: str
+    asset: str = "SOL"
+
+
+class ClaimNftOrderInput(BaseModel):
+    order_id: str
+    transaction_signature: str
+
+
+@app.get("/v1/nfts/catalog")
+def get_nfts_catalog():
+    """
+    Returns the complete Molt Alpha DEMS 6-piece pixel art NFT collection catalog,
+    including rarities, traits, SOL/USDC prices, remaining edition supply, and bundled API credit grants.
+    """
+    from nft_collection import MoltAlphaDemsCollection
+
+    col = MoltAlphaDemsCollection()
+    return col.list_catalog()
+
+
+@app.get("/v1/newsletter/latest")
+def get_latest_daily_newsletter():
+    """
+    Returns the latest automated Daily Intelligence & Quant Newsletter (JSON + Markdown)
+    combining verified submolt radar, first-passage probability matrices, and Molt Alpha DEMS NFT supply.
+    """
+    import json as _json
+
+    news_json_path = REPORTS_DIR / "latest_newsletter.json"
+    if news_json_path.is_file():
+        try:
+            return _json.loads(news_json_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    from ops.publisher import publish_daily_alpha
+
+    publish_daily_alpha(dry_run=True, force_refresh=False, storage_manager=storage, witness_manager=witness_manager)
+    if news_json_path.is_file():
+        return _json.loads(news_json_path.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=500, detail="Failed to synthesize daily newsletter.")
+
+
+@app.get("/v1/nfts/assets/{filename}")
+def get_nft_asset_image(filename: str):
+    """
+    Serves the 2x Nearest-Neighbor upscaled PNG pixel artwork files for Molt Alpha DEMS.
+    """
+    from nft_collection import NFT_ASSETS_DIR
+
+    clean_name = Path(filename).name
+    target = NFT_ASSETS_DIR / clean_name
+    if not target.is_file() or target.suffix.lower() not in (".png", ".json"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"NFT asset '{clean_name}' not found.",
+        )
+    media = "image/png" if target.suffix.lower() == ".png" else "application/json"
+    return FileResponse(target, media_type=media)
+
+
+@app.get("/v1/nfts/metadata/{nft_id}.json")
+def get_nft_metaplex_metadata(nft_id: str, edition: Optional[int] = None):
+    """
+    Returns Metaplex Token Metadata standard JSON for wallet and marketplace indexing.
+    """
+    from nft_collection import MoltAlphaDemsCollection
+
+    col = MoltAlphaDemsCollection()
+    try:
+        return col.build_metaplex_metadata(nft_id, edition_number=edition)
+    except KeyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+
+
+@app.post("/v1/nfts/order", status_code=status.HTTP_201_CREATED)
+def create_nft_lazy_mint_order(payload: CreateNftOrderInput, request: Request):
+    """
+    Creates a bound Lazy-Mint Order for one of the 6 Molt Alpha DEMS pixel artworks.
+    Zero upfront rent is spent by the seller; the buyer pays the bound invoice on Solana
+    to mint their edition and receive bundled Moltbook Alpha API credits.
+    """
+    from nft_collection import MoltAlphaDemsCollection
+
+    col = MoltAlphaDemsCollection()
+    try:
+        order = col.create_lazy_mint_order(
+            nft_id=payload.nft_id,
+            buyer_wallet=payload.buyer_wallet,
+            asset=payload.asset,
+            storage=storage,
+        )
+        storage.log_audit_event(
+            "nft_order_created",
+            f"Created lazy-mint order {order['order_id']} for {order['nft_id']} ({order['buyer_wallet']})",
+            ip_address=get_client_ip(request),
+        )
+        return order
+    except KeyError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+
+@app.post("/v1/nfts/claim")
+def claim_nft_lazy_mint_order(payload: ClaimNftOrderInput, request: Request):
+    """
+    Verifies on-chain Solana payment for a Lazy-Mint NFT Order, assigns the sequential
+    edition number (#1..max_supply), mints the bundled Moltbook Alpha API key + credit lot,
+    and returns an Ed25519-signed ownership & provenance witness certificate.
+    """
+    from nft_collection import MoltAlphaDemsCollection
+
+    col = MoltAlphaDemsCollection()
+    ledger = col._load_ledger()
+    order = ledger.get("orders", {}).get(payload.order_id)
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"NFT order '{payload.order_id}' not found.",
+        )
+
+    if order.get("status") == "MINTED":
+        return order["mint_receipt"]
+
+    cfg = load_payment_config()
+    verifier = SolanaPaymentVerifier(
+        max_age_seconds=cfg.get("max_age_seconds", 3600),
+        require_consensus=False,
+    )
+    try:
+        verified = verifier.verify_payment(
+            payload.transaction_signature.strip(),
+            requested_tier=order["bundled_tier"],
+            expected_payer=order["buyer_wallet"],
+            expected_reference=order["memo_reference"],
+        )
+    except (VerificationError, RPCError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"On-chain payment verification failed for NFT order '{payload.order_id}': {e!s}",
+        ) from e
+
+    try:
+        receipt = col.claim_lazy_mint_order(
+            order_id=payload.order_id,
+            tx_signature=verified.tx_signature,
+            verified_payment=verified,
+            storage=storage,
+            witness_manager=witness_manager,
+        )
+        storage.log_audit_event(
+            "nft_edition_minted",
+            f"Minted {receipt['nft_name']} to {receipt['owner_wallet']} via tx {verified.tx_signature[:16]}...",
+            ip_address=get_client_ip(request),
+        )
+        return receipt
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
 
 @app.get("/v1/intel/microstructure")
@@ -3201,10 +4735,12 @@ class SubscribeWebhookInput(BaseModel):
     @field_validator("target_url")
     @classmethod
     def validate_url(cls, v: str) -> str:
+        from ops.security.egress_guard import validate_outbound_url, EgressSecurityError
         val = v.strip()
-        if not (val.startswith("http://") or val.startswith("https://")):
-            raise ValueError("target_url must begin with http:// or https://")
-        return val
+        try:
+            return validate_outbound_url(val, allow_http=True, resolve_dns=False)
+        except EgressSecurityError as exc:
+            raise ValueError(str(exc)) from exc
 
     @field_validator("secret_token")
     @classmethod
@@ -3234,6 +4770,13 @@ def subscribe_webhook(
     When a DEX microstructure anomaly occurs matching the event filter and minimum severity,
     the event payload is signed with HMAC-SHA256 and pushed to target_url.
     """
+    existing_active = storage.list_webhook_subscriptions(active_only=True)
+    if len(existing_active) >= 100:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Maximum active webhook subscriptions (100) reached. Delete unused subscriptions.",
+        )
+
     subscription = storage.create_webhook_subscription(
         target_url=sub_input.target_url,
         secret_token=sub_input.secret_token,

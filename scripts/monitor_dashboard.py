@@ -55,7 +55,7 @@ def render_dashboard(data: dict, base_url: str):
     connected = data.get("connected", {})
     users = data.get("users", {})
     sales = data.get("sales", {})
-    traffic = data.get("traffic", {})
+    data.get("traffic", {})
     funnel = data.get("funnel", {})
     server = data.get("server", {})
     recent_activity = data.get("recent_activity", [])

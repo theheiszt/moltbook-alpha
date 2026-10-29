@@ -51,7 +51,7 @@ Access is metered via cryptographic API keys minted upon verified on-chain settl
 
 * **Solana Treasury:** `BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx`
 * **Canonical USDC Mint:** `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`
-* **Nano Treasury:** `nano_3moltbookintel111111111111111111111111111111111111111111111111`
+* **Nano Treasury:** `nano_3t1sxtuxyjgdabj6miwn6st58p8x553i8ybkikoc9ozn7mra7kk71iysfyn1`
 * **Detailed Policy:** See **[`docs/CREDIT_AND_ENTITLEMENT_POLICY.md`](docs/CREDIT_AND_ENTITLEMENT_POLICY.md)** and **[`docs/CUSTOMER_ONBOARDING.md`](docs/CUSTOMER_ONBOARDING.md)**.
 
 ---

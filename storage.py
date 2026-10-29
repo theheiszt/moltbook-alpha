@@ -137,6 +137,9 @@ class StorageManager:
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous=NORMAL;")
         conn.execute("PRAGMA busy_timeout=5000;")
+        conn.execute("PRAGMA cache_size = -64000;")
+        conn.execute("PRAGMA mmap_size = 268435456;")
+        conn.execute("PRAGMA temp_store = MEMORY;")
         return conn
 
     @contextmanager
@@ -588,6 +591,7 @@ class StorageManager:
         request_id: Optional[str] = None,
     ) -> Tuple[Optional[Dict[str, Any]], str]:
         self._expire_overdue_lots_and_entitlements(conn)
+        self._reap_expired_reservations_conn(conn)
 
         cur = conn.cursor()
         cur.execute(
@@ -2316,11 +2320,15 @@ class StorageManager:
         detail: str,
         ip_address: Optional[str] = None
     ) -> int:
-        """Records an event in the audit_logs table for security forensics."""
+        """Records an event in the audit_logs table for security forensics with zero-leak secret scrubbing."""
+        from ops.security.credential_redactor import credential_redactor
+
         now_iso = datetime.now(timezone.utc).isoformat()
         entry_detail = detail
         if ip_address:
             entry_detail = f"{detail} [client_ip: {ip_address}]"
+
+        scrubbed_detail = credential_redactor.redact_text(entry_detail)
 
         with self._lock, self.connection() as conn:
             with conn:
@@ -2330,7 +2338,7 @@ class StorageManager:
                     INSERT INTO audit_logs (event_type, detail, created_at)
                     VALUES (?, ?, ?)
                     """,
-                    (event_type, entry_detail, now_iso)
+                    (event_type, scrubbed_detail, now_iso)
                 )
                 return cur.lastrowid
 
@@ -2340,7 +2348,7 @@ class StorageManager:
         event_type: Optional[str] = None
     ) -> list[Dict[str, Any]]:
         """Retrieves recent audit log events."""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             cur = conn.cursor()
             if event_type:
                 cur.execute(
@@ -2417,7 +2425,7 @@ class StorageManager:
         """
         Aggregates conversion counts across funnel stages.
         """
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             cur = conn.cursor()
             if since_utc:
                 cur.execute(
@@ -2456,7 +2464,7 @@ class StorageManager:
         limit: int = 100,
         event_name: Optional[str] = None,
     ) -> list[Dict[str, Any]]:
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             cur = conn.cursor()
             if event_name:
                 cur.execute(
@@ -2510,7 +2518,7 @@ class StorageManager:
         iso_1h = (now - timedelta(hours=1)).isoformat()
         iso_24h = (now - timedelta(hours=24)).isoformat()
 
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             cur = conn.cursor()
 
             # 1. Total & Active Users
@@ -2695,7 +2703,7 @@ class StorageManager:
         Returns True if operational, raises StorageError or returns False on failure.
         """
         try:
-            with self._lock, self.connection() as conn:
+            with self.connection() as conn:
                 cur = conn.cursor()
                 cur.execute("SELECT 1")
                 row = cur.fetchone()
@@ -2939,6 +2947,7 @@ class StorageManager:
         with self._lock, self.connection() as conn:
             with conn:
                 self._expire_overdue_lots_and_entitlements(conn)
+                self._reap_expired_reservations_conn(conn)
                 cur = conn.cursor()
                 cur.execute(
                     """
@@ -3043,7 +3052,7 @@ class StorageManager:
 
     def get_key_lots(self, key_hash: str) -> list[Dict[str, Any]]:
         """Retrieves all credit lots (active and inactive) for a key hash."""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             cur = conn.cursor()
             cur.execute(
                 """
@@ -3058,7 +3067,7 @@ class StorageManager:
 
     def get_credit_ledger(self, key_hash: Optional[str] = None, limit: int = 50) -> list[Dict[str, Any]]:
         """Retrieves audit trail events from credit_ledger_events."""
-        with self._lock, self.connection() as conn:
+        with self.connection() as conn:
             cur = conn.cursor()
             if key_hash:
                 cur.execute(

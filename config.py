@@ -28,10 +28,15 @@ def _resolve_data_dir() -> Path:
     env_dir = os.getenv("MOLTBOOK_DATA_DIR")
     if env_dir:
         return Path(env_dir).resolve()
+    # In CI or testing environments, strictly isolate to repository data directory
+    if os.getenv("CI") or os.getenv("PYTEST_CURRENT_TEST") or APP_ENV == "test":
+        return (BASE_DIR / "data").resolve()
     # On Linux production server, check standard system data directory
     sys_path = Path("/var/lib/moltbook-alpha")
     if sys_path.is_dir() and os.name != "nt":
-        return sys_path
+        # Only use production directory if accessible for writing
+        if os.access(sys_path, os.W_OK):
+            return sys_path
     return (BASE_DIR / "data").resolve()
 
 
@@ -43,6 +48,8 @@ def _resolve_reports_dir() -> Path:
     env_reports = os.getenv("MOLTBOOK_REPORTS_DIR")
     if env_reports:
         return Path(env_reports).resolve()
+    if os.getenv("CI") or os.getenv("PYTEST_CURRENT_TEST") or APP_ENV == "test":
+        return (BASE_DIR / "reports").resolve()
     if DATA_DIR != (BASE_DIR / "data").resolve():
         return (DATA_DIR / "reports").resolve()
     return (BASE_DIR / "reports").resolve()
@@ -103,7 +110,7 @@ WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "moltbook_webhook_secret_dev")
 # Default production-safe rates (USD values converted to integer micro-units)
 NANO_TREASURY_ADDRESS = os.getenv(
     "NANO_TREASURY_ADDRESS",
-    "nano_3moltbookintel111111111111111111111111111111111111111111111111",
+    "nano_3t1sxtuxyjgdabj6miwn6st58p8x553i8ybkikoc9ozn7mra7kk71iysfyn1",
 )
 
 DEFAULT_RATES: Dict[str, Dict[str, Any]] = {
@@ -307,7 +314,7 @@ def load_payment_config() -> Dict[str, Any]:
 
     return {
         "solana_treasury_wallet": treasury_wallet,
-        "nano_treasury_address": NANO_TREASURY_ADDRESS,
+        "nano_treasury_address": os.getenv("NANO_TREASURY_ADDRESS", config_data.get("nano_treasury_address", NANO_TREASURY_ADDRESS)).strip(),
         "accepted_rails": ["solana", "nano"],
         "rpc_url": rpc_endpoints[0],
         "rpc_endpoints": rpc_endpoints,

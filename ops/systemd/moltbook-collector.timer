@@ -1,0 +1,10 @@
+[Unit]
+Description=Moltbook Alpha Hourly Intelligence Ingestion Timer
+
+[Timer]
+OnCalendar=*-*-* *:00:00 UTC
+RandomizedDelaySec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target

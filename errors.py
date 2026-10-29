@@ -35,6 +35,7 @@ class RecoveryAction(str, Enum):
     BACKOFF_AND_RETRY = "backoff_and_retry"
     INSPECT_PARAMETERS = "inspect_parameters"
     CONTACT_SUPPORT = "contact_support"
+    CONFIRM_OPERATION = "confirm_operation"
 
 
 class ErrorCode(str, Enum):
@@ -75,6 +76,11 @@ class ErrorCode(str, Enum):
     DATABASE_UNAVAILABLE = "DATABASE_UNAVAILABLE"
     FEATURE_DISABLED = "FEATURE_DISABLED"
     INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR"
+    # Step-Up Policy & Confirmation Nonces
+    POLICY_CONFIRMATION_REQUIRED = "POLICY_CONFIRMATION_REQUIRED"
+    CONFIRMATION_NONCE_INVALID = "CONFIRMATION_NONCE_INVALID"
+    # Maintenance & Safe Mode
+    SERVICE_READ_ONLY_MODE = "SERVICE_READ_ONLY_MODE"
 
 
 class ErrorDefinition(BaseModel):
@@ -392,6 +398,40 @@ ERROR_REGISTRY: Dict[str, ErrorDefinition] = {
         description="Returned when a webhook request fails secret header authentication.",
         docs_url=f"{DOCS_BASE_URL}#UNAUTHORIZED_WEBHOOK",
     ),
+    ErrorCode.POLICY_CONFIRMATION_REQUIRED.value: ErrorDefinition(
+        code=ErrorCode.POLICY_CONFIRMATION_REQUIRED,
+        status_code=428,
+        retryable=False,
+        outcome=OperationOutcome.NOT_COMMITTED,
+        state_effect="none",
+        recovery_action=RecoveryAction.CONFIRM_OPERATION,
+        default_message="Step-up confirmation required: This action will permanently dispatch an on-chain refund transaction from the treasury.",
+        description="Returned when high-consequence operations require explicit confirmation with a single-use nonce.",
+        docs_url=f"{DOCS_BASE_URL}#POLICY_CONFIRMATION_REQUIRED",
+    ),
+    ErrorCode.CONFIRMATION_NONCE_INVALID.value: ErrorDefinition(
+        code=ErrorCode.CONFIRMATION_NONCE_INVALID,
+        status_code=410,
+        retryable=False,
+        outcome=OperationOutcome.NOT_COMMITTED,
+        state_effect="none",
+        recovery_action=RecoveryAction.INSPECT_PARAMETERS,
+        default_message="Confirmation nonce is missing, expired, invalid, or was already consumed.",
+        description="Returned when an invalid, expired, or previously burned confirmation nonce is presented.",
+        docs_url=f"{DOCS_BASE_URL}#CONFIRMATION_NONCE_INVALID",
+    ),
+    ErrorCode.SERVICE_READ_ONLY_MODE.value: ErrorDefinition(
+        code=ErrorCode.SERVICE_READ_ONLY_MODE,
+        status_code=503,
+        retryable=True,
+        outcome=OperationOutcome.NOT_COMMITTED,
+        state_effect="none",
+        recovery_action=RecoveryAction.BACKOFF_AND_RETRY,
+        default_message="Service is currently running in Read-Only Safe Mode for maintenance.",
+        description="Returned when a state-mutating operation is rejected because the system is operating in Read-Only Safe Mode.",
+        docs_url=f"{DOCS_BASE_URL}#SERVICE_READ_ONLY_MODE",
+        default_retry_after=60,
+    ),
     ErrorCode.INTERNAL_SERVER_ERROR.value: ErrorDefinition(
         code=ErrorCode.INTERNAL_SERVER_ERROR,
         status_code=500,
@@ -504,6 +544,12 @@ def format_error_payload(
     - root-level convenience fields for seamless backwards-compatibility.
     - legacy `detail` bridge field.
     """
+    from ops.security.credential_redactor import credential_redactor
+    clean_message = credential_redactor.redact_text(message)
+    clean_details = credential_redactor.redact_object(details) if details else None
+    message = clean_message
+    details = clean_details
+
     defn = ERROR_REGISTRY.get(code)
     is_retryable = retryable if retryable is not None else (defn.retryable if defn else False)
     eff_retry_after = retry_after if retry_after is not None else (defn.default_retry_after if defn else None)

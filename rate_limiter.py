@@ -22,6 +22,11 @@ import time
 from typing import Dict, List, Tuple, Callable, Any, Optional
 
 
+DEFAULT_RATE_LIMIT_CAPACITY: float = 5.0
+DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN: float = 60.0
+DEFAULT_MAX_CONCURRENT_IN_FLIGHT: int = 5
+
+
 class TokenBucketRateLimiter:
     """
     Token Bucket Rate Limiter supporting burst capacity and sustained refill rate.

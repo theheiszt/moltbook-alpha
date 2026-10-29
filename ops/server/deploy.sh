@@ -127,8 +127,8 @@ if [ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]; then
     systemctl restart "${SERVICE_NAME}"
 
     # 7. Post-deployment health verification
-    echo "[VERIFY] Running post-deployment health check..."
-    sleep 2
+    echo "[VERIFY] Waiting for ${SERVICE_NAME} to complete application startup..."
+    sleep 6
     if [ -f "${CURRENT_LINK}/ops/server/health_check.sh" ]; then
         if ! bash "${CURRENT_LINK}/ops/server/health_check.sh"; then
             echo "[ALERT] Post-deployment health check FAILED!"

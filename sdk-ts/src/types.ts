@@ -149,3 +149,20 @@ export interface ToolDAGGraph {
   }>;
   evaluation_order: string[];
 }
+
+export interface WebhookSubscription {
+  subscription_id: string;
+  target_url: string;
+  secret_token: string;
+  subscribed_events: string[];
+  min_severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  created_at: string;
+  active: boolean;
+}
+
+export interface SubscribeWebhookInput {
+  targetUrl: string;
+  secretToken: string;
+  subscribedEvents?: string[];
+  minSeverity?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+}

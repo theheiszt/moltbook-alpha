@@ -55,7 +55,7 @@
         <div class="flex items-center bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl px-2.5 py-1 text-xs">
           <label for="serverUrl" class="text-[var(--muted-foreground,#94a3b8)] mr-1.5 font-medium">Gateway:</label>
           <select id="serverUrl" onchange="onServerChange()" class="bg-transparent text-[var(--foreground,#f8fafc)] focus:outline-none cursor-pointer font-mono text-[11px]">
-            <option value="https://gzip-franklin-gsm-vii.trycloudflare.com" class="bg-slate-900 text-white">Cloudflare Gateway (Production)</option>
+            <option value="https://moltbook-alpha.duckdns.org" class="bg-slate-900 text-white">DuckDNS Gateway (Production)</option>
             <option value="http://10.0.0.190:8080" class="bg-slate-900 text-white">Local ProLiant (10.0.0.190:8080)</option>
             <option value="http://127.0.0.1:8080" class="bg-slate-900 text-white">Localhost (127.0.0.1:8080)</option>
             <option value="" class="bg-slate-900 text-white">Custom URL...</option>
@@ -87,9 +87,10 @@
         <div class="flex items-center bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl px-2.5 py-1 text-xs">
           <label for="refreshInterval" class="text-[var(--muted-foreground,#94a3b8)] mr-1.5 font-medium">Poll:</label>
           <select id="refreshInterval" onchange="onIntervalChange()" class="bg-transparent text-[var(--foreground,#f8fafc)] focus:outline-none cursor-pointer font-mono text-[11px]">
-            <option value="3000" class="bg-slate-900 text-white">3s</option>
-            <option value="5000" selected class="bg-slate-900 text-white">5s</option>
-            <option value="15000" class="bg-slate-900 text-white">15s</option>
+            <option value="5000" class="bg-slate-900 text-white">5s</option>
+            <option value="15000" selected class="bg-slate-900 text-white">15s</option>
+            <option value="30000" class="bg-slate-900 text-white">30s</option>
+            <option value="60000" class="bg-slate-900 text-white">60s</option>
             <option value="0" class="bg-slate-900 text-white">Manual</option>
           </select>
         </div>
@@ -111,7 +112,7 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
-        <a id="testHealthLink" href="https://gzip-franklin-gsm-vii.trycloudflare.com/v1/health" target="_blank" class="px-2.5 py-1 bg-rose-900/60 hover:bg-rose-800 border border-rose-700 text-rose-200 rounded-lg text-xs font-medium">Test /v1/health ↗</a>
+        <a id="testHealthLink" href="https://moltbook-alpha.duckdns.org/v1/health" target="_blank" class="px-2.5 py-1 bg-rose-900/60 hover:bg-rose-800 border border-rose-700 text-rose-200 rounded-lg text-xs font-medium">Test /v1/health ↗</a>
         <button onclick="fetchMetrics()" class="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-semibold">Retry</button>
       </div>
     </div>
@@ -140,14 +141,14 @@
       <form onsubmit="event.preventDefault(); submitAdminLogin();" class="space-y-4">
         <div>
           <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Username</label>
-          <input id="loginUsername" type="text" value="ADMIN" autocomplete="username" required
+          <input id="loginUsername" type="text" placeholder="Enter username" autocomplete="username" required
             class="w-full bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono transition">
         </div>
 
         <div>
           <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Password</label>
           <div class="relative">
-            <input id="loginPassword" type="password" value="Neverwinter#7789" autocomplete="current-password" required
+            <input id="loginPassword" type="password" placeholder="Enter password" autocomplete="current-password" required
               class="w-full bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono transition pr-10">
             <button type="button" onclick="togglePasswordVisibility('loginPassword')" class="absolute right-3 top-2.5 text-slate-400 hover:text-white text-xs">
               👁️
@@ -161,10 +162,6 @@
           class="w-full py-2.5 px-4 bg-cyan-600 hover:bg-cyan-500 active:scale-[0.98] text-white text-xs font-bold rounded-xl transition shadow-lg shadow-cyan-950/50 flex items-center justify-center gap-2">
           <span>Authenticate & Access Dashboard →</span>
         </button>
-
-        <div class="p-3 bg-slate-900/60 rounded-xl border border-slate-800/80 text-[11px] text-slate-400 text-center">
-          Default Credentials: <code class="text-cyan-300">ADMIN</code> / <code class="text-emerald-300">Neverwinter#7789</code>
-        </div>
       </form>
     </div>
 
@@ -377,6 +374,92 @@
 
       </div>
 
+      <!-- Latest Intelligence Briefing & Daily Newsletter Viewer -->
+      <div class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-5 shadow-sm">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-4 mb-4 border-b border-[var(--border,#222f3e)]">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-base">🧠</span>
+              <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--foreground,#f8fafc)]">Latest Verified Intelligence Briefing &amp; Daily Newsletter</h3>
+              <span id="briefingIdBadge" class="px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-800 text-cyan-300 font-mono text-[10px]">brf_loading</span>
+              <span id="briefingWitnessBadge" class="px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-800 text-emerald-300 font-mono text-[10px]">wit_verified</span>
+            </div>
+            <p class="text-[11px] text-[var(--muted-foreground,#94a3b8)] mt-1">
+              Analyzed Base: <strong id="briefingItemsCount" class="text-white">0</strong> items ingested &bull;
+              <strong id="briefingSignalsCount" class="text-emerald-400">0</strong> actionable signals &bull;
+              Generated: <span id="briefingCreatedAt" class="font-mono text-slate-300">N/A</span>
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="flex items-center gap-1.5 bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl px-2.5 py-1">
+              <input id="ingestPostInput" type="text" placeholder="Paste Moltbook post URL or ID..."
+                class="bg-transparent text-[11px] text-white placeholder-slate-500 focus:outline-none font-mono w-48 sm:w-56">
+              <button id="ingestPostBtn" onclick="triggerAdminPostIngest()" class="px-2 py-0.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-200 text-[11px] font-semibold transition">
+                + Ingest Post
+              </button>
+            </div>
+            <div class="inline-flex rounded-xl bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] p-1 text-[11px] font-medium">
+              <button id="tabBtnBriefing" onclick="switchBriefingTab('briefing')" class="px-2.5 py-1 rounded-lg bg-cyan-600 text-white transition">Executive Briefing</button>
+              <button id="tabBtnNewsletter" onclick="switchBriefingTab('newsletter')" class="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white transition">Daily Newsletter</button>
+              <button id="tabBtnRaw" onclick="switchBriefingTab('raw')" class="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white transition">Raw Markdown</button>
+            </div>
+            <button id="refreshBriefingBtn" onclick="triggerAdminBriefingRefresh()" class="px-3 py-1.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-200 text-xs font-semibold transition flex items-center gap-1.5">
+              <span>⚡ Synthesize Now</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="briefingFormattedContainer" class="bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl p-4 max-h-[460px] overflow-y-auto custom-scrollbar text-xs leading-relaxed space-y-2 text-slate-200">
+          <div class="text-slate-400">Loading latest intelligence briefing...</div>
+        </div>
+        <pre id="briefingRawContainer" class="hidden bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl p-4 max-h-[460px] overflow-y-auto custom-scrollbar text-[11px] font-mono text-slate-300 whitespace-pre-wrap"></pre>
+      </div>
+
+      <!-- Ecosystem Operations Monitor: Agent Job Board (25 Reward Cap) & Molt Alpha DEMS NFTs -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Agent Job & Bounty Board Pool Monitor -->
+        <div class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-3 pb-3 border-b border-[var(--border,#222f3e)]">
+            <div class="flex items-center gap-2">
+              <span class="text-base">🎯</span>
+              <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--foreground,#f8fafc)]">Agent Job Board &amp; Bounty Pool</h3>
+            </div>
+            <span id="jobRewardPoolBadge" class="px-2.5 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 font-mono text-[11px]">0 / 25 Claimed (+10 Credits)</span>
+          </div>
+          <div class="grid grid-cols-3 gap-2 mb-3 text-center">
+            <div class="bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl p-2.5">
+              <span class="text-[10px] text-slate-400 block">Open Bounties</span>
+              <span id="ecoOpenJobs" class="text-base font-bold text-white font-mono">0</span>
+            </div>
+            <div class="bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl p-2.5">
+              <span class="text-[10px] text-slate-400 block">Rewards Issued</span>
+              <span id="ecoRewardsClaimed" class="text-base font-bold text-emerald-400 font-mono">0 / 25</span>
+            </div>
+            <div class="bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl p-2.5">
+              <span class="text-[10px] text-slate-400 block">Remaining Pool</span>
+              <span id="ecoRewardsRemaining" class="text-base font-bold text-cyan-400 font-mono">25</span>
+            </div>
+          </div>
+          <div id="ecoJobSubmissionsContainer" class="space-y-1.5 max-h-44 overflow-y-auto custom-scrollbar text-xs">
+            <div class="text-slate-500 text-xs py-2 text-center">No bounty submissions recorded yet.</div>
+          </div>
+        </div>
+
+        <!-- Molt Alpha DEMS NFT Collection Monitor -->
+        <div class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-3 pb-3 border-b border-[var(--border,#222f3e)]">
+            <div class="flex items-center gap-2">
+              <span class="text-base">👾</span>
+              <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--foreground,#f8fafc)]">Molt Alpha DEMS — 6 Pixel Artworks Inventory</h3>
+            </div>
+            <span id="nftMintedBadge" class="px-2.5 py-0.5 rounded-full bg-purple-950/80 border border-purple-700/60 text-purple-300 font-mono text-[11px]">0 / 123 Minted</span>
+          </div>
+          <div id="ecoNftEditionsContainer" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </div>
+
       <!-- Recent Completed Transactions -->
       <div class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-5 shadow-sm">
         <div class="flex items-center justify-between mb-4">
@@ -476,7 +559,7 @@
 
   <script>
     let pollTimer = null;
-    let currentBaseUrl = "https://gzip-franklin-gsm-vii.trycloudflare.com";
+    let currentBaseUrl = "https://moltbook-alpha.duckdns.org";
     let adminToken = sessionStorage.getItem("moltbook_admin_token") || "";
 
     function togglePasswordVisibility(inputId) {
@@ -652,13 +735,39 @@
       }
     }
 
-    function onIntervalChange() {
-      const ms = parseInt(document.getElementById("refreshInterval").value, 10);
-      if (pollTimer) clearInterval(pollTimer);
-      if (ms > 0 && adminToken) {
+    let isTabVisible = !document.hidden;
+
+    function restartPolling() {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+      if (!isTabVisible || !adminToken) return;
+      const selectEl = document.getElementById("refreshInterval");
+      const ms = selectEl ? parseInt(selectEl.value, 10) : 15000;
+      if (ms > 0) {
         pollTimer = setInterval(fetchMetrics, ms);
       }
     }
+
+    function onIntervalChange() {
+      restartPolling();
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      isTabVisible = !document.hidden;
+      if (isTabVisible) {
+        if (adminToken) {
+          fetchMetrics();
+          restartPolling();
+        }
+      } else {
+        if (pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+      }
+    });
 
     function formatTimeAgo(isoString) {
       if (!isoString) return "N/A";
@@ -705,7 +814,6 @@
       try {
         const url = `${currentBaseUrl}/v1/metrics/dashboard`;
         const resp = await fetch(url, {
-          cache: "no-store",
           headers: {
             "Accept": "application/json",
             "Authorization": "Bearer " + adminToken
@@ -805,6 +913,219 @@
 
       // 11. Activity Stream
       renderActivityFeed(recentActivity);
+
+      // 12. Latest Intelligence Briefing & Ecosystem Monitor
+      renderBriefingSection(data.latest_briefing || {});
+      renderEcosystemSection(data.ecosystem || {});
+    }
+
+    function renderEcosystemSection(eco) {
+      const jb = eco.job_board || {};
+      const nft = eco.nft_collection || {};
+      const claimed = jb.rewards_claimed || 0;
+      const cap = jb.max_rewards_cap || 25;
+      const rem = jb.rewards_remaining !== undefined ? jb.rewards_remaining : (cap - claimed);
+
+      document.getElementById("jobRewardPoolBadge").textContent = `${claimed} / ${cap} Claimed (+10 Credits)`;
+      document.getElementById("ecoOpenJobs").textContent = (jb.open_jobs || 0).toLocaleString();
+      document.getElementById("ecoRewardsClaimed").textContent = `${claimed} / ${cap}`;
+      document.getElementById("ecoRewardsRemaining").textContent = rem.toLocaleString();
+
+      const subEl = document.getElementById("ecoJobSubmissionsContainer");
+      const subs = jb.recent_submissions || [];
+      if (subs.length === 0) {
+        subEl.innerHTML = `<div class="text-slate-500 text-xs py-2 text-center">No bounty submissions recorded yet.</div>`;
+      } else {
+        subEl.innerHTML = subs.map(s => `
+          <div class="p-2 rounded-lg bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] flex items-center justify-between gap-2 font-mono text-[11px]">
+            <div class="truncate">
+              <span class="text-cyan-400 font-semibold">${escapeHtml(s.worker_agent)}</span>
+              <span class="text-slate-500 mx-1">&rarr;</span>
+              <span class="text-slate-300">${escapeHtml(s.job_id)}</span>
+            </div>
+            <span class="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] shrink-0">${escapeHtml(s.status)}</span>
+          </div>
+        `).join("");
+      }
+
+      const mintedTot = nft.total_minted_or_reserved || 0;
+      const capTot = nft.total_editions_cap || 123;
+      document.getElementById("nftMintedBadge").textContent = `${mintedTot} / ${capTot} Minted`;
+
+      const nftEl = document.getElementById("ecoNftEditionsContainer");
+      const eds = nft.editions || [];
+      nftEl.innerHTML = eds.map(e => `
+        <div class="bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl p-2.5 flex flex-col justify-between">
+          <div class="flex items-center justify-between gap-1">
+            <span class="text-[11px] font-bold text-white truncate">${escapeHtml(e.name)}</span>
+            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-purple-300">${escapeHtml(e.rarity)}</span>
+          </div>
+          <div class="mt-2 flex items-center justify-between text-[10px] font-mono">
+            <span class="text-cyan-400">${e.price_sol} SOL (+${e.credits} cr)</span>
+            <span class="text-emerald-400 font-semibold">${e.remaining}/${e.max_supply} left</span>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    async function triggerAdminPostIngest() {
+      const inp = document.getElementById("ingestPostInput");
+      const btn = document.getElementById("ingestPostBtn");
+      const val = (inp.value || "").trim();
+      if (!val) {
+        alert("Paste a Moltbook post URL or post ID first.");
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = "Ingesting...";
+      try {
+        const resp = await fetch(`${currentBaseUrl}/v1/admin/briefing/ingest-post`, {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer " + adminToken,
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
+          body: JSON.stringify({ post_url_or_id: val })
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        inp.value = "";
+        await fetchMetrics();
+      } catch (e) {
+        alert("Failed to ingest post: " + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "+ Ingest Post";
+      }
+    }
+
+    let currentBriefingTab = "briefing";
+    let cachedBriefingObj = { briefing_markdown: "", newsletter_markdown: "" };
+
+    function switchBriefingTab(tab) {
+      currentBriefingTab = tab;
+      const btnBrf = document.getElementById("tabBtnBriefing");
+      const btnNews = document.getElementById("tabBtnNewsletter");
+      const btnRaw = document.getElementById("tabBtnRaw");
+      [btnBrf, btnNews, btnRaw].forEach(b => {
+        b.className = "px-2.5 py-1 rounded-lg text-slate-400 hover:text-white transition";
+      });
+      if (tab === "briefing") btnBrf.className = "px-2.5 py-1 rounded-lg bg-cyan-600 text-white transition";
+      if (tab === "newsletter") btnNews.className = "px-2.5 py-1 rounded-lg bg-cyan-600 text-white transition";
+      if (tab === "raw") btnRaw.className = "px-2.5 py-1 rounded-lg bg-cyan-600 text-white transition";
+      renderBriefingContent();
+    }
+
+    function escapeHtml(str) {
+      return String(str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function formatInlineMd(line) {
+      return escapeHtml(line)
+        .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>')
+        .replace(/`([^`]+)`/g, '<code class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-cyan-300 font-mono text-[11px]">$1</code>')
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank" class="text-sky-400 hover:underline">$1 ↗</a>');
+    }
+
+    function markdownToSimpleHtml(md) {
+      if (!md) return '<div class="text-slate-500">No briefing markdown available.</div>';
+      const lines = md.split(/\r?\n/);
+      const out = [];
+      let inTable = false;
+      for (let i = 0; i < lines.length; i++) {
+        const raw = lines[i];
+        const trimmed = raw.trim();
+        if (!trimmed) {
+          if (inTable) { out.push("</tbody></table></div>"); inTable = false; }
+          continue;
+        }
+        if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
+          if (trimmed.includes("---")) continue;
+          const cells = trimmed.slice(1, -1).split("|").map(c => formatInlineMd(c.trim()));
+          if (!inTable) {
+            inTable = true;
+            out.push('<div class="overflow-x-auto my-2"><table class="w-full text-left border-collapse border border-slate-800 text-[11px]"><thead><tr class="bg-slate-900/90 text-slate-300 border-b border-slate-800">');
+            cells.forEach(c => out.push(`<th class="p-2 border-r border-slate-800">${c}</th>`));
+            out.push("</tr></thead><tbody class='divide-y divide-slate-800/70'>");
+          } else {
+            out.push("<tr class='hover:bg-slate-900/40'>");
+            cells.forEach(c => out.push(`<td class="p-2 border-r border-slate-800/60">${c}</td>`));
+            out.push("</tr>");
+          }
+          continue;
+        } else if (inTable) {
+          out.push("</tbody></table></div>");
+          inTable = false;
+        }
+        if (trimmed === "---") {
+          out.push('<hr class="border-slate-800/80 my-3">');
+        } else if (trimmed.startsWith("# ")) {
+          out.push(`<h2 class="text-base font-bold text-white mt-2 mb-1">${formatInlineMd(trimmed.slice(2))}</h2>`);
+        } else if (trimmed.startsWith("## ")) {
+          out.push(`<h3 class="text-sm font-bold text-cyan-400 mt-3 mb-1">${formatInlineMd(trimmed.slice(3))}</h3>`);
+        } else if (trimmed.startsWith("### ")) {
+          out.push(`<h4 class="text-xs font-bold text-indigo-300 uppercase tracking-wider mt-2.5 mb-1">${formatInlineMd(trimmed.slice(4))}</h4>`);
+        } else if (trimmed.startsWith("- ")) {
+          out.push(`<div class="pl-3 flex items-start gap-2"><span class="text-cyan-400 mt-0.5">&bull;</span><div class="flex-1">${formatInlineMd(trimmed.slice(2))}</div></div>`);
+        } else if (trimmed.startsWith("> ")) {
+          out.push(`<div class="pl-3 border-l-2 border-cyan-500/60 text-slate-400 italic">${formatInlineMd(trimmed.slice(2))}</div>`);
+        } else {
+          out.push(`<p>${formatInlineMd(trimmed)}</p>`);
+        }
+      }
+      if (inTable) out.push("</tbody></table></div>");
+      return out.join("");
+    }
+
+    function renderBriefingSection(brf) {
+      if (!brf) return;
+      cachedBriefingObj = brf;
+      document.getElementById("briefingIdBadge").textContent = brf.briefing_id || "N/A";
+      document.getElementById("briefingWitnessBadge").textContent = brf.state_witness_id || "Verified";
+      document.getElementById("briefingItemsCount").textContent = (brf.items_analyzed || 0).toLocaleString();
+      document.getElementById("briefingSignalsCount").textContent = (brf.signals_extracted || 0).toLocaleString();
+      document.getElementById("briefingCreatedAt").textContent = formatTimeAgo(brf.created_at);
+      renderBriefingContent();
+    }
+
+    function renderBriefingContent() {
+      const formattedEl = document.getElementById("briefingFormattedContainer");
+      const rawEl = document.getElementById("briefingRawContainer");
+      const md = currentBriefingTab === "newsletter"
+        ? (cachedBriefingObj.newsletter_markdown || cachedBriefingObj.briefing_markdown || "")
+        : (cachedBriefingObj.briefing_markdown || cachedBriefingObj.newsletter_markdown || "");
+
+      if (currentBriefingTab === "raw") {
+        formattedEl.classList.add("hidden");
+        rawEl.classList.remove("hidden");
+        rawEl.textContent = md || "No markdown available.";
+      } else {
+        rawEl.classList.add("hidden");
+        formattedEl.classList.remove("hidden");
+        formattedEl.innerHTML = markdownToSimpleHtml(md);
+      }
+    }
+
+    async function triggerAdminBriefingRefresh() {
+      const btn = document.getElementById("refreshBriefingBtn");
+      btn.disabled = true;
+      btn.innerHTML = "<span>⏳ Synthesizing...</span>";
+      try {
+        const resp = await fetch(`${currentBaseUrl}/v1/admin/briefing/refresh`, {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + adminToken, "Accept": "application/json" }
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        await fetchMetrics();
+      } catch (e) {
+        alert("Briefing refresh error: " + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = "<span>⚡ Synthesize Now</span>";
+      }
     }
 
     function renderFunnel(funnel) {
