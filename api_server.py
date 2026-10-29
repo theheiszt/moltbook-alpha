@@ -25,6 +25,7 @@ from fastapi import FastAPI, Header, HTTPException, Request, Response, WebSocket
 from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator, model_validator
 import uvicorn
 
@@ -148,6 +149,9 @@ _DASHBOARD_METRICS_CACHE_TTL_SECONDS = 10.0
 
 SERVER_START_TIME = time.time()
 PROJECT_ROOT = Path(__file__).resolve().parent
+_assets_dir = PROJECT_ROOT / "assets"
+if _assets_dir.is_dir():
+    app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="assets")
 
 
 @app.middleware("http")
@@ -236,6 +240,8 @@ async def metrics_middleware(request: Request, call_next):
             norm_endpoint = "/v1/webhooks/test/:subscription_id"
         elif endpoint.startswith("/v1/webhooks/") and endpoint != "/v1/webhooks":
             norm_endpoint = "/v1/webhooks/:subscription_id"
+        elif endpoint.startswith("/assets/"):
+            norm_endpoint = "/assets/:path"
         elif endpoint.startswith("/v1/nfts/assets/"):
             norm_endpoint = "/v1/nfts/assets/:filename"
         elif endpoint.startswith("/v1/nfts/metadata/"):
@@ -246,6 +252,13 @@ async def metrics_middleware(request: Request, call_next):
             norm_endpoint = "/v1/jobs/:job_id"
         elif endpoint in {
             "/dashboard",
+            "/dashboard.html",
+            "/jobs",
+            "/jobs.html",
+            "/nfts",
+            "/nfts.html",
+            "/index.html",
+            "/sample.json",
             "/v1/metrics/dashboard",
             "/v1/newsletter/latest",
             "/v1/quickstart",
@@ -736,6 +749,7 @@ def authenticate_and_deduct(api_key: Optional[str], request_id: Optional[str] = 
 
 
 @app.get("/", response_class=HTMLResponse)
+@app.get("/index.html", response_class=HTMLResponse)
 def index():
     if INDEX_HTML_PATH.exists():
         with open(INDEX_HTML_PATH, "r", encoding="utf-8") as f:
@@ -1337,12 +1351,42 @@ def get_agent_quickstart(request: Request):
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
+@app.get("/dashboard.html", response_class=HTMLResponse)
 def serve_dashboard():
     """Serves the real-time Moltbook Alpha traffic & operations dashboard."""
     dashboard_path = PROJECT_ROOT / "dashboard.html"
     if dashboard_path.exists():
         return HTMLResponse(content=dashboard_path.read_text(encoding="utf-8"))
     return HTMLResponse(content="<h1>Dashboard application file not found.</h1>", status_code=404)
+
+
+@app.get("/jobs", response_class=HTMLResponse)
+@app.get("/jobs.html", response_class=HTMLResponse)
+def serve_jobs():
+    """Serves the Agent Jobs & Bounties board."""
+    jobs_path = PROJECT_ROOT / "jobs.html"
+    if jobs_path.exists():
+        return HTMLResponse(content=jobs_path.read_text(encoding="utf-8"))
+    return HTMLResponse(content="<h1>Jobs application file not found.</h1>", status_code=404)
+
+
+@app.get("/nfts", response_class=HTMLResponse)
+@app.get("/nfts.html", response_class=HTMLResponse)
+def serve_nfts():
+    """Serves the Molt Alpha DEMS NFT collection portal."""
+    nfts_path = PROJECT_ROOT / "nfts.html"
+    if nfts_path.exists():
+        return HTMLResponse(content=nfts_path.read_text(encoding="utf-8"))
+    return HTMLResponse(content="<h1>NFT application file not found.</h1>", status_code=404)
+
+
+@app.get("/sample.json")
+def serve_sample_json():
+    """Serves sample.json for agent and developer quickstarts."""
+    sample_path = PROJECT_ROOT / "sample.json"
+    if sample_path.exists():
+        return JSONResponse(content=json.loads(sample_path.read_text(encoding="utf-8")))
+    return JSONResponse(content={"error": "sample.json not found"}, status_code=404)
 
 
 class CreateInvoiceInput(BaseModel):
