@@ -22,6 +22,12 @@ echo "=== Moltbook Alpha Health Check [$(date -u +%Y-%m-%dT%H:%M:%SZ)] ==="
 
 # 1. Systemd Service State
 if command -v systemctl >/dev/null 2>&1; then
+    for attempt in 1 2 3 4 5; do
+        if systemctl is-active --quiet "$SERVICE_NAME"; then
+            break
+        fi
+        sleep 2
+    done
     if systemctl is-active --quiet "$SERVICE_NAME"; then
         echo "[PASS] Systemd service '${SERVICE_NAME}' is active and running."
     else
