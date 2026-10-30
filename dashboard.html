@@ -1148,7 +1148,8 @@
       ];
 
       container.innerHTML = rails.map(r => {
-        const count = assetsMap[r.key] || 0;
+        const item = assetsMap[r.key];
+        const count = (typeof item === 'object' && item !== null) ? (item.count ?? 0) : (item || 0);
         return `
           <div class="bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl p-3 text-center">
             <span class="text-xl block mb-1">${r.icon}</span>
