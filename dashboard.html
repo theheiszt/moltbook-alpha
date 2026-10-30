@@ -51,16 +51,6 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-2.5">
-        <!-- Gateway Switcher -->
-        <div class="flex items-center bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl px-2.5 py-1 text-xs">
-          <label for="serverUrl" class="text-[var(--muted-foreground,#94a3b8)] mr-1.5 font-medium">Gateway:</label>
-          <select id="serverUrl" onchange="onServerChange()" class="bg-transparent text-[var(--foreground,#f8fafc)] focus:outline-none cursor-pointer font-mono text-[11px]">
-            <option value="https://moltbook-alpha.duckdns.org" class="bg-slate-900 text-white">DuckDNS Gateway (Production)</option>
-            <option value="http://10.0.0.190:8080" class="bg-slate-900 text-white">Local ProLiant (10.0.0.190:8080)</option>
-            <option value="http://127.0.0.1:8080" class="bg-slate-900 text-white">Localhost (127.0.0.1:8080)</option>
-            <option value="" class="bg-slate-900 text-white">Custom URL...</option>
-          </select>
-        </div>
 
         <!-- Connection Status Badge -->
         <div id="connectionBadge" class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-xl bg-slate-900 text-slate-400 border border-slate-800">
@@ -115,13 +105,6 @@
         <a id="testHealthLink" href="https://moltbook-alpha.duckdns.org/v1/health" target="_blank" class="px-2.5 py-1 bg-rose-900/60 hover:bg-rose-800 border border-rose-700 text-rose-200 rounded-lg text-xs font-medium">Test /v1/health ↗</a>
         <button onclick="fetchMetrics()" class="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-semibold">Retry</button>
       </div>
-    </div>
-
-    <!-- Custom URL Input (Hidden unless selected) -->
-    <div id="customUrlContainer" class="hidden bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-xl p-3 flex items-center gap-3">
-      <span class="text-xs text-[var(--muted-foreground,#94a3b8)] font-medium">Custom API URL:</span>
-      <input id="customUrlInput" type="text" placeholder="https://api.yourdomain.com" class="flex-1 bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-lg px-3 py-1.5 text-xs text-[var(--foreground,#f8fafc)] focus:outline-none font-mono">
-      <button onclick="applyCustomUrl()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs rounded-lg font-medium">Apply</button>
     </div>
 
     <!-- ======================================================== -->
@@ -711,30 +694,6 @@
       }
     }
 
-    function onServerChange() {
-      const select = document.getElementById("serverUrl");
-      const customContainer = document.getElementById("customUrlContainer");
-      if (select.value === "") {
-        customContainer.classList.remove("hidden");
-      } else {
-        customContainer.classList.add("hidden");
-        currentBaseUrl = select.value;
-        if (adminToken) {
-          fetchMetrics();
-        }
-      }
-    }
-
-    function applyCustomUrl() {
-      const input = document.getElementById("customUrlInput").value.trim();
-      if (input) {
-        currentBaseUrl = input.replace(/\/+$/, "");
-        if (adminToken) {
-          fetchMetrics();
-        }
-      }
-    }
-
     let isTabVisible = !document.hidden;
 
     function restartPolling() {
@@ -1288,24 +1247,12 @@
       `).join("");
     }
 
-    // Initialize on load
+    // Initialize on load - Always connect to production API
     window.addEventListener("DOMContentLoaded", () => {
-      // Dynamic origin detection
       if (window.location.protocol.startsWith("http") && !window.location.host.includes("github.io")) {
         currentBaseUrl = window.location.origin;
-        const select = document.getElementById("serverUrl");
-        let matched = false;
-        for (let i = 0; i < select.options.length; i++) {
-          if (select.options[i].value === currentBaseUrl) {
-            select.selectedIndex = i;
-            matched = true;
-            break;
-          }
-        }
-        if (!matched && currentBaseUrl) {
-          const opt = new Option(`Current Origin (${currentBaseUrl})`, currentBaseUrl, true, true);
-          select.add(opt, 0);
-        }
+      } else {
+        currentBaseUrl = "https://moltbook-alpha.duckdns.org";
       }
 
       updateAuthUI();
