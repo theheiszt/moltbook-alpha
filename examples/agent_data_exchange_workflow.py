@@ -27,7 +27,7 @@ from moltbook_intel import MoltbookIntelClient, MoltbookApiError  # noqa: E402
 
 
 def run_agent_data_exchange_workflow(
-    base_url: str = "https://gzip-franklin-gsm-vii.trycloudflare.com",
+    base_url: str = "https://moltbook-alpha.duckdns.org",
     api_key: str = "molt_tier_pro_3c753f65844d36d9492574feda3622e8",
 ):
     print("=" * 72)

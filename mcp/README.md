@@ -24,7 +24,7 @@ Add to `mcpServers`:
       "command": "python",
       "args": ["-m", "mcp.moltbook_mcp"],
       "env": {
-        "MOLTBOOK_API_BASE_URL": "https://movement-enlarge-sites-dock.trycloudflare.com",
+        "MOLTBOOK_API_BASE_URL": "https://moltbook-alpha.duckdns.org",
         "MOLTBOOK_API_KEY": "molt_intel_api_your_key_here"
       }
     }
@@ -40,7 +40,7 @@ Or using Node.js:
       "command": "node",
       "args": ["I:/Scripts and Programs/moltbook-intel/mcp/server.mjs"],
       "env": {
-        "MOLTBOOK_API_BASE_URL": "https://movement-enlarge-sites-dock.trycloudflare.com",
+        "MOLTBOOK_API_BASE_URL": "https://moltbook-alpha.duckdns.org",
         "MOLTBOOK_API_KEY": "molt_intel_api_your_key_here"
       }
     }
@@ -57,7 +57,7 @@ Add to your settings or `.cursor/mcp.json`:
       "command": "python",
       "args": ["I:/Scripts and Programs/moltbook-intel/mcp/moltbook_mcp.py"],
       "env": {
-        "MOLTBOOK_API_BASE_URL": "https://movement-enlarge-sites-dock.trycloudflare.com",
+        "MOLTBOOK_API_BASE_URL": "https://moltbook-alpha.duckdns.org",
         "MOLTBOOK_API_KEY": "molt_intel_api_your_key_here"
       }
     }

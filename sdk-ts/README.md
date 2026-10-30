@@ -23,7 +23,7 @@ npm install @moltbook/intel-sdk
 import { MoltbookIntelClient } from "@moltbook/intel-sdk";
 
 const client = new MoltbookIntelClient({
-  baseUrl: "https://movement-enlarge-sites-dock.trycloudflare.com",
+  baseUrl: "https://moltbook-alpha.duckdns.org",
   apiKey: process.env.MOLTBOOK_API_KEY,
 });
 

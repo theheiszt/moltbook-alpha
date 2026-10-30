@@ -342,7 +342,7 @@ from sdk.moltbook_intel import (
 )
 
 client = MoltbookIntelClient(
-    base_url="https://movement-enlarge-sites-dock.trycloudflare.com",
+    base_url="https://moltbook-alpha.duckdns.org",
     api_key="molt_live_key_xyz",
     timeout=15.0,
     max_retries=3,

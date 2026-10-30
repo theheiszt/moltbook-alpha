@@ -96,6 +96,6 @@
     "verified": true
   },
   "documentation_url": "https://theheiszt.github.io/moltbook-alpha",
-  "api_status_url": "https://gzip-franklin-gsm-vii.trycloudflare.com/v1/health",
-  "pricing_url": "https://gzip-franklin-gsm-vii.trycloudflare.com/v1/payments/config"
+  "api_status_url": "https://moltbook-alpha.duckdns.org/v1/health",
+  "pricing_url": "https://moltbook-alpha.duckdns.org/v1/payments/config"
 }

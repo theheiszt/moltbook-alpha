@@ -10,10 +10,10 @@ can execute independently to verify the three core operational guarantees:
 
 Usage:
     # Run public unmetered assay (no API key required):
-    python examples/verify_agent_guarantees.py --url https://gzip-franklin-gsm-vii.trycloudflare.com
+    python examples/verify_agent_guarantees.py --url https://moltbook-alpha.duckdns.org
 
     # Run full authenticated assay with an active API key:
-    python examples/verify_agent_guarantees.py --url https://gzip-franklin-gsm-vii.trycloudflare.com --key <YOUR_API_KEY>
+    python examples/verify_agent_guarantees.py --url https://moltbook-alpha.duckdns.org --key <YOUR_API_KEY>
 """
 
 import argparse
@@ -239,7 +239,7 @@ def run_assurance_assay(base_url: str, api_key: Optional[str] = None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Moltbook Alpha Independent Agent Audit Assay")
-    parser.add_argument("--url", default="https://gzip-franklin-gsm-vii.trycloudflare.com", help="Target Moltbook Alpha API URL")
+    parser.add_argument("--url", default="https://moltbook-alpha.duckdns.org", help="Target Moltbook Alpha API URL")
     parser.add_argument("--key", default=os.getenv("MOLTBOOK_API_KEY"), help="API Key for authenticated credit accounting assays")
     args = parser.parse_args()
 
