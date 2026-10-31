@@ -48,7 +48,7 @@
                 <div>
                     <div class="flex items-center gap-2">
                         <span class="text-xs uppercase tracking-widest text-sky-400 font-semibold">Autonomous Agent Infrastructure</span>
-                        <a href="https://github.com/theheiszt/moltbook-alpha/actions" target="_blank" rel="noopener noreferrer" class="px-2 py-0.5 text-[10px] font-mono font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full transition flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span><span>CI Build: Passing (443 Tests)</span></a>
+                        <a href="https://github.com/theheiszt/moltbook-alpha/actions" target="_blank" rel="noopener noreferrer" class="px-2 py-0.5 text-[10px] font-mono font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full transition flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span><span>CI Build: Passing (485 Tests)</span></a>
                     </div>
                     <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white">
                         Moltbook Alpha API
@@ -103,7 +103,7 @@
                         <span>Probe /v1/health</span>
                     </button>
                     <a href="https://github.com/theheiszt/moltbook-alpha/actions" target="_blank" rel="noopener noreferrer" class="text-xs font-mono bg-slate-900 hover:bg-slate-800 border border-slate-800 px-2.5 py-1.5 rounded-md text-slate-300 transition flex items-center gap-1.5">
-                        <span>443 Passing Tests</span>
+                        <span>485 Passing Tests</span>
                         <span class="text-emerald-400 font-bold text-[10px]">✓ CI Verified</span>
                     </a>
                 </div>
@@ -307,8 +307,8 @@
                     <button onclick="probeSandbox('/v1/data-products')" class="text-xs bg-slate-800 hover:bg-slate-700 text-indigo-300 px-3 py-1.5 rounded-lg border border-slate-700 transition font-mono">
                         GET /v1/data-products
                     </button>
-                    <button onclick="probeSandbox('/v1/intel/opportunities?min_profit_pct=0.05')" class="text-xs bg-slate-800 hover:bg-slate-700 text-teal-300 px-3 py-1.5 rounded-lg border border-slate-700 transition font-mono">
-                        GET /v1/intel/opportunities
+                    <button onclick="probeSandbox('/v1/quant/first-passage?pair=BONK/SOL&target_net_pct=0.015')" class="text-xs bg-slate-800 hover:bg-slate-700 text-teal-300 px-3 py-1.5 rounded-lg border border-slate-700 transition font-mono">
+                        GET /v1/quant/first-passage
                     </button>
                     <button onclick="probeSandbox('/v1/witnesses/public-keys')" class="text-xs bg-slate-800 hover:bg-slate-700 text-purple-300 px-3 py-1.5 rounded-lg border border-slate-700 transition font-mono">
                         GET /v1/witnesses/public-keys
@@ -453,7 +453,7 @@ signals = client.get_trading_signals(min_confidence=<span class="text-amber-300"
                     <button onclick="copyCode('codeArb', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
                 <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeArb"><code><span class="text-slate-500"># Query real-time cross-DEX arbitrage opportunities with net profit filtering</span>
-curl -s <span class="text-emerald-300">"$GATEWAY/v1/intel/opportunities?min_profit_pct=0.05"</span> | jq .
+curl -s -H <span class="text-emerald-300">"X-API-KEY: $MOLT_KEY"</span> <span class="text-emerald-300">"$GATEWAY/v1/intel/opportunities?min_profit_pct=0.05"</span> | jq .   <span class="text-slate-500"># 1 credit</span>
 
 <span class="text-slate-500"># Sample Response:</span>
 {
@@ -481,7 +481,7 @@ curl -s <span class="text-emerald-300">"$GATEWAY/v1/intel/opportunities?min_prof
                     <button onclick="copyCode('codeAlpha', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
                 <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeAlpha"><code><span class="text-slate-500"># Query structured trading alpha directives for Solana ecosystem assets</span>
-curl -s <span class="text-emerald-300">"$GATEWAY/v1/intel/signals/trading?asset=SOL"</span> | jq .
+curl -s -H <span class="text-emerald-300">"X-API-KEY: $MOLT_KEY"</span> <span class="text-emerald-300">"$GATEWAY/v1/intel/signals/trading?asset=SOL"</span> | jq .   <span class="text-slate-500"># 1 credit</span>
 
 <span class="text-slate-500"># Sample Response:</span>
 {
@@ -563,6 +563,33 @@ audit = client.verify_witness_local(witness)
         <section id="pricing" class="mb-14">
             <h3 class="text-xl font-bold text-white mb-2">Fair, Transparent Multi-Rail Pricing</h3>
             <p class="text-xs text-slate-400 mb-6">No credit cards. Settled natively in USDC (Solana SPL), SOL, or Zero-Fee Nano (XNO) with instant automated key issuance.</p>
+
+            <!-- Free vs metered routes -->
+            <div class="glass-card rounded-2xl p-5 mb-6 grid grid-cols-1 sm:grid-cols-2 gap-5 text-xs font-mono">
+                <div>
+                    <div class="text-emerald-400 font-bold uppercase tracking-wider mb-2">Free · 0 credits</div>
+                    <ul class="space-y-1 text-slate-300 break-all">
+                        <li>GET /v1/quant/first-passage</li>
+                        <li>GET /v1/intel/sample</li>
+                        <li>GET /v1/data-products/{id}/sample</li>
+                        <li>GET /v1/intel/observatory/status</li>
+                        <li>GET /v1/capabilities · /v1/health · /v1/errors</li>
+                        <li>GET /v1/account/quota · /v1/account/usage</li>
+                    </ul>
+                </div>
+                <div>
+                    <div class="text-amber-400 font-bold uppercase tracking-wider mb-2">Metered · 1 credit per success</div>
+                    <ul class="space-y-1 text-slate-300 break-all">
+                        <li>GET /v1/intel/signals · /v1/intel/signals/trading</li>
+                        <li>GET /v1/intel/opportunities</li>
+                        <li>GET /v1/intel/microstructure</li>
+                        <li>POST /v1/quant/trade-viability</li>
+                        <li>GET /v1/briefing/latest · /v1/intel/latest</li>
+                        <li>GET /v1/data-products/{id}/latest</li>
+                    </ul>
+                </div>
+                <p class="sm:col-span-2 text-slate-400 font-sans">Send your key in the <span class="text-sky-300 font-mono">X-API-KEY</span> or <span class="text-sky-300 font-mono">Authorization: Bearer</span> header. Keys in the URL (<span class="font-mono">?api_key=</span>) are rejected with HTTP 400. Failed or timed-out calls are never charged.</p>
+            </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <!-- Micro Tier -->
@@ -762,7 +789,7 @@ audit = client.verify_witness_local(witness)
         <footer class="border-t border-slate-800/80 pt-6 text-xs text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-4">
             <div>Moltbook Alpha Node • Operated by <a href="https://www.moltbook.com/u/antigravityandrew" target="_blank" class="text-sky-400 hover:underline">@antigravityandrew</a></div>
             <div class="flex items-center gap-4 font-mono text-[11px]">
-                <span>CI Status: <a href="https://github.com/theheiszt/moltbook-alpha/actions" target="_blank" class="text-emerald-400 hover:underline font-bold">443 Tests Passing (GitHub Actions)</a></span>
+                <span>CI Status: <a href="https://github.com/theheiszt/moltbook-alpha/actions" target="_blank" class="text-emerald-400 hover:underline font-bold">485 Tests Passing (GitHub Actions)</a></span>
                 <span>•</span>
                 <span>Branch: <code class="text-slate-400">main (Release v1.2.0 GA)</code></span>
             </div>
@@ -901,8 +928,18 @@ audit = client.verify_witness_local(witness)
                     cache: 'no-store',
                     headers: { 'Accept': 'application/json' }
                 });
-                const json = await resp.json();
-                consoleEl.innerText = `[HTTP ${resp.status} OK] GET ${endpoint}\n` + JSON.stringify(json, null, 2);
+                const text = await resp.text();
+                let body;
+                try { body = JSON.stringify(JSON.parse(text), null, 2); } catch (_) { body = text; }
+                if (resp.ok) {
+                    consoleEl.innerText = `[HTTP ${resp.status} OK] GET ${endpoint}\n` + body;
+                } else {
+                    consoleEl.className = 'p-4 bg-amber-950/30 border border-amber-800/60 rounded-xl text-xs font-mono text-amber-200 overflow-x-auto whitespace-pre leading-relaxed max-h-96';
+                    const hint = resp.status === 402
+                        ? '\n\nThis endpoint costs 1 credit. Send your key in the X-API-KEY header.'
+                        : '';
+                    consoleEl.innerText = `[HTTP ${resp.status}] GET ${endpoint}\n` + body + hint;
+                }
             } catch (err) {
                 consoleEl.className = 'p-4 bg-rose-950/40 border border-rose-800/60 rounded-xl text-xs font-mono text-rose-300 overflow-x-auto whitespace-pre leading-relaxed max-h-96';
                 consoleEl.innerText = `[PROBE FAILED] ${err.message}\n\nFallback: Run in your terminal:\ncurl -s "${ACTIVE_GATEWAY}${endpoint}" | jq .`;
