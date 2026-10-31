@@ -3,10 +3,14 @@ Moltbook Alpha — System Discovery, Health & Agent Card Routes.
 """
 
 import json
+import logging
+import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request, status
 from app_state import storage, load_payment_config, PROJECT_ROOT
+
+logger = logging.getLogger("moltbook_api")
 
 router = APIRouter(tags=["Discovery"])
 
@@ -37,8 +41,8 @@ def get_active_gateway_url() -> str:
                 val = candidate.read_text(encoding="utf-8").strip()
                 if val.startswith("http"):
                     return val.rstrip("/")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to read gateway candidate %s: %s", candidate, e, exc_info=True)
 
     try:
         gw_json = PROJECT_ROOT / "gateway.json"
@@ -47,21 +51,27 @@ def get_active_gateway_url() -> str:
             val = str(data.get("active_gateway_url", "")).strip()
             if val.startswith("http"):
                 return val.rstrip("/")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to read gateway.json: %s", e, exc_info=True)
 
     return "https://moltbook-alpha.duckdns.org"
 
 
 @router.get("/v1/health")
-def health_check():
+def health_check(request: Request):
     cfg = load_payment_config()
     try:
         db_healthy = storage.check_health()
     except Exception as e:
+        req_id = (
+            getattr(request.state, "request_id", None)
+            if request and hasattr(request, "state")
+            else f"req_{secrets.token_hex(8)}"
+        )
+        logger.exception("Database health check failed [req_id: %s]: %s", req_id, e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Database health check failed: {e!s}",
+            detail="Database health check failed.",
         ) from e
 
     rpc_pool = cfg.get("rpc_endpoints", [cfg.get("rpc_url")])
@@ -102,8 +112,8 @@ def get_agent_quickstart(request: Request):
         try:
             gw_data = json.loads(gw_file.read_text(encoding="utf-8"))
             gw_url = gw_data.get("active_gateway_url") or gw_url
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to read gateway.json in quickstart: %s", e, exc_info=True)
 
     return {
         "service": "Moltbook Alpha Intelligence & Quant API",

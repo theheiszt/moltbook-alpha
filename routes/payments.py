@@ -4,6 +4,7 @@ Moltbook Alpha — Payment & Challenge Routes.
 
 from datetime import datetime, timezone
 import hmac
+import logging
 import os
 import re
 import secrets
@@ -49,6 +50,8 @@ from payment_verifier import (
     VerifyPaymentInput,
 )
 from storage import StorageError
+
+logger = logging.getLogger("moltbook_api")
 
 router = APIRouter(tags=["Payments"])
 
@@ -323,6 +326,7 @@ def create_payment_invoice(req: CreateInvoiceInput, request: Request):
             tier=req.target_tier,
             amount_usd=tier_usd,
             credits=credits,
+            base_raw=int(inv_record["amount_raw"]),
         )
         return {
             "success": True,
@@ -1020,9 +1024,11 @@ def verify_nano_payment(req: VerifyNanoPaymentInput, request: Request):
     try:
         settlement = nano_adapter.verify_settlement(
             block_hash=req.block_hash,
-            expected_raw=int(invoice["amount_raw"]),
+            # Nano amounts exceed 2**62, so storage keeps them in amount_raw_text (amount_raw is 0)
+            expected_raw=int(invoice.get("amount_raw_text") or invoice["amount_raw"]),
+            invoice_id=req.invoice_id,
         )
-    except Exception as e:
+    except VerificationError as e:
         storage.record_unmatched_payment(
             rail="nano",
             tx_signature=req.block_hash,
@@ -1033,6 +1039,22 @@ def verify_nano_payment(req: VerifyNanoPaymentInput, request: Request):
             reason="SETTLEMENT_VERIFICATION_FAILED",
         )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+        logger.exception("Unexpected error verifying Nano payment [req_id: %s]: %s", req_id, e)
+        storage.record_unmatched_payment(
+            rail="nano",
+            tx_signature=req.block_hash,
+            payer_wallet="unknown_nano_payer",
+            asset="XNO",
+            amount_raw=int(invoice["amount_raw"]),
+            expected_amount_raw=int(invoice["amount_raw"]),
+            reason="SETTLEMENT_VERIFICATION_FAILED",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Payment verification failed due to internal error.",
+        )
 
     res = storage.fulfill_invoice_and_redeem(
         invoice_id=req.invoice_id,
@@ -1062,8 +1084,8 @@ def verify_nano_payment(req: VerifyNanoPaymentInput, request: Request):
                 },
             )
             witness_id = w.get("witness_id")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to create witness for nano payment: %s", e, exc_info=True)
 
     return {
         "success": True,
@@ -1099,8 +1121,8 @@ def get_unmatched_payments(
             try:
                 dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
                 ages.append(max(0.0, (now - dt).total_seconds()))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to parse date for unmatched payment: %s", e, exc_info=True)
     if ages:
         oldest_age_sec = max(ages)
         ages.sort()
@@ -1284,10 +1306,12 @@ def process_unmatched_refund(unmatched_id: str, request: Request):
     try:
         dispatch_result = refund_dispatcher.dispatch_refund(record)
     except Exception as e:
+        req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+        logger.exception("Refund dispatch failed for unmatched %s [req_id: %s]: %s", unmatched_id, req_id, e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Refund dispatch failed: {e!s}",
-        )
+            detail="Refund dispatch failed.",
+        ) from e
 
     storage.mark_unmatched_refunded(
         unmatched_id=unmatched_id,
@@ -1321,8 +1345,8 @@ def process_unmatched_refund(unmatched_id: str, request: Request):
             )
             witness_id = w.get("witness_id")
             witness_sig = w.get("signature")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to create witness for refund: %s", e, exc_info=True)
 
     return {
         "success": True,

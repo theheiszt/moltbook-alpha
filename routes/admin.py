@@ -3,6 +3,7 @@ Moltbook Alpha — Administrator Console, Metrics Exposition & Management Routes
 """
 
 import hmac
+import logging
 import os
 import secrets
 import threading
@@ -38,6 +39,8 @@ from ops.security.safe_mode import (
 )
 from ops.trading.dex_microstructure import microstructure_broadcaster
 
+logger = logging.getLogger("moltbook_api")
+
 router = APIRouter(tags=["Admin & Metrics"])
 
 
@@ -65,8 +68,8 @@ def get_prometheus_metrics(request: Request):
 
     try:
         update_active_keys_gauge(storage.get_active_keys_count())
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to update active keys gauge: %s", e, exc_info=True)
     text_data = registry.export_prometheus_text()
     return Response(
         content=text_data,
@@ -279,8 +282,8 @@ def _get_dashboard_ecosystem_summary() -> Dict[str, Any]:
                 "SELECT submission_id, job_id, worker_agent, deliverable_uri, status, state_witness_id, submitted_at FROM agent_job_submissions ORDER BY submitted_at DESC LIMIT 6"
             )
             jb_summary["recent_submissions"] = [dict(r) for r in cur.fetchall()]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to fetch job board summary: %s", e, exc_info=True)
 
     nft_summary: Dict[str, Any] = {
         "collection_name": "Molt Alpha DEMS",
@@ -307,8 +310,8 @@ def _get_dashboard_ecosystem_summary() -> Dict[str, Any]:
             }
             for e in items
         ]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to fetch NFT catalog summary: %s", e, exc_info=True)
 
     return {"job_board": jb_summary, "nft_collection": nft_summary}
 
@@ -369,7 +372,8 @@ def get_dashboard_metrics_endpoint(request: Request):
             active_ws = microstructure_broadcaster.active_connections_count
             if callable(active_ws):
                 active_ws = active_ws()
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to get active ws connections count: %s", e, exc_info=True)
             active_ws = 0
 
     # In-flight concurrency slots
@@ -378,7 +382,8 @@ def get_dashboard_metrics_endpoint(request: Request):
         try:
             with getattr(concurrency_limiter, "_lock", threading.Lock()):
                 in_flight = sum(len(slots) for slots in concurrency_limiter._in_flight.values())
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to get in-flight count: %s", e, exc_info=True)
             in_flight = 0
 
     # Request distribution from Prometheus registry
@@ -401,8 +406,8 @@ def get_dashboard_metrics_endpoint(request: Request):
                         status_codes["4xx"] += int(val)
                     elif code_str.startswith("5"):
                         status_codes["5xx"] += int(val)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to read Prometheus counters: %s", e, exc_info=True)
 
     uptime_sec = round(time.time() - SERVER_START_TIME, 1)
 
@@ -434,8 +439,8 @@ def get_dashboard_metrics_endpoint(request: Request):
                 latest_briefing_info["briefing_markdown"] = b_row["report_markdown"] or ""
                 latest_briefing_info["state_witness_id"] = b_row["state_witness_id"] or "Verified"
                 latest_briefing_info["created_at"] = b_row["created_at"]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to query latest briefing for metrics dashboard: %s", e, exc_info=True)
 
     try:
         from config import REPORTS_DIR
@@ -445,8 +450,8 @@ def get_dashboard_metrics_endpoint(request: Request):
         ln_file = Path(REPORTS_DIR) / "latest_newsletter.md"
         if ln_file.is_file():
             latest_briefing_info["newsletter_markdown"] = ln_file.read_text(encoding="utf-8")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to read briefing/newsletter markdown files: %s", e, exc_info=True)
 
     payload = {
         "success": True,

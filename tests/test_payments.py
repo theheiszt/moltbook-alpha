@@ -257,6 +257,8 @@ def test_api_verify_endpoint_idempotency_and_replay(monkeypatch):
         MagicMock(return_value=tx),
     )
 
+    from api_server import rate_limiter
+    rate_limiter.reset()
     client = TestClient(app)
     inv = client.post("/v1/payments/invoice", json={"target_tier": "tier_starter"}).json()
     ref = inv["reference"]

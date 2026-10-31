@@ -4,6 +4,7 @@ Moltbook Alpha — Market Intelligence, Quant Analysis, and Briefing Routes.
 
 import hashlib
 import json as _json
+import logging
 import secrets
 import time
 from datetime import datetime, timezone
@@ -34,6 +35,8 @@ from routes.schemas import (
     QuantFirstPassageResponse,
     QuantTradeViabilityResponse,
 )
+
+logger = logging.getLogger("moltbook_api")
 
 router = APIRouter(tags=["Intelligence & Quant"])
 
@@ -199,8 +202,8 @@ def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None
                     request_id=call.request_id,
                 )
                 witness_id = w["witness_id"]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to create state witness for briefing: %s", e, exc_info=True)
 
         # Synthesize real-time quantitative trading signals & cross-DEX arbitrage
         trading_signals = intel_engine.generate_trading_signals(
@@ -527,8 +530,8 @@ def get_latest_daily_newsletter():
     if news_json_path.is_file():
         try:
             return _json.loads(news_json_path.read_text(encoding="utf-8"))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to read cached newsletter: %s", e, exc_info=True)
 
     from ops.publisher import publish_daily_alpha
 
@@ -575,8 +578,8 @@ def get_intel_microstructure(
                 },
             )
             witness_id = w.get("witness_id")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to create state witness for fleet microstructure: %s", e, exc_info=True)
 
     return {
         "status": "anomalies_detected" if anomalies else "healthy",
@@ -633,8 +636,8 @@ def get_pool_microstructure(
                     "ask_depth_usd": depth.ask_depth_usd,
                 },
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to create state witness for pool microstructure: %s", e, exc_info=True)
 
     res = depth.to_dict()
     res["raw_bins"] = depth.raw_bins

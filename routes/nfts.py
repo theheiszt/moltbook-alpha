@@ -2,6 +2,8 @@
 Moltbook Alpha — Molt Alpha DEMS NFT Collection Routes.
 """
 
+import logging
+import secrets
 from pathlib import Path
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Request, status
@@ -14,6 +16,8 @@ from app_state import (
     get_client_ip,
 )
 from payment_verifier import SolanaPaymentVerifier, VerificationError, RPCError
+
+logger = logging.getLogger("moltbook_api")
 
 router = APIRouter(prefix="/v1/nfts", tags=["NFTs"])
 
@@ -143,9 +147,11 @@ def claim_nft_lazy_mint_order(payload: ClaimNftOrderInput, request: Request):
             expected_reference=order["memo_reference"],
         )
     except (VerificationError, RPCError) as e:
+        req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+        logger.exception("On-chain payment verification failed for NFT order '%s' [req_id: %s]: %s", payload.order_id, req_id, e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"On-chain payment verification failed for NFT order '{payload.order_id}': {e!s}",
+            detail=f"On-chain payment verification failed for NFT order '{payload.order_id}'.",
         ) from e
 
     try:

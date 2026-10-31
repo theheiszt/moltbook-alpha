@@ -279,3 +279,85 @@ def test_secret_redaction_in_webhook_auth():
     assert data["code"] == ErrorCode.UNAUTHORIZED_WEBHOOK.value
     # Secret attempt must never be reflected in client error payload
     assert secret_attempt not in str(data)
+
+
+
+def test_internal_error_redaction_health_check():
+    client = TestClient(app)
+    with patch.object(storage, "check_health", side_effect=Exception("Disk I/O error at secret path C:\\Keys\\db.sqlite")):
+        resp = client.get("/v1/health")
+        assert resp.status_code == 503
+        data = resp.json()
+        assert "Database health check failed." in str(data)
+        assert "C:\\Keys\\db.sqlite" not in str(data)
+        assert "Disk I/O" not in str(data)
+
+
+def test_internal_error_redaction_refund_dispatch():
+    from app_state import refund_dispatcher
+    client = TestClient(app)
+    unm = storage.record_unmatched_payment("solana", "sig_refund_secret_test", "payer_wallet_test", "USDC", 1000000, 1000000, "EXPIRED")
+    admin_key, _ = storage.create_api_key(tier="admin", credits=1000)
+
+    with patch.object(refund_dispatcher, "dispatch_refund", side_effect=Exception("Solana treasury secret key priv_key_999 leaked")):
+        resp = client.post(
+            f"/v1/payments/refund/{unm['unmatched_id']}",
+            headers={"X-API-KEY": admin_key, "X-Admin-Bypass-Confirmation": "true"},
+        )
+        assert resp.status_code == 400
+        data = resp.json()
+        assert "Refund dispatch failed." in str(data)
+        assert "priv_key_999" not in str(data)
+
+
+def test_internal_error_redaction_nano_verify():
+    from app_state import nano_adapter
+    client = TestClient(app)
+    inv, claim_secret, _ = storage.create_invoice(
+        tier="tier_micro",
+        credits=10,
+        asset="XNO",
+        amount_raw=10**30,
+        recipient=nano_adapter.merchant_address,
+        cluster="nano-live",
+        expiry_seconds=1800,
+        rail="nano",
+    )
+
+    with patch.object(nano_adapter, "verify_settlement", side_effect=RuntimeError("Internal daemon error at http://192.168.1.50:7076/secret_node")):
+        resp = client.post(
+            "/v1/payments/verify-nano",
+            json={
+                "block_hash": "b" * 64,
+                "invoice_id": inv["invoice_id"],
+                "claim_secret": claim_secret,
+            },
+        )
+        assert resp.status_code == 400
+        data = resp.json()
+        assert "Payment verification failed due to internal error." in str(data)
+        assert "192.168.1.50" not in str(data)
+        assert "secret_node" not in str(data)
+
+
+def test_internal_error_redaction_nft_claim():
+    client = TestClient(app)
+    order_res = client.post(
+        "/v1/nfts/order",
+        json={"nft_id": "02-inscribe", "buyer_wallet": "1" * 32, "asset": "SOL"},
+    )
+    assert order_res.status_code == 201
+    order = order_res.json()
+
+    with patch.object(SolanaPaymentVerifier, "verify_payment", side_effect=RPCError("504 Gateway Timeout at https://rpc.solana.internal?token=secret_rpc_token_999")):
+        resp = client.post(
+            "/v1/nfts/claim",
+            json={
+                "order_id": order["order_id"],
+                "transaction_signature": "4" * 88,
+            },
+        )
+        assert resp.status_code == 400
+        data = resp.json()
+        assert "On-chain payment verification failed for NFT order" in str(data)
+        assert "secret_rpc_token_999" not in str(data)

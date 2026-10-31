@@ -224,7 +224,7 @@ async def _background_quota_reservation_sweeper():
         except asyncio.CancelledError:
             break
         except Exception as e:
-            logger.warning("Error in background quota reservation sweeper: %s", e)
+            logger.warning("Error in background quota reservation sweeper: %s", e, exc_info=True)
 
 
 @asynccontextmanager
@@ -539,8 +539,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
             f"Unhandled {type(exc).__name__}: {exc!s} [req_id: {req_id}]",
             ip_address=request.client.host if request.client else "unknown",
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to log audit event for unhandled exception: %s", e, exc_info=True)
 
     content = format_error_payload(
         code=ErrorCode.INTERNAL_SERVER_ERROR.value,
@@ -629,8 +629,8 @@ async def websocket_microstructure_stream(
                 })
     except WebSocketDisconnect:
         pass
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Microstructure websocket error: %s", e, exc_info=True)
     finally:
         microstructure_broadcaster.disconnect(websocket)
         storage.log_audit_event("ws_microstructure_disconnected", f"Session {session_id} ended")
@@ -657,8 +657,8 @@ async def websocket_alpha_stream(
             auth_msg = await asyncio.wait_for(websocket.receive_json(), timeout=5.0)
             if isinstance(auth_msg, dict) and auth_msg.get("type") == "auth":
                 raw_key = auth_msg.get("api_key") or auth_msg.get("token")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Websocket auth handshake failed: %s", e, exc_info=True)
 
     if not raw_key:
         await websocket.send_json({
@@ -748,8 +748,8 @@ async def websocket_alpha_stream(
                     })
         except WebSocketDisconnect:
             pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Websocket receiver error: %s", e, exc_info=True)
 
     receiver_task = asyncio.create_task(receiver())
 
@@ -773,8 +773,8 @@ async def websocket_alpha_stream(
                 })
     except WebSocketDisconnect:
         pass
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Websocket sender error: %s", e, exc_info=True)
     finally:
         receiver_task.cancel()
         storage.log_audit_event("ws_disconnected", f"WebSocket session {session_id} ended")
