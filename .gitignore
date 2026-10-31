@@ -39,3 +39,7 @@ moltbook_alpha_phase1/
 
 # Assets and proprietary media
 # assets/
+
+# Local scripts that embed raw keys / server credentials
+scripts/revoke_leaked_keys.py
+scripts/deploy_production.py
