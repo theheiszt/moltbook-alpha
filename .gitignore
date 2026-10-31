@@ -43,3 +43,6 @@ moltbook_alpha_phase1/
 # Local scripts that embed raw keys / server credentials
 scripts/revoke_leaked_keys.py
 scripts/deploy_production.py
+
+# Release archives built with git archive
+*.tar.gz
