@@ -2,10 +2,8 @@
 Unit tests for Moltbook Alpha Observatory Source Adapter (ops/observatory_adapter.py).
 """
 
-import json
 import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from storage import StorageManager
 from ops.observatory_adapter import (

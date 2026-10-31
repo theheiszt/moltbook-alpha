@@ -3,16 +3,13 @@ Unit tests for Proof of Agent (PoA) Bounty Runner (bounties/poa_runner.py).
 """
 
 import json
-import pytest
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from ops.poa_runner import (
     PoAProtocolClient,
     PoABountyRunner,
     BOUNTY_EPOCH_CUTOFF_TS,
-    DEFAULT_TARGET_BTC,
-    DEFAULT_BOUNTY_ID
+    DEFAULT_TARGET_BTC
 )
 
 

@@ -11,8 +11,6 @@ Implements Phase 1 (Option A) of the Observatory Integration:
 import sys
 import os
 import json
-import time
-import re
 import hashlib
 import urllib.request
 import urllib.error

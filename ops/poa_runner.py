@@ -462,31 +462,31 @@ class PoABountyRunner:
         epochs = audit.get("epoch_details", [])
 
         lines = [
-            f"# Proof of Agent (PoA) 3-Epoch Activity & AIBTC Identity Proof",
+            "# Proof of Agent (PoA) 3-Epoch Activity & AIBTC Identity Proof",
             f"**Bounty Target:** AIBTC Bounty `{self.bounty_id}` (37,000 sats sBTC)",
             f"**Beneficiary BTC Address:** `{self.target_btc}`",
             f"**Generated:** {datetime.now(timezone.utc).isoformat()}\n",
-            f"## 1. PoA Identity & Explorer Profile",
+            "## 1. PoA Identity & Explorer Profile",
             f"- **PoA Address:** `{poa_address}`",
             f"- **POAScan Profile:** `https://poascan.io/address/{poa_address}`",
             f"- **POAScan Public API:** `https://poascan.io/api/v1/address/{poa_address}/txs`\n",
-            f"## 2. Activity Across 3+ Distinct Epochs (Closed After 2026-10-24T13:30Z)",
-            f"Verified on-chain via POAScan:\n",
-            f"| Epoch | Type | Transaction ID | Peer Attestations | Confirmed (UTC) |",
-            f"|---|---|---|---|---|"
+            "## 2. Activity Across 3+ Distinct Epochs (Closed After 2026-10-24T13:30Z)",
+            "Verified on-chain via POAScan:\n",
+            "| Epoch | Type | Transaction ID | Peer Attestations | Confirmed (UTC) |",
+            "|---|---|---|---|---|"
         ]
 
         for ep in epochs:
             lines.append(f"| Epoch {ep.get('epoch')} | `{ep.get('type')}` | `{ep.get('tx_id')}` | {ep.get('atts', 0)} | {ep.get('iso')} |")
 
         lines.extend([
-            f"\n## 3. On-Chain AIBTC Identity Binding Memo",
+            "\n## 3. On-Chain AIBTC Identity Binding Memo",
             f"- **Required Memo:** `aibtc:{self.target_btc}`",
             f"- **Binding Transaction Hash:** `{memo_tx_id}`",
             f"- **From Address:** `{poa_address}`",
             f"- **Explorer Verification:** `https://poascan.io/address/{poa_address}`\n",
-            f"## 4. Verification Summary",
-            f"- Criteria 1 (Valid PoA Address): ✅ Verified",
+            "## 4. Verification Summary",
+            "- Criteria 1 (Valid PoA Address): ✅ Verified",
             f"- Criteria 2 (3+ Epochs post-2026-10-24T13:30Z): ✅ {audit.get('distinct_epochs_count', 0)} epochs verified",
             f"- Criteria 3 (Identity Binding Memo Tx): ✅ Verified (`{memo_tx_id}`)"
         ])
