@@ -25,6 +25,7 @@ from app_state import (
     record_rate_limit,
 )
 from config import REPORTS_DIR
+from routes.pagination import decode_cursor, paginate
 from routes.schemas import (
     BriefingLatestResponse,
     IntelMicrostructureOverviewResponse,
@@ -282,19 +283,25 @@ def get_intel_signals(
     category: Optional[str] = None,
     confidence: Optional[str] = None,
     limit: int = 25,
+    cursor: Optional[str] = None,
 ):
     """
     Queries indexed intelligence signals across security advisories, API changes,
     operational failures, architecture patterns, and market alpha.
+    Pass the returned next_cursor back as `cursor` to fetch the next page.
     """
-    signals = intel_engine.search_signals(
+    page = max(1, min(limit, 100))
+    offset = decode_cursor(cursor) if cursor else 0
+    results = intel_engine.search_signals(
         category=category,
         confidence=confidence,
-        limit=min(limit, 100),
+        limit=offset + page + 1,
     )
+    signals, next_cursor = paginate(results, offset, page)
     return {
         "count": len(signals),
         "signals": signals,
+        "next_cursor": next_cursor,
     }
 
 
@@ -306,25 +313,31 @@ def get_intel_opportunities(
     pair: Optional[str] = None,
     opp_type: Optional[str] = None,
     limit: int = 25,
+    cursor: Optional[str] = None,
 ):
     """
     Scans real-time cross-DEX arbitrage opportunities, liquidity gaps,
     and tick vacuum squeeze alerts across tracked Solana liquidity pools (Orca, Raydium, Meteora).
     Calculates net profitability after pool fee tiers and execution gas costs.
+    Pass the returned next_cursor back as `cursor` to fetch the next page.
     """
-    opps = intel_engine.get_live_opportunities(
+    page = max(1, min(limit, 100))
+    offset = decode_cursor(cursor) if cursor else 0
+    results = intel_engine.get_live_opportunities(
         dex_microstructure=dex_microstructure,
         min_profit_pct=min_profit_pct,
         pair=pair,
         opp_type=opp_type,
-        limit=min(limit, 100),
+        limit=offset + page + 1,
         witness_manager=witness_manager,
     )
+    opps, next_cursor = paginate(results, offset, page)
     return {
         "count": len(opps),
         "min_profit_pct": min_profit_pct,
         "opportunities": opps,
         "timestamp_utc": time.time(),
+        "next_cursor": next_cursor,
     }
 
 

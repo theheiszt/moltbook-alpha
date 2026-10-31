@@ -175,6 +175,8 @@ export interface SubscribeWebhookInput {
 export interface IntelSignalsResponse {
   count: number;
   signals: Record<string, unknown>[];
+  /** Pass back as `cursor` to fetch the next page; null on the last page. */
+  next_cursor?: string | null;
   [key: string]: unknown;
 }
 
@@ -183,6 +185,8 @@ export interface IntelOpportunitiesResponse {
   min_profit_pct: number;
   opportunities: Record<string, unknown>[];
   timestamp_utc: number | string;
+  /** Pass back as `cursor` to fetch the next page; null on the last page. */
+  next_cursor?: string | null;
   [key: string]: unknown;
 }
 

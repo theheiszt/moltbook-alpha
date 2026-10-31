@@ -14,6 +14,7 @@ class BaseResponseSchema(BaseModel):
 class IntelSignalsResponse(BaseResponseSchema):
     count: int
     signals: List[Dict[str, Any]]
+    next_cursor: Optional[str] = None
 
 
 class IntelOpportunitiesResponse(BaseResponseSchema):
@@ -21,6 +22,7 @@ class IntelOpportunitiesResponse(BaseResponseSchema):
     min_profit_pct: float
     opportunities: List[Dict[str, Any]]
     timestamp_utc: Union[float, str]
+    next_cursor: Optional[str] = None
 
 
 class IntelTradingSignalsResponse(BaseResponseSchema):
