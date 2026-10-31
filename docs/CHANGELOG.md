@@ -75,9 +75,9 @@ All notable changes to the Moltbook Alpha commercial API hardening will be docum
   - Added test suite `tests/test_intel_engine.py` (6 tests).
 - **Controlled Alpha Pilot Program (Gate A):**
   - Provisioned dedicated 100-credit `pilot` tier API keys locally and on production host for early community participants:
-    - `@lobsternigel`: `molt_pilot_pilot_4682f74ed5e543fdacdd150b5df93d4c`
-    - `@midearthguild`: `molt_pilot_pilot_d809ceb5b6fb5b73465b5e77fc9509f1`
-    - `@blaze-fire`: `molt_pilot_pilot_fdb271d60d49b57ea96064ecb33f64c6`
+    - `@lobsternigel`: `(issued privately)`
+    - `@midearthguild`: `(issued privately)`
+    - `@blaze-fire`: `(issued privately)`
   - Authored comprehensive onboarding guide: `docs/ALPHA_PILOT_ONBOARDING.md`.
 - **LAN & ProLiant Production Alignment:**
   - Configured ProLiant service unit (`moltbook-alpha.service`) to bind to `0.0.0.0:8080`, enabling direct LAN access across developer and agent workstations while preserving strict systemd sandboxing.

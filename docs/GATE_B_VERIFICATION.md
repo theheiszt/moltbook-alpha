@@ -155,7 +155,7 @@ The official Python client SDK was run against the public Cloudflare HTTPS endpo
 ```bash
 python examples/agent_autonomous_workflow.py \
   --server https://movement-enlarge-sites-dock.trycloudflare.com \
-  --key molt_pilot_pilot_4682f74ed5e543fdacdd150b5df93d4c
+  --key molt_your_key_here
 ```
 
 **Output:**
