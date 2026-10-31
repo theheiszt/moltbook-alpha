@@ -355,12 +355,11 @@ async def timeout_and_rate_limit_middleware(request: Request, call_next):
     try:
         response = await asyncio.wait_for(call_next(request), timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
-        slot_id = getattr(request.state, "concurrency_slot_id", None)
-        rate_key = getattr(request.state, "concurrency_rate_key", None)
-        if slot_id and rate_key:
-            concurrency_limiter.release(slot_id, rate_key)
-            request.state.concurrency_slot_id = None
-
+        # The sync handler keeps running in its worker thread after this point. Flag the
+        # request so a late MeteredCall.settle() never charges for a 504 the client received.
+        # The concurrency slot is deliberately NOT released here: MeteredCall.__exit__ frees it
+        # when the handler thread actually finishes, so a slow key cannot exceed its slot cap.
+        request.state.timed_out = True
         res_id = getattr(request.state, "quota_reservation_id", None)
         if res_id:
             storage.release_quota(res_id, reason="request_timeout_504")

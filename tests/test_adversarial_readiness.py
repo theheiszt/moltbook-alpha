@@ -366,10 +366,12 @@ def test_adversarial_idempotency_cross_user_isolation():
 
 def test_adversarial_timeout_and_504_slot_and_quota_recovery():
     """
-    Verifies that on 504 Request Timeout:
+    Verifies that on 504 Request Timeout (handler never runs, wait_for patched to raise):
     1. Middleware returns HTTP 504 with REQUEST_TIMEOUT.
-    2. Reserved quota credit is restored immediately.
-    3. Concurrency slot is released immediately.
+    2. Reserved quota credit is restored.
+    3. No concurrency slot is left behind.
+    The real "handler outlives the timeout" path is covered by
+    test_timeout_holds_concurrency_slot_until_handler_thread_finishes.
     """
     client = TestClient(app, raise_server_exceptions=False)
     raw_key, key_info = storage.create_api_key(tier="tier_starter", credits=10, prefix_tag="molt_timeout_test")
@@ -399,6 +401,73 @@ def test_adversarial_timeout_and_504_slot_and_quota_recovery():
     # Ledger remains balanced
     v = storage.verify_ledger_balance(k_hash)
     assert v["balanced"] is True
+
+
+def test_timeout_holds_concurrency_slot_until_handler_thread_finishes():
+    """
+    A sync metered handler that outlives DEFAULT_REQUEST_TIMEOUT_SECONDS:
+    1. Client receives 504 REQUEST_TIMEOUT.
+    2. The concurrency slot stays held while the worker thread is still running
+       (so a slow key cannot exceed its concurrency cap), then drops to 0 when it exits.
+    3. The late settle() never charges: the credit is refunded and the ledger balances.
+    """
+    import time
+
+    from fastapi import Request
+
+    from app_state import MeteredCall
+
+    timed_out_seen = threading.Event()
+    proceed = threading.Event()
+    path = "/__test__/slow-metered"
+
+    def slow_metered(request: Request):
+        with MeteredCall(request, path, ip_bucket="test_slow_metered") as call:
+            deadline = time.monotonic() + 5
+            while not getattr(request.state, "timed_out", False) and time.monotonic() < deadline:
+                time.sleep(0.01)
+            timed_out_seen.set()
+            proceed.wait(timeout=5)
+            return call.settle({"ok": True})
+
+    app.add_api_route(path, slow_metered, methods=["GET"])
+    added_route = app.router.routes[-1]
+
+    raw_key, key_info = storage.create_api_key(tier="tier_starter", credits=10, prefix_tag="molt_slow_timeout")
+    k_hash = key_info["key_hash"]
+    rate_key = f"key:{k_hash}"
+    result = {}
+
+    def do_request():
+        client = TestClient(app, raise_server_exceptions=False)
+        result["resp"] = client.get(path, headers={"X-API-KEY": raw_key})
+
+    try:
+        with patch("api_server.DEFAULT_REQUEST_TIMEOUT_SECONDS", 0.3):
+            t = threading.Thread(target=do_request)
+            t.start()
+            assert timed_out_seen.wait(timeout=5), "middleware never flagged the request as timed out"
+
+            # Timed out, but the worker thread is still running: the slot must still be held.
+            # (Credit is checked after the thread exits — the middleware's refund and the
+            # handler seeing the flag race by one statement, and both paths refund.)
+            assert concurrency_limiter.get_in_flight(rate_key) == 1
+
+            proceed.set()
+            t.join(timeout=10)
+            assert not t.is_alive()
+    finally:
+        proceed.set()
+        app.router.routes.remove(added_route)
+
+    resp = result["resp"]
+    assert resp.status_code == 504
+    assert resp.json()["code"] == "REQUEST_TIMEOUT"
+
+    # Handler thread has exited: slot freed, late settle() did not deduct.
+    assert concurrency_limiter.get_in_flight(rate_key) == 0
+    assert storage.get_key_quota_details(raw_key)["credits_remaining"] == 10
+    assert storage.verify_ledger_balance(k_hash)["balanced"] is True
 
 
 def test_deterministic_stress_loop_agent_quota_and_burst_exhaustion():

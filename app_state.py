@@ -399,6 +399,14 @@ class MeteredCall:
     def settle(self, payload: Any) -> Any:
         """Commits the reserved credit, caching the payload for idempotent replay, and returns it."""
         reservation_id = self.reservation.get("reservation_id")
+        if getattr(self.request.state, "timed_out", False):
+            # The middleware already answered 504; never charge for it. release_quota is a
+            # guarded no-op if the middleware already released this reservation.
+            if reservation_id and not self._settled:
+                storage.release_quota(reservation_id, reason="request_timeout_504")
+                self.request.state.quota_reservation_id = None
+            self._settled = True
+            return payload
         if reservation_id and not self._settled:
             storage.settle_quota(reservation_id, response_payload=jsonable_encoder(payload))
             self.request.state.quota_reservation_id = None
