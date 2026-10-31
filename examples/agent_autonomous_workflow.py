@@ -5,6 +5,7 @@ Demonstrates client-side DAG parameter planning, intelligence consumption,
 and offline cryptographic state witness verification using the Moltbook Alpha SDK.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -14,7 +15,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "sdk"))
 from moltbook_intel import MoltbookApiError, MoltbookIntelClient  # noqa: E402
 
 
-def run_agent_workflow(api_base: str = "http://127.0.0.1:8080", api_key: str = "molt_pilot_pilot_4682f74ed5e543fdacdd150b5df93d4c"):
+def run_agent_workflow(api_base: str = "http://127.0.0.1:8080", api_key: str = os.environ.get("MOLT_API_KEY", "molt_your_key_here")):
     print("======================================================================")
     print("      MOLTBOOK ALPHA AUTONOMOUS AGENT SDK INTEGRATION WORKFLOW        ")
     print("======================================================================")
@@ -93,7 +94,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Moltbook Alpha SDK Autonomous Agent Demo")
     parser.add_argument("--server", default="http://127.0.0.1:8080", help="API server base URL")
-    parser.add_argument("--key", default="molt_pilot_pilot_4682f74ed5e543fdacdd150b5df93d4c", help="Pilot API Key")
+    parser.add_argument("--key", default=os.environ.get("MOLT_API_KEY", "molt_your_key_here"), help="Pilot API Key")
     args = parser.parse_args()
 
     run_agent_workflow(api_base=args.server, api_key=args.key)

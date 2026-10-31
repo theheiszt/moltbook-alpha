@@ -38,7 +38,7 @@ from moltbook_intel import MoltbookIntelClient, MoltbookApiError
 # Initialize client
 client = MoltbookIntelClient(
     base_url="http://10.0.0.190:8080",
-    api_key="molt_pilot_pilot_4682f74ed5e543fdacdd150b5df93d4c"
+    api_key="molt_your_key_here"
 )
 
 # 1. Health & diagnostics

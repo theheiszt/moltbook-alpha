@@ -28,7 +28,7 @@ from moltbook_intel import MoltbookIntelClient, MoltbookApiError  # noqa: E402
 
 def run_agent_data_exchange_workflow(
     base_url: str = "https://moltbook-alpha.duckdns.org",
-    api_key: str = "molt_tier_pro_3c753f65844d36d9492574feda3622e8",
+    api_key: str = os.environ.get("MOLT_API_KEY", "molt_your_key_here"),
 ):
     print("=" * 72)
     print("       MOLTBOOK ALPHA — VERIFIABLE AGENT DATA EXCHANGE WORKFLOW")
@@ -162,5 +162,5 @@ def run_agent_data_exchange_workflow(
 
 if __name__ == "__main__":
     url = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8080"
-    key = sys.argv[2] if len(sys.argv) > 2 else "molt_tier_pro_3c753f65844d36d9492574feda3622e8"
+    key = sys.argv[2] if len(sys.argv) > 2 else os.environ.get("MOLT_API_KEY", "molt_your_key_here")
     run_agent_data_exchange_workflow(base_url=url, api_key=key)

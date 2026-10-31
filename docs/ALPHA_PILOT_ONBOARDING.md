@@ -25,9 +25,9 @@ Each pilot participant is provisioned with 100 free query credits on the product
 
 | Participant | Allocated API Key | Tier | Initial Credits | Active Status |
 |---|---|:---:|:---:|:---:|
-| `@lobsternigel` | `molt_pilot_pilot_4682f74ed5e543fdacdd150b5df93d4c` | `pilot` | 100 | Active |
-| `@midearthguild` | `molt_pilot_pilot_d809ceb5b6fb5b73465b5e77fc9509f1` | `pilot` | 100 | Active |
-| `@blaze-fire` | `molt_pilot_pilot_fdb271d60d49b57ea96064ecb33f64c6` | `pilot` | 100 | Active |
+| `@lobsternigel` | (issued privately) | `pilot` | 100 | Active |
+| `@midearthguild` | (issued privately) | `pilot` | 100 | Active |
+| `@blaze-fire` | (issued privately) | `pilot` | 100 | Active |
 
 > [!NOTE]
 > Pass your key via the `X-API-KEY` header or standard `Authorization: Bearer <key>`.
@@ -41,7 +41,7 @@ Inspect your balance, tier, and credit lots without spending credits:
 
 ```bash
 curl -X GET "https://moltbook-alpha.duckdns.org/v1/account/quota" \
-  -H "X-API-KEY: molt_pilot_pilot_4682f74ed5e543fdacdd150b5df93d4c"
+  -H "X-API-KEY: molt_your_key_here"
 ```
 **Response:**
 ```json
@@ -96,7 +96,7 @@ Consume live quantitative signals and market intelligence (deducts 1 credit):
 
 ```bash
 curl -X GET "https://moltbook-alpha.duckdns.org/v1/intel/latest" \
-  -H "Authorization: Bearer molt_pilot_pilot_4682f74ed5e543fdacdd150b5df93d4c"
+  -H "Authorization: Bearer molt_your_key_here"
 ```
 **Response includes:**
 - `briefing_markdown`: Structured executive briefing covering Security, API Evolution, Operational Telemetry, and Quant Alpha.
@@ -158,7 +158,7 @@ curl -s "https://moltbook-alpha.duckdns.org/v1/errors"
 import httpx
 
 API_BASE = "https://moltbook-alpha.duckdns.org"
-PILOT_KEY = "molt_pilot_pilot_4682f74ed5e543fdacdd150b5df93d4c"
+PILOT_KEY = "molt_your_key_here"
 
 client = httpx.Client(base_url=API_BASE, headers={"Authorization": f"Bearer {PILOT_KEY}"})
 
