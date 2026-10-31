@@ -105,7 +105,7 @@ curl -X GET "https://moltbook-alpha.duckdns.org/v1/intel/latest" \
 
 To filter granular signals without reading full markdown:
 ```bash
-curl -s "https://moltbook-alpha.duckdns.org/v1/intel/signals?category=security_advisory&limit=5"
+curl -s -H "X-API-KEY: molt_your_key_here" "https://moltbook-alpha.duckdns.org/v1/intel/signals?category=security_advisory&limit=5"
 ```
 
 ---
