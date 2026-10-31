@@ -131,6 +131,7 @@ from storage import StorageError, StorageManager
 
 __all__ = [
     "app",
+    "EDGE_CACHEABLE_PATHS",
     "storage",
     "rate_limiter",
     "token_bucket_limiter",
@@ -260,6 +261,19 @@ if _assets_dir.is_dir():
     app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="assets")
 
 
+EDGE_CACHEABLE_PATHS = [
+    "/v1/health",
+    "/v1/quickstart",
+    "/v1/capabilities",
+    "/v1/intel/sample",
+    "/v1/intel/observatory/status",
+    "/v1/sample",
+    "/.well-known/agent-card.json",
+    "/v1/payments/config",
+    "/v1/errors",
+]
+
+
 @app.middleware("http")
 async def request_tracing_middleware(request: Request, call_next):
     req_id = request.headers.get("x-request-id")
@@ -302,17 +316,7 @@ async def request_tracing_middleware(request: Request, call_next):
     # Edge caching headers for unmetered static/discovery endpoints
     if request.method == "GET" and response.status_code == 200:
         path = request.url.path
-        if path in [
-            "/v1/health",
-            "/v1/quickstart",
-            "/v1/capabilities",
-            "/v1/intel/sample",
-            "/v1/intel/observatory/status",
-            "/v1/sample",
-            "/.well-known/agent-card.json",
-            "/v1/payments/config",
-            "/v1/errors",
-        ] or (path.startswith("/v1/tools/") and path.endswith("/parameter-graph")):
+        if path in EDGE_CACHEABLE_PATHS or (path.startswith("/v1/tools/") and path.endswith("/parameter-graph")):
             response.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=60"
             response.headers["Vary"] = "Accept-Encoding"
 
@@ -327,114 +331,8 @@ async def metrics_middleware(request: Request, call_next):
         status_code = response.status_code
         return response
     finally:
-        endpoint = request.url.path
-        if endpoint.startswith("/v1/payments/status/"):
-            norm_endpoint = "/v1/payments/status/:signature"
-        elif endpoint.startswith("/v1/payments/invoice/") and endpoint.endswith("/claim"):
-            norm_endpoint = "/v1/payments/invoice/:id/claim"
-        elif endpoint.startswith("/v1/payments/invoice/"):
-            norm_endpoint = "/v1/payments/invoice/:id"
-        elif endpoint.startswith("/v1/payments/refund/"):
-            norm_endpoint = "/v1/payments/refund/:unmatched_id"
-        elif endpoint.startswith("/v1/errors/"):
-            norm_endpoint = "/v1/errors/:code"
-        elif endpoint.startswith("/v1/tools/") and endpoint.endswith("/parameter-graph"):
-            norm_endpoint = "/v1/tools/:tool/parameter-graph"
-        elif endpoint.startswith("/v1/challenges/") and endpoint != "/v1/challenges/verify":
-            norm_endpoint = "/v1/challenges/:id"
-        elif endpoint.startswith("/v1/witnesses/") and endpoint not in {"/v1/witnesses/public-keys", "/v1/witnesses/verify"}:
-            norm_endpoint = "/v1/witnesses/:id"
-        elif endpoint.startswith("/v1/data-products/") and endpoint.endswith("/latest"):
-            norm_endpoint = "/v1/data-products/:product_id/latest"
-        elif endpoint.startswith("/v1/data-products/") and endpoint.endswith("/sample"):
-            norm_endpoint = "/v1/data-products/:product_id/sample"
-        elif endpoint.startswith("/v1/data-products/") and endpoint != "/v1/data-products":
-            norm_endpoint = "/v1/data-products/:product_id"
-        elif endpoint.startswith("/v1/intel/microstructure/") and endpoint != "/v1/intel/microstructure":
-            norm_endpoint = "/v1/intel/microstructure/:pool_id"
-        elif endpoint.startswith("/v1/webhooks/test/"):
-            norm_endpoint = "/v1/webhooks/test/:subscription_id"
-        elif endpoint.startswith("/v1/webhooks/") and endpoint != "/v1/webhooks":
-            norm_endpoint = "/v1/webhooks/:subscription_id"
-        elif endpoint.startswith("/assets/"):
-            norm_endpoint = "/assets/:path"
-        elif endpoint.startswith("/v1/nfts/assets/"):
-            norm_endpoint = "/v1/nfts/assets/:filename"
-        elif endpoint.startswith("/v1/nfts/metadata/"):
-            norm_endpoint = "/v1/nfts/metadata/:nft_id"
-        elif endpoint.startswith("/v1/jobs/") and endpoint.endswith("/submit"):
-            norm_endpoint = "/v1/jobs/:job_id/submit"
-        elif endpoint.startswith("/v1/jobs/") and endpoint not in {"/v1/jobs/board", "/v1/jobs/post"}:
-            norm_endpoint = "/v1/jobs/:job_id"
-        elif endpoint in {
-            "/dashboard",
-            "/dashboard.html",
-            "/jobs",
-            "/jobs.html",
-            "/nfts",
-            "/nfts.html",
-            "/index.html",
-            "/sample.json",
-            "/v1/metrics/dashboard",
-            "/v1/newsletter/latest",
-            "/v1/quickstart",
-            "/v1/admin/briefing/refresh",
-            "/v1/admin/briefing/ingest-post",
-            "/v1/jobs/verify-witness",
-            "/v1/intel/demand",
-            "/v1/intel/observatory/status",
-            "/v1/intel/observatory/trends",
-            "/v1/quant/first-passage",
-            "/v1/quant/trade-viability",
-            "/v1/nfts/catalog",
-            "/v1/nfts/order",
-            "/v1/nfts/claim",
-            "/v1/jobs/board",
-            "/v1/jobs/post",
-            "/",
-            "/metrics",
-            "/gateway.json",
-            "/v1/gateway/discovery",
-            "/.well-known/agent-card.json",
-            "/v1/health",
-            "/v1/errors",
-            "/v1/challenges",
-            "/v1/challenges/verify",
-            "/v1/tools",
-            "/v1/witnesses/public-keys",
-            "/v1/witnesses/verify",
-            "/v1/intel/sample",
-            "/v1/intel/latest",
-            "/v1/intel/signals",
-            "/v1/intel/signals/trading",
-            "/v1/intel/opportunities",
-            "/v1/intel/refresh",
-            "/v1/intel/microstructure",
-            "/v1/metrics/funnel",
-            "/v1/admin/login",
-            "/v1/admin/change-password",
-            "/v1/admin/logout",
-            "/v1/admin/session",
-            "/v1/admin/safemode",
-            "/v1/webhooks",
-            "/v1/webhooks/subscribe",
-            "/v1/payments/config",
-            "/v1/payments/invoice",
-            "/v1/payments/verify-solana",
-            "/v1/payments/verify-nano",
-            "/v1/payments/reconcile",
-            "/v1/payments/unmatched",
-            "/v1/payments/webhook",
-            "/v1/keys/generate-demo",
-            "/v1/briefing/latest",
-            "/v1/account/quota",
-            "/v1/account/usage",
-            "/v1/capabilities",
-            "/v1/data-products",
-        }:
-            norm_endpoint = endpoint
-        else:
-            norm_endpoint = "unmatched_route"
+        route = request.scope.get("route")
+        norm_endpoint = getattr(route, "path", None) or "unmatched_route"
         record_request(norm_endpoint, request.method, status_code)
 
 

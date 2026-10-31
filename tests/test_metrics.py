@@ -107,6 +107,12 @@ def test_metrics_middleware_tracks_requests():
     assert resp1.status_code == 200
     resp2 = client.get("/v1/payments/config")
     assert resp2.status_code == 200
+    # Parameterized route template
+    resp3 = client.get("/v1/intel/microstructure/Raydium_SOL_USDC")
+    assert resp3.status_code in (200, 401, 402)
+    # Unmatched route (404)
+    resp4 = client.get("/v1/nonexistent_route_404")
+    assert resp4.status_code == 404
 
     metrics_resp = client.get("/metrics")
     assert metrics_resp.status_code == 200
@@ -114,6 +120,8 @@ def test_metrics_middleware_tracks_requests():
 
     assert 'moltbook_api_requests_total{endpoint="/v1/health",method="GET",status_code="200"}' in body
     assert 'moltbook_api_requests_total{endpoint="/v1/payments/config",method="GET",status_code="200"}' in body
+    assert 'moltbook_api_requests_total{endpoint="/v1/intel/microstructure/{pool_id}",method="GET"' in body
+    assert 'moltbook_api_requests_total{endpoint="unmatched_route",method="GET",status_code="404"}' in body
 
 
 def test_convenience_functions_and_rpc_hops():

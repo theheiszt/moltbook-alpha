@@ -14,7 +14,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator, model_validator
 
 from app_state import (
-    confirm_store,
     get_client_ip,
     in_flight_deduplicator,
     nano_adapter,
@@ -23,6 +22,7 @@ from app_state import (
     storage,
     witness_manager,
 )
+from ops.security.confirm_store import confirm_store
 from config import (
     BASE58_PATTERN,
     CANONICAL_USDC_MINT,
