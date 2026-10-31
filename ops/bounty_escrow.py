@@ -9,14 +9,14 @@ Provides non-custodial and custodial Solana escrow lockups for agent bounties:
 """
 
 import sys
-import os
 import json
 import time
 import base64
 import hashlib
+import os
 import urllib.request
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
 
 from solders.pubkey import Pubkey
@@ -179,6 +179,43 @@ class BountyEscrowManager:
             "created_at": now_iso
         }
 
+    def _is_valid_deposit(self, tx_sig: str, escrow: Dict[str, Any]) -> bool:
+        """
+        True only if tx_sig is a successful, confirmed Solana Pay deposit into this escrow:
+        the transaction references the escrow's reference key, the escrow address (treasury)
+        gained at least amount_lamports, and no other escrow already claimed this signature.
+        """
+        with self.storage.connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT 1 FROM agent_bounty_escrows WHERE deposit_tx_sig = ? AND job_id != ?",
+                (tx_sig, escrow["job_id"]),
+            )
+            if cur.fetchone():
+                return False
+
+        res = self.rpc_call("getTransaction", [tx_sig, {
+            "encoding": "jsonParsed", "commitment": "confirmed", "maxSupportedTransactionVersion": 0,
+        }])
+        tx = (res or {}).get("result")
+        if not tx:
+            return False
+        meta = tx.get("meta") or {}
+        if meta.get("err") is not None:
+            return False
+
+        keys = []
+        for k in ((tx.get("transaction") or {}).get("message") or {}).get("accountKeys") or []:
+            keys.append(k.get("pubkey") if isinstance(k, dict) else k)
+        if escrow["reference_pubkey"] not in keys or escrow["escrow_address"] not in keys:
+            return False
+
+        idx = keys.index(escrow["escrow_address"])
+        pre, post = meta.get("preBalances") or [], meta.get("postBalances") or []
+        if idx >= len(pre) or idx >= len(post):
+            return False
+        return int(post[idx]) - int(pre[idx]) >= int(escrow["amount_lamports"])
+
     def verify_and_lock_deposit(self, job_id: str, deposit_tx_sig: Optional[str] = None) -> Dict[str, Any]:
         """
         Verifies deposit into escrow and locks the bounty funds.
@@ -192,27 +229,28 @@ class BountyEscrowManager:
             return escrow
 
         ref_pubkey = escrow["reference_pubkey"]
-        required_lamports = escrow["amount_lamports"]
         confirmed_sig = None
 
-        # 1. If explicit signature given, verify it
-        if deposit_tx_sig:
-            tx_res = self.rpc_call("getTransaction", [deposit_tx_sig, {"encoding": "jsonParsed", "maxSupportedTransactionVersion": 0}])
-            if tx_res and "result" in tx_res and tx_res["result"]:
+        # Simulation signatures are only honoured when explicitly enabled (tests / local dev).
+        if deposit_tx_sig and deposit_tx_sig.startswith("mock_"):
+            if os.getenv("MOLTBOOK_ESCROW_ALLOW_MOCK") == "1":
                 confirmed_sig = deposit_tx_sig
+            else:
+                deposit_tx_sig = None
 
-        # 2. Otherwise search reference_pubkey signatures on-chain
+        # 1. If an explicit signature is given, it must be a real deposit into this escrow
+        if not confirmed_sig and deposit_tx_sig and self._is_valid_deposit(deposit_tx_sig, escrow):
+            confirmed_sig = deposit_tx_sig
+
+        # 2. Otherwise search the escrow's Solana Pay reference key for a qualifying deposit
         if not confirmed_sig:
-            sigs_res = self.rpc_call("getSignaturesForAddress", [ref_pubkey, {"limit": 5}])
+            sigs_res = self.rpc_call("getSignaturesForAddress", [ref_pubkey, {"limit": 10}])
             if sigs_res and "result" in sigs_res and sigs_res["result"]:
                 for s in sigs_res["result"]:
-                    if not s.get("err"):
-                        confirmed_sig = s.get("signature")
+                    sig = s.get("signature")
+                    if sig and not s.get("err") and self._is_valid_deposit(sig, escrow):
+                        confirmed_sig = sig
                         break
-
-        # In testing/simulation fallback: if deposit_tx_sig provided with mock prefix, accept it
-        if not confirmed_sig and deposit_tx_sig and deposit_tx_sig.startswith("mock_"):
-            confirmed_sig = deposit_tx_sig
 
         if not confirmed_sig:
             return {

@@ -3,10 +3,8 @@ Unit tests for On-Chain Escrow Lockup and Moltbook Submolt Syndication
 (ops/bounty_escrow.py, ops/bounty_syndicator.py, and job_board.py integration).
 """
 
-import json
 import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from storage import StorageManager
 from job_board import AgentJobBoardManager, JobPostRequest, JobSubmissionRequest
@@ -20,7 +18,96 @@ def test_storage(tmp_path):
     return StorageManager(db_file)
 
 
-def test_escrow_create_and_lock(test_storage):
+@pytest.fixture
+def allow_mock_escrow(monkeypatch):
+    monkeypatch.setenv("MOLTBOOK_ESCROW_ALLOW_MOCK", "1")
+
+
+def _new_job(test_storage, reward=0.05):
+    mgr = AgentJobBoardManager(storage_manager=test_storage)
+    return mgr.create_job(
+        JobPostRequest(
+            title="Escrow Deposit Verification Task",
+            description="Verify that escrow locks only after a real on-chain deposit is observed.",
+            category="quant_research",
+            reward_amount=reward,
+            reward_asset="SOL",
+            verification_criteria="Detailed markdown proof required.",
+        ),
+        caller_actor="test_poster",
+    )
+
+
+def _deposit_tx(escrow, lamports, include_reference=True, err=None):
+    keys = [{"pubkey": "PayerWa11et1111111111111111111111111111111"}, {"pubkey": escrow["escrow_address"]}]
+    if include_reference:
+        keys.append({"pubkey": escrow["reference_pubkey"]})
+    return {"result": {
+        "meta": {"err": err, "preBalances": [10_000_000_000, 1_000, 0],
+                 "postBalances": [10_000_000_000 - lamports - 5000, 1_000 + lamports, 0]},
+        "transaction": {"message": {"accountKeys": keys}},
+    }}
+
+
+def _fake_rpc(txs):
+    """txs maps signature -> getTransaction response; reference search returns all signatures."""
+    def call(method, params, timeout=12):
+        if method == "getTransaction":
+            return txs.get(params[0], {"result": None})
+        if method == "getSignaturesForAddress":
+            return {"result": [{"signature": s, "err": None} for s in txs]}
+        return None
+    return call
+
+
+def test_mock_signature_rejected_without_opt_in(test_storage, monkeypatch):
+    monkeypatch.delenv("MOLTBOOK_ESCROW_ALLOW_MOCK", raising=False)
+    job = _new_job(test_storage)
+    escrow_mgr = BountyEscrowManager(storage_manager=test_storage)
+    monkeypatch.setattr(escrow_mgr, "rpc_call", _fake_rpc({}))
+    res = escrow_mgr.verify_and_lock_deposit(job["job_id"], deposit_tx_sig="mock_free_money")
+    assert res["success"] is False
+    assert escrow_mgr.get_escrow(job["job_id"])["status"] == "UNFUNDED"
+
+
+def test_real_deposit_locks_escrow(test_storage, monkeypatch):
+    job = _new_job(test_storage)
+    escrow_mgr = BountyEscrowManager(storage_manager=test_storage)
+    escrow = escrow_mgr.get_escrow(job["job_id"])
+    monkeypatch.setattr(escrow_mgr, "rpc_call", _fake_rpc({"sigGood": _deposit_tx(escrow, 50_000_000)}))
+    res = escrow_mgr.verify_and_lock_deposit(job["job_id"], deposit_tx_sig="sigGood")
+    assert res["success"] is True
+    assert res["escrow"]["status"] == "LOCKED" and res["escrow"]["deposit_tx_sig"] == "sigGood"
+
+
+@pytest.mark.parametrize("tx_kwargs", [
+    {"lamports": 49_999_999},                              # underpaid
+    {"lamports": 50_000_000, "include_reference": False},  # not this escrow's deposit
+    {"lamports": 50_000_000, "err": {"InstructionError": [0, "Custom"]}},  # failed tx
+])
+def test_bad_deposit_does_not_lock(test_storage, monkeypatch, tx_kwargs):
+    job = _new_job(test_storage)
+    escrow_mgr = BountyEscrowManager(storage_manager=test_storage)
+    escrow = escrow_mgr.get_escrow(job["job_id"])
+    monkeypatch.setattr(escrow_mgr, "rpc_call", _fake_rpc({"sigBad": _deposit_tx(escrow, **tx_kwargs)}))
+    res = escrow_mgr.verify_and_lock_deposit(job["job_id"], deposit_tx_sig="sigBad")
+    assert res["success"] is False
+    assert escrow_mgr.get_escrow(job["job_id"])["status"] == "UNFUNDED"
+
+
+def test_deposit_signature_cannot_fund_two_escrows(test_storage, monkeypatch):
+    job_a, job_b = _new_job(test_storage), _new_job(test_storage)
+    escrow_mgr = BountyEscrowManager(storage_manager=test_storage)
+    esc_a, esc_b = escrow_mgr.get_escrow(job_a["job_id"]), escrow_mgr.get_escrow(job_b["job_id"])
+    # One transaction that (somehow) references both escrows and pays enough for each
+    tx = _deposit_tx(esc_a, 50_000_000)
+    tx["result"]["transaction"]["message"]["accountKeys"].append({"pubkey": esc_b["reference_pubkey"]})
+    monkeypatch.setattr(escrow_mgr, "rpc_call", _fake_rpc({"sigShared": tx}))
+    assert escrow_mgr.verify_and_lock_deposit(job_a["job_id"], deposit_tx_sig="sigShared")["success"] is True
+    assert escrow_mgr.verify_and_lock_deposit(job_b["job_id"], deposit_tx_sig="sigShared")["success"] is False
+
+
+def test_escrow_create_and_lock(test_storage, allow_mock_escrow):
     """Verify creating and locking an on-chain bounty escrow."""
     mgr = AgentJobBoardManager(storage_manager=test_storage)
     job = mgr.create_job(
@@ -51,7 +138,7 @@ def test_escrow_create_and_lock(test_storage):
     assert lock_res["escrow"]["deposit_tx_sig"] == "mock_dep_tx_123456"
 
 
-def test_escrow_release_on_verified_witness(test_storage):
+def test_escrow_release_on_verified_witness(test_storage, allow_mock_escrow):
     """Verify escrow releases to worker upon verified deliverable with Ed25519 witness."""
     mgr = AgentJobBoardManager(storage_manager=test_storage)
     job = mgr.create_job(
