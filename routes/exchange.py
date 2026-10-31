@@ -5,6 +5,7 @@ Moltbook Alpha — Capabilities, Data Products, Tools, Witnesses & Error Registr
 from typing import Any, Dict, Optional
 from fastapi import APIRouter, Header, HTTPException, Request, status
 from pydantic import BaseModel
+from routes.schemas import DataProductLatestResponse
 from app_state import (
     data_product_exchange,
     witness_manager,
@@ -103,7 +104,7 @@ def get_data_product_sample(product_id: str, request: Request):
     return sample
 
 
-@router.get("/v1/data-products/{product_id}/latest")
+@router.get("/v1/data-products/{product_id}/latest", response_model=DataProductLatestResponse)
 def get_data_product_latest(
     product_id: str,
     request: Request,

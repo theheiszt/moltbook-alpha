@@ -4,6 +4,7 @@ Moltbook Alpha — Account Quota and Usage Routes.
 
 from typing import Optional
 from fastapi import APIRouter, Header, HTTPException, Request, status
+from routes.schemas import AccountQuotaUsageResponse
 from app_state import (
     storage,
     rate_limiter,
@@ -24,7 +25,7 @@ def create_account_router() -> APIRouter:
     return router
 
 
-@router.get("/quota")
+@router.get("/quota", response_model=AccountQuotaUsageResponse)
 def get_account_quota(
     request: Request,
     x_api_key: Optional[str] = Header(None, alias="X-API-KEY"),
@@ -143,7 +144,7 @@ def get_account_quota(
     return res
 
 
-@router.get("/usage")
+@router.get("/usage", response_model=AccountQuotaUsageResponse)
 def get_account_usage(
     request: Request,
     x_api_key: Optional[str] = Header(None, alias="X-API-KEY"),

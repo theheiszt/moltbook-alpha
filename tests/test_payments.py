@@ -482,8 +482,9 @@ def test_signature_mismatch_rejected():
 
 def test_ambiguous_rpc_timeout_followed_by_successful_retry(monkeypatch):
     import secrets
-    from api_server import app, storage
+    from api_server import app, storage, rate_limiter
 
+    rate_limiter.reset()
     client = TestClient(app)
     inv = client.post("/v1/payments/invoice", json={"target_tier": "tier_starter"}).json()
     ref = inv["reference"]

@@ -24,6 +24,16 @@ from app_state import (
     record_rate_limit,
 )
 from config import REPORTS_DIR
+from routes.schemas import (
+    BriefingLatestResponse,
+    IntelMicrostructureOverviewResponse,
+    IntelOpportunitiesResponse,
+    IntelPoolMicrostructureResponse,
+    IntelSignalsResponse,
+    IntelTradingSignalsResponse,
+    QuantFirstPassageResponse,
+    QuantTradeViabilityResponse,
+)
 
 router = APIRouter(tags=["Intelligence & Quant"])
 
@@ -164,7 +174,7 @@ def get_sample_briefing_payload() -> Dict[str, Any]:
     }
 
 
-@router.get("/v1/briefing/latest")
+@router.get("/v1/briefing/latest", response_model=BriefingLatestResponse)
 def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None)):
     with MeteredCall(request, "/v1/briefing/latest", ip_bucket="briefing") as call:
         res_info = call.reservation
@@ -262,7 +272,7 @@ def get_intel_latest(request: Request, x_api_key: Optional[str] = Header(None)):
     return get_latest_briefing(request, x_api_key=x_api_key)
 
 
-@router.get("/v1/intel/signals")
+@router.get("/v1/intel/signals", response_model=IntelSignalsResponse)
 @metered("/v1/intel/signals")
 def get_intel_signals(
     request: Request,
@@ -285,7 +295,7 @@ def get_intel_signals(
     }
 
 
-@router.get("/v1/intel/opportunities")
+@router.get("/v1/intel/opportunities", response_model=IntelOpportunitiesResponse)
 @metered("/v1/intel/opportunities")
 def get_intel_opportunities(
     request: Request,
@@ -315,7 +325,7 @@ def get_intel_opportunities(
     }
 
 
-@router.get("/v1/intel/signals/trading")
+@router.get("/v1/intel/signals/trading", response_model=IntelTradingSignalsResponse)
 @metered("/v1/intel/signals/trading")
 def get_intel_trading_signals(
     request: Request,
@@ -384,7 +394,7 @@ def get_intel_observatory_trends(
     return adapter.get_recent_trends(hours=hours, limit=limit, category=category)
 
 
-@router.get("/v1/quant/first-passage")
+@router.get("/v1/quant/first-passage", response_model=QuantFirstPassageResponse)
 def get_quant_first_passage(
     request: Request,
     pair: str = "BONK/SOL",
@@ -455,7 +465,7 @@ def get_quant_first_passage(
     return profile
 
 
-@router.post("/v1/quant/trade-viability")
+@router.post("/v1/quant/trade-viability", response_model=QuantTradeViabilityResponse)
 @metered("/v1/quant/trade-viability")
 def post_quant_trade_viability(
     payload: QuantTradeViabilityInput,
@@ -528,7 +538,7 @@ def get_latest_daily_newsletter():
     raise HTTPException(status_code=500, detail="Failed to synthesize daily newsletter.")
 
 
-@router.get("/v1/intel/microstructure")
+@router.get("/v1/intel/microstructure", response_model=IntelMicrostructureOverviewResponse)
 @metered("/v1/intel/microstructure")
 def get_intel_microstructure(
     request: Request,
@@ -580,7 +590,7 @@ def get_intel_microstructure(
     }
 
 
-@router.get("/v1/intel/microstructure/{pool_id}")
+@router.get("/v1/intel/microstructure/{pool_id}", response_model=IntelPoolMicrostructureResponse)
 @metered("/v1/intel/microstructure/{pool_id}")
 def get_pool_microstructure(
     pool_id: str,

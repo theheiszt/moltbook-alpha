@@ -166,3 +166,131 @@ export interface SubscribeWebhookInput {
   subscribedEvents?: string[];
   minSeverity?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 }
+
+
+// ----------------------------------------------------------------------------
+// Core and Metered API Response Models
+// ----------------------------------------------------------------------------
+
+export interface IntelSignalsResponse {
+  count: number;
+  signals: Record<string, unknown>[];
+  [key: string]: unknown;
+}
+
+export interface IntelOpportunitiesResponse {
+  count: number;
+  min_profit_pct: number;
+  opportunities: Record<string, unknown>[];
+  timestamp_utc: number | string;
+  [key: string]: unknown;
+}
+
+export interface IntelTradingSignalsResponse {
+  count: number;
+  min_confidence: number | string;
+  trading_signals: Record<string, unknown>[];
+  timestamp_utc: number | string;
+  [key: string]: unknown;
+}
+
+export interface IntelMicrostructureOverviewResponse {
+  status: string;
+  tracked_pool_count: number;
+  active_anomaly_count: number;
+  depth_bps: number;
+  pools: Record<string, unknown>[];
+  recent_anomalies: Record<string, unknown>[];
+  state_witness_id?: string;
+  timestamp_utc: number | string;
+  [key: string]: unknown;
+}
+
+export interface IntelPoolMicrostructureResponse {
+  pool_id: string;
+  protocol: string;
+  pair: string;
+  current_tick?: number;
+  current_price: number;
+  bid_depth_usd: number;
+  ask_depth_usd: number;
+  imbalance_ratio: number;
+  active_bin_count: number;
+  timestamp_utc: number | string;
+  raw_bins: Record<string, unknown>[];
+  anomalies: Record<string, unknown>[];
+  state_witness?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface BriefingLatestResponse {
+  success: boolean;
+  user_tier: string;
+  credits_remaining: number;
+  briefing_markdown: string;
+  trading_signals: Record<string, unknown>[];
+  opportunities: Record<string, unknown>[];
+  state_witness_id?: string;
+  [key: string]: unknown;
+}
+
+export interface DataProductLatestResponse {
+  product_id: string;
+  snapshot_id: string;
+  generated_at: string;
+  retrieval_outcome?: string;
+  freshness_seconds?: number;
+  source_attribution?: Record<string, unknown>;
+  state_witness_id?: string;
+  usage_receipt?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface AccountQuotaUsageResponse {
+  success: boolean;
+  key_prefix: string;
+  tier: string;
+  credits_remaining: number;
+  is_active: boolean;
+  created_at: string;
+  low_credit_warning: boolean;
+  entitlement?: Record<string, unknown>;
+  credit_lots?: Record<string, unknown>[];
+  usage?: Record<string, unknown>;
+  rate_limit_state?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface QuantFirstPassageResponse {
+  pair: string;
+  target_net_pct: number;
+  roundtrip_spread_bps: number;
+  required_gross_move_pct: number;
+  volatility_metrics: Record<string, unknown>;
+  two_barrier_analysis: Record<string, unknown>;
+  horizon_probabilities: Record<string, unknown>[];
+  optimal_target_ladder: Record<string, unknown>[];
+  recommended_target_net_pct: number;
+  state_witness_id?: string;
+  witness_signature?: string;
+  generated_at: string;
+  cache_status?: string;
+  cache_age_seconds?: number;
+  [key: string]: unknown;
+}
+
+export interface QuantTradeViabilityResponse {
+  pair: string;
+  target_net_pct: number;
+  roundtrip_spread_bps: number;
+  required_gross_move_pct: number;
+  volatility_metrics: Record<string, unknown>;
+  two_barrier_analysis: Record<string, unknown>;
+  horizon_probabilities: Record<string, unknown>[];
+  optimal_target_ladder: Record<string, unknown>[];
+  recommended_target_net_pct: number;
+  state_witness_id?: string;
+  witness_signature?: string;
+  generated_at: string;
+  [key: string]: unknown;
+}
