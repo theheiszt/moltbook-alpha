@@ -1,11 +1,20 @@
-import paramiko
+import os
+import shlex
+import sys
 import time
 
-HOST = "10.0.0.190"
-USER = "user"
-PASS = "1234"
+import paramiko
+
+HOST = os.environ.get("MOLTBOOK_DEPLOY_HOST", "10.0.0.190")
+USER = os.environ.get("MOLTBOOK_DEPLOY_USER", "user")
+# SSH/sudo password must come from the environment; never commit it.
+PASS = os.environ.get("MOLTBOOK_DEPLOY_PASSWORD")
+
 
 def main():
+    if not PASS:
+        sys.exit("MOLTBOOK_DEPLOY_PASSWORD is not set; refusing to deploy.")
+
     print(f"Connecting to {HOST}...")
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -45,16 +54,16 @@ def main():
 
     for c in deploy_commands:
         print(f"Executing: {c}")
-        # Note: sudo with user password if needed, or echo 1234 | sudo -S
-        stdin, stdout, stderr = ssh.exec_command(f"echo 1234 | sudo -S {c}")
+        # sudo -S reads the password from stdin; it is never placed on the command line.
+        stdin, stdout, stderr = ssh.exec_command(f"sudo -S -p '' bash -c {shlex.quote(c)}")
+        stdin.write(PASS + "\n")
+        stdin.flush()
         out = stdout.read().decode()
         err = stderr.read().decode()
-        # Filter password prompt from err
-        clean_err = "\n".join([line for line in err.splitlines() if "[sudo] password for" not in line])
         if out.strip():
             print("  STDOUT:", out.strip().encode("ascii", "replace").decode("ascii"))
-        if clean_err.strip():
-            print("  STDERR:", clean_err.strip().encode("ascii", "replace").decode("ascii"))
+        if err.strip():
+            print("  STDERR:", err.strip().encode("ascii", "replace").decode("ascii"))
 
     ssh.close()
     print("Deployment finished.")
