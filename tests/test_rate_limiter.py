@@ -2,6 +2,7 @@
 Tests for SlidingWindowRateLimiter, InFlightDeduplicator, and API Rate Limiting Middleware.
 """
 
+import secrets
 import time
 import threading
 from unittest.mock import patch
@@ -121,7 +122,8 @@ def test_api_verify_solana_rate_limiting_triggers_429():
     rate_limiter.reset()
 
     # Rate limit for verify-solana is 10/min per IP
-    test_sig = "5abcde" * 15  # 90 chars valid base58 length
+    # Unique per run: a fixed signature is redeemed on the first run and 409s on every later one
+    test_sig = "".join(secrets.choice("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz") for _ in range(88))
     inv = client.post("/v1/payments/invoice", json={"target_tier": "tier_starter"}).json()
     payload = {"transaction_signature": test_sig, "invoice_id": inv["invoice_id"]}
 

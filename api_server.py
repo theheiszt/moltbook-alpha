@@ -16,6 +16,7 @@ import threading
 import time
 import hashlib
 import hmac
+import functools
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -161,7 +162,21 @@ async def request_tracing_middleware(request: Request, call_next):
         req_id = f"req_{secrets.token_hex(8)}"
     request.state.request_id = req_id
 
-    # Developer Experience (DX): seamlessly accept API keys via Authorization: Bearer molt_... or ?api_key=molt_...
+    # Keys in URLs leak into access logs, proxies, browser history and Referer headers: reject them outright.
+    if "api_key" in request.query_params or "x_api_key" in request.query_params:
+        content = format_error_payload(
+            code=ErrorCode.VALIDATION_ERROR.value,
+            message=(
+                "API keys are not accepted in the URL query string. Send the key in the X-API-KEY header "
+                "or as Authorization: Bearer molt_... . Rotate the key if this URL may have been logged."
+            ),
+            request_id=req_id,
+            status_code=400,
+            retryable=False,
+        )
+        return JSONResponse(status_code=400, content=content, headers={"X-Request-ID": req_id})
+
+    # Developer Experience (DX): accept API keys via Authorization: Bearer molt_... as well as X-API-KEY
     if not request.headers.get("x-api-key"):
         candidate_key = None
         auth_hdr = request.headers.get("authorization", "")
@@ -169,10 +184,6 @@ async def request_tracing_middleware(request: Request, call_next):
             token_val = auth_hdr[7:].strip()
             if token_val and not token_val.startswith("adm_sess_"):
                 candidate_key = token_val
-        if not candidate_key:
-            q_key = request.query_params.get("api_key") or request.query_params.get("x_api_key")
-            if q_key and q_key.strip():
-                candidate_key = q_key.strip()
         if candidate_key:
             raw_headers = list(request.scope.get("headers", []))
             raw_headers.append((b"x-api-key", candidate_key.encode("utf-8")))
@@ -696,56 +707,234 @@ def get_client_ip(request: Request) -> str:
 
 
 
-def authenticate_and_deduct(api_key: Optional[str], request_id: Optional[str] = None) -> Dict[str, Any]:
+def _payment_required_detail(message: str = "Access requires an active API key or payment.", price: Optional[str] = None) -> Dict[str, Any]:
     cfg = load_payment_config()
-    if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={
-                "error": "Payment Required",
-                "message": "Access requires an active API key or payment.",
-                "price": "Starter: $1 (50 queries), Pro: $5 (300 queries), Premium: $20 (10,000 queries / 30 days).",
-                "purchase_instructions": {
-                    "treasury_wallet": cfg["solana_treasury_wallet"],
-                    "rates": cfg["rates"],
-                    "topup_packages": cfg.get("topup_packages", {}),
-                    "verify_endpoint": "POST /v1/payments/verify-solana",
-                },
-            },
-        )
+    return {
+        "error": "Payment Required",
+        "message": message,
+        "price": price or "Starter: $1 (50 queries), Pro: $5 (300 queries), Premium: $20 (10,000 queries / 30 days).",
+        "purchase_instructions": {
+            "treasury_wallet": cfg["solana_treasury_wallet"],
+            "rates": cfg["rates"],
+            "topup_packages": cfg.get("topup_packages", {}),
+            "verify_endpoint": "POST /v1/payments/verify-solana",
+        },
+    }
 
-    user_info, state = storage.authenticate_and_deduct(api_key, request_id=request_id)
-    if state == "invalid":
+
+def extract_api_key(request: Request) -> Optional[str]:
+    """Returns the caller's key from X-API-KEY or Authorization: Bearer (never from the query string)."""
+    raw_key = (request.headers.get("x-api-key") or "").strip()
+    if not raw_key:
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            raw_key = auth_header[7:].strip()
+    return raw_key or None
+
+
+class IdempotentReplay(Exception):
+    """Raised when a metered request repeats a settled idempotency key; carries the cached response."""
+
+    def __init__(self, payload: Dict[str, Any]):
+        super().__init__("idempotent replay")
+        self.payload = payload
+
+
+class MeteredCall:
+    """
+    Shared paid-access gate for metered endpoints.
+
+    Entering the context authenticates the key, applies per-IP and per-key rate limits,
+    takes a concurrency slot, and reserves 1 credit (two-phase, idempotency-key aware).
+    Call settle(payload) on success. Any exception releases the reservation (zero charge
+    on failure), and the concurrency slot is always freed on exit.
+
+        with MeteredCall(request, "/v1/intel/signals") as call:
+            return call.settle(build_payload())
+    """
+
+    def __init__(
+        self,
+        request: Request,
+        endpoint: str,
+        ip_bucket: Optional[str] = None,
+        payment_required_detail: Optional[Dict[str, Any]] = None,
+    ):
+        self.request = request
+        self.endpoint = endpoint
+        self.ip_bucket = ip_bucket or endpoint
+        self.payment_required_detail = payment_required_detail
+        self.request_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
+        self.reservation: Dict[str, Any] = {}
+        self._slot_id: Optional[str] = None
+        self._rate_key: Optional[str] = None
+        self._settled = False
+
+    def __enter__(self) -> "MeteredCall":
+        request = self.request
+        client_ip = get_client_ip(request)
+
+        # General rate limit: 60 requests per minute per IP
+        allowed, retry_after = rate_limiter.is_allowed(f"{self.ip_bucket}:{client_ip}", limit=60, window_seconds=60)
+        if not allowed:
+            record_rate_limit(self.endpoint)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Too many requests. Please retry in {retry_after} seconds.",
+                headers={"Retry-After": str(retry_after)},
+            )
+
+        raw_key = extract_api_key(request)
+        if not raw_key:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=self.payment_required_detail or _payment_required_detail(),
+            )
+
+        rate_key = f"key:{storage.hash_key(raw_key)}"
+
+        # Token bucket rate limiting (Burst 5, Sustained 60/min)
+        tb_allowed, tb_retry_after, tb_remaining = token_bucket_limiter.is_allowed(
+            rate_key,
+            capacity=DEFAULT_RATE_LIMIT_BURST_CAPACITY,
+            refill_per_min=DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN,
+        )
+        request.state.rate_limit_limit = DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN
+        request.state.rate_limit_remaining = tb_remaining
+        request.state.rate_limit_reset = tb_retry_after
+
+        if not tb_allowed:
+            record_rate_limit(self.endpoint)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Request rate exceeded. Please retry in {tb_retry_after} seconds.",
+                headers={
+                    "Retry-After": str(tb_retry_after),
+                    "X-RateLimit-Limit": str(DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(tb_retry_after),
+                },
+            )
+
+        # Concurrency Limiter (Max 5 concurrent requests)
+        slot_acquired, slot_id, _ = concurrency_limiter.acquire(
+            rate_key,
+            max_concurrent=DEFAULT_RATE_LIMIT_MAX_CONCURRENT,
+        )
+        if not slot_acquired:
+            record_rate_limit(self.endpoint)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Maximum concurrent requests reached (5). Please back off and retry.",
+                headers={"Retry-After": "1"},
+            )
+        self._slot_id, self._rate_key = slot_id, rate_key
+        request.state.concurrency_slot_id = slot_id
+        request.state.concurrency_rate_key = rate_key
+
+        try:
+            self._reserve(raw_key)
+        except BaseException:
+            self._release_slot()
+            raise
+        return self
+
+    def _reserve(self, raw_key: str) -> None:
+        # Two-Phase Quota Reservation with Idempotency Key
+        idempotency_key = self.request.headers.get("idempotency-key") or self.request.headers.get("x-idempotency-key")
+        res_info, state = storage.reserve_quota(raw_key, idempotency_key=idempotency_key, request_id=self.request_id)
+
+        if state == "ok" and res_info and res_info.get("reservation_id"):
+            self.reservation = res_info
+            self.request.state.quota_reservation_id = res_info["reservation_id"]
+            return
+
+        if state == "idempotent_replay":
+            raise IdempotentReplay(res_info.get("cached_response") or {
+                "status": "settled",
+                "reservation_id": res_info.get("reservation_id"),
+                "idempotency_key": res_info.get("idempotency_key"),
+                "message": "Request previously settled under this idempotency key. Cached payload not retained.",
+            })
+        if state == "in_flight":
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="A request with this idempotency key is currently in flight. Please retry shortly.",
+                headers={"Retry-After": "1"},
+            )
+        if state == "revoked":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="API key has been revoked.")
+        if state == "entitlement_expired":
+            detail = _payment_required_detail()
+            detail["error"] = "Entitlement Expired"
+            detail["message"] = "Premium entitlement has expired. Renew your Premium subscription to continue spending credits."
+            del detail["price"]
+            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=detail)
+        if state == "exhausted":
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail="Key credits exhausted. Top up your balance via Solana USDC.",
+            )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid API key. Submit payment to /v1/payments/verify-solana or contact administrator.",
         )
-    if state == "revoked":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="API key has been revoked.",
-        )
-    if state == "entitlement_expired":
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={
-                "error": "Entitlement Expired",
-                "message": "Premium entitlement has expired. Renew your Premium subscription to continue spending credits.",
-                "purchase_instructions": {
-                    "treasury_wallet": cfg["solana_treasury_wallet"],
-                    "rates": cfg["rates"],
-                    "topup_packages": cfg.get("topup_packages", {}),
-                    "verify_endpoint": "POST /v1/payments/verify-solana",
-                },
-            },
-        )
-    if state == "exhausted":
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="Key credits exhausted. Top up your balance via Solana USDC.",
-        )
 
-    return user_info or {}
+    def settle(self, payload: Any) -> Any:
+        """Commits the reserved credit, caching the payload for idempotent replay, and returns it."""
+        reservation_id = self.reservation.get("reservation_id")
+        if reservation_id and not self._settled:
+            storage.settle_quota(reservation_id, response_payload=jsonable_encoder(payload))
+            self.request.state.quota_reservation_id = None
+        self._settled = True
+        return payload
+
+    def _release_slot(self) -> None:
+        if self._slot_id and self._rate_key:
+            concurrency_limiter.release(self._slot_id, self._rate_key)
+        self._slot_id = None
+        self.request.state.concurrency_slot_id = None
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        try:
+            if exc is None:
+                if not self._settled:
+                    self.settle(None)
+                return False
+            reservation_id = self.reservation.get("reservation_id")
+            if reservation_id and not self._settled:
+                reason = "http_exception" if isinstance(exc, (HTTPException, ApiError)) else type(exc).__name__
+                storage.release_quota(reservation_id, reason=reason)
+                self.request.state.quota_reservation_id = None
+        finally:
+            self._release_slot()
+
+        if isinstance(exc, Exception) and not isinstance(exc, (HTTPException, ApiError)):
+            logger.exception("Metered endpoint %s failed [req_id: %s]", self.endpoint, self.request_id)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Internal server error serving {self.endpoint}. Incident recorded with request ID {self.request_id}.",
+            ) from exc
+        return False
+
+
+def metered(endpoint: str):
+    """
+    Route decorator that puts a sync handler behind MeteredCall (1 credit per successful call).
+    The handler must declare a `request: Request` parameter. Place it below the @app route decorator.
+    """
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            with MeteredCall(kwargs["request"], endpoint) as call:
+                return call.settle(fn(*args, **kwargs))
+        return wrapper
+    return decorator
+
+
+@app.exception_handler(IdempotentReplay)
+async def idempotent_replay_handler(request: Request, exc: IdempotentReplay):
+    return JSONResponse(status_code=200, content=jsonable_encoder(exc.payload), headers={"Idempotent-Replayed": "true"})
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -1304,8 +1493,8 @@ def admin_refresh_briefing_endpoint(request: Request):
 def get_agent_quickstart(request: Request):
     """
     [UNMETERED - 0 CREDITS] One-call Developer & Autonomous Agent Quickstart Guide.
-    Returns active gateway endpoints, 0-credit discovery routes, flexible authentication
-    options (X-API-KEY, Authorization: Bearer, or ?api_key=), and copy-pasteable commands.
+    Returns active gateway endpoints, 0-credit discovery routes, authentication
+    options (X-API-KEY or Authorization: Bearer), and copy-pasteable commands.
     """
     gw_url = "https://moltbook-alpha.duckdns.org"
     gw_file = PROJECT_ROOT / "gateway.json"
@@ -1322,10 +1511,9 @@ def get_agent_quickstart(request: Request):
         "active_gateway_url": gw_url,
         "portal_url": "https://theheiszt.github.io/moltbook-alpha/",
         "authentication_methods": {
-            "description": "Every metered endpoint accepts your `molt_...` key via any of these 3 methods:",
+            "description": "Every metered endpoint accepts your `molt_...` key via either header. Keys in the URL query string are rejected (400).",
             "header_x_api_key": "X-API-KEY: molt_your_key_here",
             "header_bearer": "Authorization: Bearer molt_your_key_here",
-            "query_param": "?api_key=molt_your_key_here",
         },
         "free_unmetered_endpoints_0_credits": [
             {"method": "GET", "path": "/v1/quickstart", "purpose": "Interactive quickstart & onboarding guide"},
@@ -3512,150 +3700,19 @@ def get_data_product_latest(
             detail=f"Data product '{product_id}' not found in exchange catalog.",
         )
 
-    client_ip = get_client_ip(request)
-
-    # General rate limit: 60 requests per minute per IP
-    allowed, retry_after = rate_limiter.is_allowed(f"data_product:{client_ip}", limit=60, window_seconds=60)
-    if not allowed:
-        record_rate_limit(f"/v1/data-products/{product_id}/latest")
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Too many requests. Please retry in {retry_after} seconds.",
-            headers={"Retry-After": str(retry_after)},
-        )
-
-    raw_key = x_api_key
-    if not raw_key:
-        auth_header = request.headers.get("authorization", "")
-        if auth_header.lower().startswith("bearer "):
-            raw_key = auth_header[7:].strip()
-
-    if not raw_key:
-        cfg = load_payment_config()
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={
-                "error": "Payment Required",
-                "message": f"Accessing data product '{product_id}' requires an active API key or payment.",
-                "price": f"{contract.cost_credits} credit per successful snapshot retrieval.",
-                "purchase_instructions": {
-                    "treasury_wallet": cfg["solana_treasury_wallet"],
-                    "rates": cfg["rates"],
-                    "verify_endpoint": "POST /v1/payments/verify-solana",
-                },
-            },
-        )
-
-    req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
-    k_hash = storage.hash_key(raw_key)
-    rate_key = f"key:{k_hash}"
-
-    # Token bucket rate limiting (Burst 5, Sustained 60/min)
-    tb_allowed, tb_retry_after, tb_remaining = token_bucket_limiter.is_allowed(
-        rate_key,
-        capacity=DEFAULT_RATE_LIMIT_BURST_CAPACITY,
-        refill_per_min=DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN,
+    payment_detail = _payment_required_detail(
+        message=f"Accessing data product '{product_id}' requires an active API key or payment.",
+        price=f"{contract.cost_credits} credit per successful snapshot retrieval.",
     )
-    request.state.rate_limit_limit = DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN
-    request.state.rate_limit_remaining = tb_remaining
-    request.state.rate_limit_reset = tb_retry_after
-
-    if not tb_allowed:
-        record_rate_limit(f"/v1/data-products/{product_id}/latest")
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Request rate exceeded. Please retry in {tb_retry_after} seconds.",
-            headers={
-                "Retry-After": str(tb_retry_after),
-                "X-RateLimit-Limit": str(DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN),
-                "X-RateLimit-Remaining": "0",
-                "X-RateLimit-Reset": str(tb_retry_after),
-            },
-        )
-
-    # Concurrency Limiter (Max 5 concurrent requests)
-    slot_acquired, slot_id, _ = concurrency_limiter.acquire(
-        rate_key,
-        max_concurrent=DEFAULT_RATE_LIMIT_MAX_CONCURRENT,
-    )
-    if not slot_acquired:
-        record_rate_limit(f"/v1/data-products/{product_id}/latest")
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Maximum concurrent requests reached (5). Please back off and retry.",
-            headers={"Retry-After": "1"},
-        )
-    request.state.concurrency_slot_id = slot_id
-    request.state.concurrency_rate_key = rate_key
-
-    # Two-Phase Quota Reservation with Idempotency Key
-    idempotency_key = request.headers.get("idempotency-key") or request.headers.get("x-idempotency-key")
-    res_info, state = storage.reserve_quota(raw_key, idempotency_key=idempotency_key, request_id=req_id)
-    if res_info and res_info.get("reservation_id") and state == "ok":
-        request.state.quota_reservation_id = res_info["reservation_id"]
-
-    if state == "idempotent_replay":
-        concurrency_limiter.release(slot_id, rate_key)
-        request.state.concurrency_slot_id = None
-        if res_info.get("cached_response"):
-            return res_info["cached_response"]
-        return {
-            "status": "settled",
-            "reservation_id": res_info.get("reservation_id"),
-            "idempotency_key": res_info.get("idempotency_key"),
-            "message": "Request previously settled under this idempotency key. Cached payload not retained.",
-        }
-
-    if state == "in_flight":
-        concurrency_limiter.release(slot_id, rate_key)
-        request.state.concurrency_slot_id = None
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="A request with this idempotency key is currently in flight. Please retry shortly.",
-            headers={"Retry-After": "1"},
-        )
-
-    if state == "invalid":
-        concurrency_limiter.release(slot_id, rate_key)
-        request.state.concurrency_slot_id = None
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid API key. Submit payment to /v1/payments/verify-solana or contact administrator.",
-        )
-    if state == "revoked":
-        concurrency_limiter.release(slot_id, rate_key)
-        request.state.concurrency_slot_id = None
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="API key has been revoked.",
-        )
-    if state == "entitlement_expired":
-        concurrency_limiter.release(slot_id, rate_key)
-        request.state.concurrency_slot_id = None
-        cfg = load_payment_config()
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={
-                "error": "Entitlement Expired",
-                "message": "Premium entitlement has expired. Renew your Premium subscription to continue spending credits.",
-                "purchase_instructions": {
-                    "treasury_wallet": cfg["solana_treasury_wallet"],
-                    "rates": cfg["rates"],
-                    "verify_endpoint": "POST /v1/payments/verify-solana",
-                },
-            },
-        )
-    if state == "exhausted":
-        concurrency_limiter.release(slot_id, rate_key)
-        request.state.concurrency_slot_id = None
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="Key credits exhausted. Top up your balance via Solana USDC.",
-        )
-
-    try:
+    with MeteredCall(
+        request,
+        f"/v1/data-products/{product_id}/latest",
+        ip_bucket="data_product",
+        payment_required_detail=payment_detail,
+    ) as call:
+        res_info = call.reservation
         receipt = {
-            "request_id": req_id,
+            "request_id": call.request_id,
             "product_id": product_id,
             "credits_deducted": contract.cost_credits,
             "entitlement_tier": res_info.get("tier"),
@@ -3689,177 +3746,14 @@ def get_data_product_latest(
             params=params,
             receipt=receipt,
         )
-
-        # Settle quota upon successful response construction
-        if res_info and res_info.get("reservation_id") and state == "ok":
-            storage.settle_quota(res_info["reservation_id"], response_payload=snapshot)
-            request.state.quota_reservation_id = None
-
-        return snapshot
-
-    except HTTPException:
-        if res_info and res_info.get("reservation_id") and state == "ok":
-            storage.release_quota(res_info["reservation_id"], reason="http_exception")
-            request.state.quota_reservation_id = None
-        raise
-    except Exception as e:
-        if res_info and res_info.get("reservation_id") and state == "ok":
-            storage.release_quota(res_info["reservation_id"], reason=f"snapshot_error: {e}")
-            request.state.quota_reservation_id = None
-        raise HTTPException(status_code=500, detail=f"Internal server error generating snapshot for '{product_id}': {e}") from e
-    finally:
-        concurrency_limiter.release(slot_id, rate_key)
-        request.state.concurrency_slot_id = None
+        return call.settle(snapshot)
 
 
 @app.get("/v1/briefing/latest")
 def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None)):
-    client_ip = get_client_ip(request)
-
-    # General rate limit: 60 requests per minute per IP
-    allowed, retry_after = rate_limiter.is_allowed(f"briefing:{client_ip}", limit=60, window_seconds=60)
-    if not allowed:
-        record_rate_limit("/v1/briefing/latest")
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Too many requests. Please retry in {retry_after} seconds.",
-            headers={"Retry-After": str(retry_after)},
-        )
-
-    raw_key = x_api_key
-    if not raw_key:
-        auth_header = request.headers.get("authorization", "")
-        if auth_header.lower().startswith("bearer "):
-            raw_key = auth_header[7:].strip()
-
-    if not raw_key:
-        cfg = load_payment_config()
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={
-                "error": "Payment Required",
-                "message": "Access requires an active API key or payment.",
-                "price": "Starter: $1 (50 queries), Pro: $5 (300 queries), Premium: $20 (10,000 queries / 30 days).",
-                "purchase_instructions": {
-                    "treasury_wallet": cfg["solana_treasury_wallet"],
-                    "rates": cfg["rates"],
-                    "topup_packages": cfg.get("topup_packages", {}),
-                    "verify_endpoint": "POST /v1/payments/verify-solana",
-                },
-            },
-        )
-
-    req_id = getattr(request.state, "request_id", None) or f"req_{secrets.token_hex(8)}"
-    k_hash = storage.hash_key(raw_key)
-    rate_key = f"key:{k_hash}"
-
-    # Token Bucket Rate Limiting (Burst 5, Sustained 60/min)
-    tb_allowed, tb_retry_after, tb_remaining = token_bucket_limiter.is_allowed(
-        rate_key,
-        capacity=DEFAULT_RATE_LIMIT_BURST_CAPACITY,
-        refill_per_min=DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN,
-    )
-    request.state.rate_limit_limit = DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN
-    request.state.rate_limit_remaining = tb_remaining
-    request.state.rate_limit_reset = tb_retry_after
-
-    if not tb_allowed:
-        record_rate_limit("/v1/briefing/latest")
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Request rate exceeded. Please retry in {tb_retry_after} seconds.",
-            headers={
-                "Retry-After": str(tb_retry_after),
-                "X-RateLimit-Limit": str(DEFAULT_RATE_LIMIT_SUSTAINED_PER_MIN),
-                "X-RateLimit-Remaining": "0",
-                "X-RateLimit-Reset": str(tb_retry_after),
-            },
-        )
-
-    # Concurrency Limiter (Max 5 concurrent requests)
-    slot_acquired, slot_id, _ = concurrency_limiter.acquire(
-        rate_key,
-        max_concurrent=DEFAULT_RATE_LIMIT_MAX_CONCURRENT,
-    )
-    if not slot_acquired:
-        record_rate_limit("/v1/briefing/latest")
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Maximum concurrent requests reached (5). Please back off and retry.",
-            headers={"Retry-After": "1"},
-        )
-    request.state.concurrency_slot_id = slot_id
-    request.state.concurrency_rate_key = rate_key
-
-    # Two-Phase Quota Reservation with Idempotency Key
-    idempotency_key = request.headers.get("idempotency-key") or request.headers.get("x-idempotency-key")
-    res_info, state = storage.reserve_quota(raw_key, idempotency_key=idempotency_key, request_id=req_id)
-    if res_info and res_info.get("reservation_id") and state == "ok":
-        request.state.quota_reservation_id = res_info["reservation_id"]
-
-    if state == "idempotent_replay":
-        concurrency_limiter.release(slot_id, rate_key)
-        request.state.concurrency_slot_id = None
-        if res_info.get("cached_response"):
-            return res_info["cached_response"]
-        return {
-            "status": "settled",
-            "reservation_id": res_info.get("reservation_id"),
-            "idempotency_key": res_info.get("idempotency_key"),
-            "message": "Request previously settled under this idempotency key. Cached payload not retained.",
-        }
-
-    if state == "in_flight":
-        concurrency_limiter.release(slot_id, rate_key)
-        request.state.concurrency_slot_id = None
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="A request with this idempotency key is currently in flight. Please retry shortly.",
-            headers={"Retry-After": "1"},
-        )
-
-    if state == "invalid":
-        concurrency_limiter.release(slot_id, rate_key)
-        request.state.concurrency_slot_id = None
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid API key. Submit payment to /v1/payments/verify-solana or contact administrator.",
-        )
-    if state == "revoked":
-        concurrency_limiter.release(slot_id, rate_key)
-        request.state.concurrency_slot_id = None
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="API key has been revoked.",
-        )
-    if state == "entitlement_expired":
-        concurrency_limiter.release(slot_id, rate_key)
-        request.state.concurrency_slot_id = None
-        cfg = load_payment_config()
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={
-                "error": "Entitlement Expired",
-                "message": "Premium entitlement has expired. Renew your Premium subscription to continue spending credits.",
-                "purchase_instructions": {
-                    "treasury_wallet": cfg["solana_treasury_wallet"],
-                    "rates": cfg["rates"],
-                    "topup_packages": cfg.get("topup_packages", {}),
-                    "verify_endpoint": "POST /v1/payments/verify-solana",
-                },
-            },
-        )
-    if state == "exhausted":
-        concurrency_limiter.release(slot_id, rate_key)
-        request.state.concurrency_slot_id = None
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="Key credits exhausted. Top up your balance via Solana USDC.",
-        )
-
-    latest_path = REPORTS_DIR / "latest_briefing.md"
-
-    try:
+    with MeteredCall(request, "/v1/briefing/latest", ip_bucket="briefing") as call:
+        res_info = call.reservation
+        latest_path = REPORTS_DIR / "latest_briefing.md"
         if not latest_path.exists():
             raise HTTPException(status_code=404, detail="No briefing generated yet.")
 
@@ -3867,7 +3761,7 @@ def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None
             content = f.read()
 
         witness_id = None
-        if res_info and res_info.get("key_hash"):
+        if res_info.get("key_hash"):
             try:
                 w = witness_manager.create_witness(
                     action="QUERY_DEDUCTED",
@@ -3877,7 +3771,7 @@ def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None
                     pre_balance=(res_info.get("credits") or 0) + 1,
                     credit_delta=-1,
                     post_balance=res_info.get("credits"),
-                    request_id=req_id,
+                    request_id=call.request_id,
                 )
                 witness_id = w["witness_id"]
             except Exception:
@@ -3907,25 +3801,7 @@ def get_latest_briefing(request: Request, x_api_key: Optional[str] = Header(None
         if witness_id:
             res["state_witness_id"] = witness_id
 
-        # Settle quota upon successful response construction
-        if res_info and res_info.get("reservation_id") and state == "ok":
-            storage.settle_quota(res_info["reservation_id"], response_payload=res)
-            request.state.quota_reservation_id = None
-
-        return res
-    except HTTPException:
-        if res_info and res_info.get("reservation_id") and state == "ok":
-            storage.release_quota(res_info["reservation_id"], reason="http_exception")
-            request.state.quota_reservation_id = None
-        raise
-    except Exception as e:
-        if res_info and res_info.get("reservation_id") and state == "ok":
-            storage.release_quota(res_info["reservation_id"], reason=f"briefing_error: {e}")
-            request.state.quota_reservation_id = None
-        raise HTTPException(status_code=500, detail="Internal server error reading briefing.") from e
-    finally:
-        concurrency_limiter.release(slot_id, rate_key)
-        request.state.concurrency_slot_id = None
+        return call.settle(res)
 
 
 @app.get("/v1/errors")
@@ -4221,7 +4097,9 @@ def get_intel_latest(request: Request, x_api_key: Optional[str] = Header(None)):
 
 
 @app.get("/v1/intel/signals")
+@metered("/v1/intel/signals")
 def get_intel_signals(
+    request: Request,
     category: Optional[str] = None,
     confidence: Optional[str] = None,
     limit: int = 25,
@@ -4242,6 +4120,7 @@ def get_intel_signals(
 
 
 @app.get("/v1/intel/opportunities")
+@metered("/v1/intel/opportunities")
 def get_intel_opportunities(
     request: Request,
     min_profit_pct: float = 0.05,
@@ -4271,6 +4150,7 @@ def get_intel_opportunities(
 
 
 @app.get("/v1/intel/signals/trading")
+@metered("/v1/intel/signals/trading")
 def get_intel_trading_signals(
     request: Request,
     asset: Optional[str] = None,
@@ -4429,6 +4309,7 @@ def get_quant_first_passage(
 
 
 @app.post("/v1/quant/trade-viability")
+@metered("/v1/quant/trade-viability")
 def post_quant_trade_viability(
     payload: QuantTradeViabilityInput,
     request: Request,
@@ -4651,6 +4532,7 @@ def claim_nft_lazy_mint_order(payload: ClaimNftOrderInput, request: Request):
 
 
 @app.get("/v1/intel/microstructure")
+@metered("/v1/intel/microstructure")
 def get_intel_microstructure(
     request: Request,
     depth_bps: float = 50.0,
@@ -4702,6 +4584,7 @@ def get_intel_microstructure(
 
 
 @app.get("/v1/intel/microstructure/{pool_id}")
+@metered("/v1/intel/microstructure/{pool_id}")
 def get_pool_microstructure(
     pool_id: str,
     request: Request,
@@ -4754,7 +4637,8 @@ def get_pool_microstructure(
 
 
 @app.post("/v1/intel/refresh")
-def refresh_intelligence():
+@metered("/v1/intel/refresh")
+def refresh_intelligence(request: Request):
     """
     Triggers an immediate collection and synthesis cycle across all approved sources.
     """

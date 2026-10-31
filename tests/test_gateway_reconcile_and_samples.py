@@ -57,13 +57,17 @@ def test_quant_first_passage_and_trade_viability_endpoints():
     assert len(body1["horizon_probabilities"]) == 6
     assert len(body1["optimal_target_ladder"]) == 6
 
-    r2 = client.post("/v1/quant/trade-viability", json={
+    viability_req = {
         "pair": "JUP/SOL",
         "target_net_pct": 0.010,
         "stop_loss_pct": 0.015,
         "roundtrip_spread_bps": 2.0,
         "horizons_hours": [4, 12, 24],
-    })
+    }
+    assert client.post("/v1/quant/trade-viability", json=viability_req).status_code == 402
+
+    raw_key, _ = api_server.storage.create_api_key(tier="tier_pro", credits=10)
+    r2 = client.post("/v1/quant/trade-viability", json=viability_req, headers={"X-API-KEY": raw_key})
     assert r2.status_code == 200
     body2 = r2.json()
     assert body2["pair"] == "JUP/SOL"

@@ -307,8 +307,8 @@
                     <button onclick="probeSandbox('/v1/data-products')" class="text-xs bg-slate-800 hover:bg-slate-700 text-indigo-300 px-3 py-1.5 rounded-lg border border-slate-700 transition font-mono">
                         GET /v1/data-products
                     </button>
-                    <button onclick="probeSandbox('/v1/intel/opportunities?min_profit_pct=0.05')" class="text-xs bg-slate-800 hover:bg-slate-700 text-teal-300 px-3 py-1.5 rounded-lg border border-slate-700 transition font-mono">
-                        GET /v1/intel/opportunities
+                    <button onclick="probeSandbox('/v1/quant/first-passage?pair=BONK/SOL&target_net_pct=0.015')" class="text-xs bg-slate-800 hover:bg-slate-700 text-teal-300 px-3 py-1.5 rounded-lg border border-slate-700 transition font-mono">
+                        GET /v1/quant/first-passage
                     </button>
                     <button onclick="probeSandbox('/v1/witnesses/public-keys')" class="text-xs bg-slate-800 hover:bg-slate-700 text-purple-300 px-3 py-1.5 rounded-lg border border-slate-700 transition font-mono">
                         GET /v1/witnesses/public-keys
@@ -453,7 +453,7 @@ signals = client.get_trading_signals(min_confidence=<span class="text-amber-300"
                     <button onclick="copyCode('codeArb', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
                 <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeArb"><code><span class="text-slate-500"># Query real-time cross-DEX arbitrage opportunities with net profit filtering</span>
-curl -s <span class="text-emerald-300">"$GATEWAY/v1/intel/opportunities?min_profit_pct=0.05"</span> | jq .
+curl -s -H <span class="text-emerald-300">"X-API-KEY: $MOLT_KEY"</span> <span class="text-emerald-300">"$GATEWAY/v1/intel/opportunities?min_profit_pct=0.05"</span> | jq .   <span class="text-slate-500"># 1 credit</span>
 
 <span class="text-slate-500"># Sample Response:</span>
 {
@@ -481,7 +481,7 @@ curl -s <span class="text-emerald-300">"$GATEWAY/v1/intel/opportunities?min_prof
                     <button onclick="copyCode('codeAlpha', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
                 <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeAlpha"><code><span class="text-slate-500"># Query structured trading alpha directives for Solana ecosystem assets</span>
-curl -s <span class="text-emerald-300">"$GATEWAY/v1/intel/signals/trading?asset=SOL"</span> | jq .
+curl -s -H <span class="text-emerald-300">"X-API-KEY: $MOLT_KEY"</span> <span class="text-emerald-300">"$GATEWAY/v1/intel/signals/trading?asset=SOL"</span> | jq .   <span class="text-slate-500"># 1 credit</span>
 
 <span class="text-slate-500"># Sample Response:</span>
 {

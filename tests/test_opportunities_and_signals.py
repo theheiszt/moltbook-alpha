@@ -20,8 +20,13 @@ from ops.trading.dex_microstructure import (
 from intel_engine import IntelEngine
 from storage import StorageManager
 from cryptographic_witness import WitnessManager
-from api_server import app
+from api_server import app, storage
 from dag_tool_parameters import TOOL_DAG_REGISTRY
+
+
+def _paid_headers():
+    raw_key, _ = storage.create_api_key(tier="tier_pro", credits=10)
+    return {"X-API-KEY": raw_key}
 
 
 @pytest.fixture
@@ -147,7 +152,7 @@ def test_intel_engine_get_live_opportunities(test_storage, dex_engine, witness_m
 
 
 def test_http_api_intel_opportunities():
-    client = TestClient(app)
+    client = TestClient(app, headers=_paid_headers())
 
     # 1. Fetch opportunities without filters
     res = client.get("/v1/intel/opportunities")
@@ -172,7 +177,8 @@ def test_http_api_intel_opportunities():
 
 
 def test_http_api_intel_trading_signals():
-    client = TestClient(app)
+    assert TestClient(app).get("/v1/intel/signals/trading").status_code == 402
+    client = TestClient(app, headers=_paid_headers())
 
     # 1. Fetch trading signals without filters
     res = client.get("/v1/intel/signals/trading")

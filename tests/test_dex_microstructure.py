@@ -14,7 +14,12 @@ from ops.trading.dex_microstructure import (
 )
 from storage import StorageManager
 from intel_engine import IntelEngine
-from api_server import app
+from api_server import app, storage
+
+
+def _paid_headers():
+    raw_key, _ = storage.create_api_key(tier="tier_pro", credits=10)
+    return {"X-API-KEY": raw_key}
 
 
 def test_clmm_math_tick_to_price_and_invert():
@@ -249,7 +254,8 @@ def test_intel_engine_ingest_microstructure_anomalies(tmp_path):
 
 def test_api_microstructure_fleet_endpoint():
     client = TestClient(app)
-    res = client.get("/v1/intel/microstructure")
+    assert client.get("/v1/intel/microstructure").status_code == 402
+    res = client.get("/v1/intel/microstructure", headers=_paid_headers())
     assert res.status_code == 200
     data = res.json()
     assert data["tracked_pool_count"] >= 3
@@ -261,7 +267,7 @@ def test_api_microstructure_fleet_endpoint():
 
 def test_api_microstructure_pool_detail_and_witness():
     client = TestClient(app)
-    res = client.get("/v1/intel/microstructure/Raydium_SOL_USDC")
+    res = client.get("/v1/intel/microstructure/Raydium_SOL_USDC", headers=_paid_headers())
     assert res.status_code == 200
     data = res.json()
     assert data["pool_id"] == "Raydium_SOL_USDC"
@@ -285,8 +291,13 @@ def test_api_microstructure_pool_detail_and_witness():
 
 def test_api_microstructure_pool_not_found():
     client = TestClient(app)
-    res = client.get("/v1/intel/microstructure/non_existent_pool_999")
+    headers = _paid_headers()
+    res = client.get("/v1/intel/microstructure/non_existent_pool_999", headers=headers)
     assert res.status_code == 404
     err_data = res.json()
     assert "detail" in err_data
     assert "non_existent_pool_999" in err_data["detail"]
+
+    # Zero charge on failure: the reserved credit is released
+    quota = client.get("/v1/account/quota", headers=headers).json()
+    assert quota["credits_remaining"] == 10

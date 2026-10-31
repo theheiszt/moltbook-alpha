@@ -140,7 +140,10 @@ def test_briefing_synthesis_and_witnessing(tmp_path):
 
 def test_api_intel_signals_endpoint():
     client = TestClient(app)
-    resp = client.get("/v1/intel/signals?limit=10")
+    assert client.get("/v1/intel/signals?limit=10").status_code == 402
+
+    raw_key, _ = storage.create_api_key(tier="tier_pro", credits=10)
+    resp = client.get("/v1/intel/signals?limit=10", headers={"X-API-KEY": raw_key})
     assert resp.status_code == 200
     data = resp.json()
     assert "count" in data

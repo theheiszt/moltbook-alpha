@@ -163,7 +163,7 @@ def test_quickstart_and_universal_api_key_auth(monkeypatch):
     Verifies:
     1. /v1/metrics/dashboard includes latest_briefing with briefing_id, state_witness_id, briefing_markdown, and newsletter_markdown.
     2. /v1/quickstart returns 200 with authentication_methods and free_unmetered_endpoints_0_credits.
-    3. Metered/account endpoints accept API keys via X-API-KEY, Authorization: Bearer molt_..., and ?api_key=molt_...
+    3. Metered/account endpoints accept API keys via X-API-KEY and Authorization: Bearer molt_..., and reject ?api_key=
     """
     monkeypatch.setenv("METRICS_BEARER_TOKEN", "secret_admin_token_12345")
     client = TestClient(app)
@@ -187,15 +187,18 @@ def test_quickstart_and_universal_api_key_auth(monkeypatch):
     assert "free_unmetered_endpoints_0_credits" in qs_data
     assert "earn_free_credits_in_one_call" in qs_data
 
-    # 3. Universal API key authentication (Authorization: Bearer molt_... and ?api_key=molt_...)
+    # 3. API key authentication via Authorization: Bearer molt_...; keys in the query string are rejected
     raw_key, _ = storage.create_api_key(tier="pro", credits=10)
     r_bearer = client.get("/v1/account/quota", headers={"Authorization": f"Bearer {raw_key}"})
     assert r_bearer.status_code == 200
     assert r_bearer.json()["credits_remaining"] == 10
 
-    r_query = client.get(f"/v1/account/quota?api_key={raw_key}")
-    assert r_query.status_code == 200
-    assert r_query.json()["credits_remaining"] == 10
+    for param in ("api_key", "x_api_key"):
+        r_query = client.get(f"/v1/account/quota?{param}={raw_key}")
+        assert r_query.status_code == 400
+        assert r_query.json()["error"]["code"] == "VALIDATION_ERROR"
+        assert raw_key not in r_query.text
+    assert "query_param" not in qs_data["authentication_methods"]
 
 
 def test_cors_preflight_max_age_caching():
