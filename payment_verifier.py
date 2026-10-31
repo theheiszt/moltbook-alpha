@@ -5,6 +5,7 @@ mint, raw integer amounts, finalization, and failure-closed network handling.
 """
 
 import json
+import os
 import time
 import hashlib
 import re
@@ -694,16 +695,28 @@ class NanoInvoicePaymentAdapter:
     Because there is no arbitrary memo field on Nano, the exact amount paid (in raw units)
     uniquely encodes the invoice identifier:
         tagged_raw = base_raw + tag_offset(invoice_id)
-    This provides self-authenticating, non-replayable settlement where the ledger block IS the receipt.
+    Settlement is verified against the live Nano ledger (block_info on public nodes):
+    the block must be a confirmed send to the merchant address for exactly tagged_raw.
     """
+
+    DEFAULT_RPC_ENDPOINTS = ["https://rpc.nano.to", "https://nanoslo.0x.no/proxy"]
 
     def __init__(
         self,
         merchant_address: str = "nano_3t1sxtuxyjgdabj6miwn6st58p8x553i8ybkikoc9ozn7mra7kk71iysfyn1",
         rate_usd_per_xno: float = 1.0,
+        rpc_endpoints: Optional[list[str]] = None,
+        rpc_caller: Optional[Callable[[str, Dict[str, Any]], Dict[str, Any]]] = None,
     ):
         self.merchant_address = merchant_address
         self.rate_usd_per_xno = rate_usd_per_xno
+        env_endpoints = [u.strip() for u in os.getenv("NANO_RPC_URLS", "").split(",") if u.strip()]
+        self.rpc_endpoints = rpc_endpoints or env_endpoints or list(self.DEFAULT_RPC_ENDPOINTS)
+        self._rpc_caller = rpc_caller
+
+    @staticmethod
+    def tag_offset(invoice_id: str) -> int:
+        return int(hashlib.sha256(invoice_id.encode("utf-8")).hexdigest()[:8], 16) % 1_000_000
 
     def generate_nano_invoice(
         self,
@@ -711,13 +724,16 @@ class NanoInvoicePaymentAdapter:
         tier: str,
         amount_usd: float,
         credits: int,
+        base_raw: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Generates a uniquely tagged Nano invoice.
-        1 XNO = 10^30 raw units.
+        1 XNO = 10^30 raw units. Pass base_raw (the invoice's stored integer amount) so the
+        quoted amount is exactly what verify_settlement() expects; float math is only a fallback.
         """
-        base_raw = int((amount_usd / self.rate_usd_per_xno) * 1e30)
-        tag_offset = int(hashlib.sha256(invoice_id.encode("utf-8")).hexdigest()[:8], 16) % 1_000_000
+        if base_raw is None:
+            base_raw = int((amount_usd / self.rate_usd_per_xno) * 1e30)
+        tag_offset = self.tag_offset(invoice_id)
         tagged_raw = base_raw + tag_offset
 
         return {
@@ -733,45 +749,86 @@ class NanoInvoicePaymentAdapter:
             "instructions": f"Send exactly {tagged_raw} raw ({tagged_raw / 1e30:.6f} XNO) to {self.merchant_address}",
         }
 
+    def _call_node(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        errors = []
+        for endpoint in self.rpc_endpoints:
+            try:
+                if self._rpc_caller:
+                    res = self._rpc_caller(endpoint, body)
+                else:
+                    req = urllib.request.Request(
+                        endpoint,
+                        data=json.dumps(body).encode("utf-8"),
+                        headers={"Content-Type": "application/json", "User-Agent": "MoltbookAlphaNanoVerifier/1.0"},
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        res = json.loads(resp.read().decode("utf-8"))
+                if not isinstance(res, dict):
+                    raise RPCError("non-dict response")
+                # "Block not found" is an authoritative answer, not a transport failure
+                if "error" in res and "not found" not in str(res["error"]).lower():
+                    raise RPCError(str(res["error"]))
+                return res
+            except Exception as e:
+                errors.append(f"[{endpoint}] {e!s}")
+        raise RPCError(f"All {len(self.rpc_endpoints)} Nano node(s) failed: {'; '.join(errors)}")
+
+    @staticmethod
+    def _normalize(addr: str) -> str:
+        addr = (addr or "").strip().lower()
+        return "nano_" + addr[4:] if addr.startswith("xrb_") else addr
+
     def verify_settlement(
         self,
         block_hash: str,
         expected_raw: int,
         mock_ledger: Optional[Dict[str, Any]] = None,
+        invoice_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Verifies block settlement against Nano ledger.
-        In test/hermetic environments, uses mock_ledger or deterministic block hash verification.
+        Verifies a send block against the Nano ledger and fails closed.
+        expected_raw is the invoice's stored base amount; when invoice_id is given the
+        block must carry the invoice tag (base + tag_offset), which binds it to that invoice.
+        mock_ledger maps lowercase block hash -> {"amount_raw", "recipient"} for hermetic tests.
         """
         cleaned_hash = block_hash.strip().lower()
         if not re.match(r"^[0-9a-f]{64}$", cleaned_hash):
             raise VerificationError("Invalid Nano block hash: must be 64 hexadecimal characters.")
 
+        required_raw = int(expected_raw) + (self.tag_offset(invoice_id) if invoice_id else 0)
+
         if mock_ledger is not None:
             block = mock_ledger.get(cleaned_hash)
             if not block:
                 raise VerificationError(f"Block '{cleaned_hash}' not found on Nano ledger.")
-            if int(block.get("amount_raw", 0)) != expected_raw:
-                raise VerificationError(
-                    f"Amount mismatch on Nano block: expected {expected_raw} raw, found {block.get('amount_raw')} raw."
-                )
-            if block.get("recipient", "").lower() != self.merchant_address.lower():
-                raise VerificationError(f"Recipient mismatch on Nano block: expected {self.merchant_address}.")
-            return {
-                "settled": True,
-                "rail": "nano",
-                "block_hash": cleaned_hash,
-                "amount_raw": expected_raw,
-                "recipient": self.merchant_address,
-                "confirmed": True,
-            }
+            amount = int(block.get("amount_raw", 0))
+            recipient = block.get("recipient", "")
+            payer = block.get("payer")
+        else:
+            info = self._call_node({"action": "block_info", "json_block": "true", "hash": cleaned_hash.upper()})
+            if "error" in info or not info.get("contents"):
+                raise VerificationError(f"Block '{cleaned_hash}' not found on Nano ledger.")
+            if info.get("subtype") != "send":
+                raise VerificationError("Nano block is not a send block. Submit the payer's send block hash.")
+            if str(info.get("confirmed")).lower() != "true":
+                raise VerificationError("Nano block is not confirmed yet. Retry in a few seconds.")
+            amount = int(info.get("amount", 0))
+            recipient = (info.get("contents") or {}).get("link_as_account", "")
+            payer = info.get("block_account")
 
+        if self._normalize(recipient) != self._normalize(self.merchant_address):
+            raise VerificationError(f"Recipient mismatch on Nano block: expected {self.merchant_address}.")
+        if amount != required_raw:
+            raise VerificationError(
+                f"Amount mismatch on Nano block: expected {required_raw} raw, found {amount} raw."
+            )
         return {
             "settled": True,
             "rail": "nano",
             "block_hash": cleaned_hash,
-            "amount_raw": expected_raw,
+            "amount_raw": amount,
             "recipient": self.merchant_address,
+            "payer": payer,
             "confirmed": True,
         }
 

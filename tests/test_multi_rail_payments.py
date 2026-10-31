@@ -5,11 +5,48 @@ and Automated Solana Refund Dispatcher.
 """
 
 import secrets
+import pytest
 from fastapi.testclient import TestClient
 from api_server import app
+from app_state import nano_adapter
 from storage import StorageManager
 from config import DB_PATH
-from payment_verifier import SolanaRefundDispatcher
+from payment_verifier import NanoInvoicePaymentAdapter, SolanaRefundDispatcher, VerificationError
+
+
+class FakeNanoLedger:
+    """Stands in for a public Nano node's block_info RPC."""
+
+    def __init__(self):
+        self.blocks = {}
+
+    def send(self, to, amount_raw, confirmed=True, subtype="send"):
+        block_hash = secrets.token_hex(32).upper()
+        self.blocks[block_hash] = {
+            "subtype": subtype,
+            "confirmed": "true" if confirmed else "false",
+            "amount": str(amount_raw),
+            "block_account": "nano_1payer",
+            "contents": {"link_as_account": to},
+        }
+        return block_hash.lower()
+
+    def __call__(self, endpoint, body):
+        assert body["action"] == "block_info"
+        return self.blocks.get(body["hash"].upper(), {"error": "Block not found"})
+
+
+@pytest.fixture()
+def nano_ledger(monkeypatch):
+    ledger = FakeNanoLedger()
+    monkeypatch.setattr(nano_adapter, "_rpc_caller", ledger)
+    return ledger
+
+
+def _nano_invoice(client):
+    res = client.post("/v1/payments/invoice", json={"target_tier": "tier_micro", "rail": "nano"})
+    assert res.status_code == 200
+    return res.json()
 
 
 def test_payments_config_multi_rail_discovery():
@@ -46,18 +83,12 @@ def test_nano_invoice_creation():
     assert data["verify_endpoint"] == "POST /v1/payments/verify-nano"
 
 
-def test_nano_settlement_verification_success_and_witness():
+def test_nano_settlement_verification_success_and_witness(nano_ledger):
     client = TestClient(app)
-    # Create invoice
-    inv_res = client.post("/v1/payments/invoice", json={
-        "target_tier": "tier_micro",
-        "rail": "nano",
-    })
-    assert inv_res.status_code == 200
-    inv = inv_res.json()
+    inv = _nano_invoice(client)
 
-    # Verify settlement with mock ledger hash (64 hex characters)
-    block_hash = secrets.token_hex(32)
+    # Customer sends exactly the quoted (tagged) amount to the merchant
+    block_hash = nano_ledger.send(inv["merchant_address"], int(inv["amount_raw"]))
     ver_res = client.post("/v1/payments/verify-nano", json={
         "block_hash": block_hash,
         "invoice_id": inv["invoice_id"],
@@ -73,15 +104,10 @@ def test_nano_settlement_verification_success_and_witness():
     assert ver.get("state_witness_id") is not None
 
 
-def test_nano_settlement_idempotency_and_claim():
+def test_nano_settlement_idempotency_and_claim(nano_ledger):
     client = TestClient(app)
-    # Create invoice
-    inv_res = client.post("/v1/payments/invoice", json={
-        "target_tier": "tier_micro",
-        "rail": "nano",
-    })
-    inv = inv_res.json()
-    block_hash = secrets.token_hex(32)
+    inv = _nano_invoice(client)
+    block_hash = nano_ledger.send(inv["merchant_address"], int(inv["amount_raw"]))
 
     # First verification
     ver_res1 = client.post("/v1/payments/verify-nano", json={
@@ -100,6 +126,68 @@ def test_nano_settlement_idempotency_and_claim():
     })
     assert ver_res2.status_code == 200
     assert ver_res2.json()["api_key"] == key1
+
+
+def test_nano_forged_block_hash_rejected(nano_ledger):
+    """Regression: any well-formed hash used to mint an API key without touching the ledger."""
+    client = TestClient(app)
+    inv = _nano_invoice(client)
+    res = client.post("/v1/payments/verify-nano", json={
+        "block_hash": secrets.token_hex(32),
+        "invoice_id": inv["invoice_id"],
+        "claim_secret": inv["claim_secret"],
+    })
+    assert res.status_code == 400
+    assert "api_key" not in res.json()
+    assert "not found" in str(res.json()).lower()
+
+
+@pytest.mark.parametrize("case", ["untagged_amount", "wrong_recipient", "unconfirmed", "receive_block"])
+def test_nano_bad_blocks_rejected(nano_ledger, case):
+    client = TestClient(app)
+    inv = _nano_invoice(client)
+    to, amount = inv["merchant_address"], int(inv["amount_raw"])
+    if case == "untagged_amount":
+        block_hash = nano_ledger.send(to, amount - NanoInvoicePaymentAdapter.tag_offset(inv["invoice_id"]))
+    elif case == "wrong_recipient":
+        block_hash = nano_ledger.send("nano_1natrium1o3z5519ifou7xii8crpxpk8y65qmkih8e8bpsjri651oza8imdd", amount)
+    elif case == "unconfirmed":
+        block_hash = nano_ledger.send(to, amount, confirmed=False)
+    else:
+        block_hash = nano_ledger.send(to, amount, subtype="receive")
+    res = client.post("/v1/payments/verify-nano", json={
+        "block_hash": block_hash,
+        "invoice_id": inv["invoice_id"],
+        "claim_secret": inv["claim_secret"],
+    })
+    assert res.status_code == 400
+    assert "api_key" not in res.json()
+
+
+def test_nano_block_cannot_settle_two_invoices(nano_ledger):
+    client = TestClient(app)
+    inv1, inv2 = _nano_invoice(client), _nano_invoice(client)
+    block_hash = nano_ledger.send(inv1["merchant_address"], int(inv1["amount_raw"]))
+    ok = client.post("/v1/payments/verify-nano", json={
+        "block_hash": block_hash, "invoice_id": inv1["invoice_id"], "claim_secret": inv1["claim_secret"]})
+    assert ok.status_code == 200
+    # inv2 carries a different tag, so inv1's block doesn't match its amount
+    res = client.post("/v1/payments/verify-nano", json={
+        "block_hash": block_hash, "invoice_id": inv2["invoice_id"], "claim_secret": inv2["claim_secret"]})
+    assert res.status_code in (400, 409)
+    assert "api_key" not in res.json()
+
+
+def test_nano_adapter_fails_closed_when_nodes_unreachable():
+    def down(endpoint, body):
+        raise ConnectionError("node offline")
+
+    adapter = NanoInvoicePaymentAdapter(rpc_endpoints=["https://a", "https://b"], rpc_caller=down)
+    with pytest.raises(Exception) as exc:
+        adapter.verify_settlement(secrets.token_hex(32), 10**29, invoice_id="inv_x")
+    assert "failed" in str(exc.value).lower()
+    with pytest.raises(VerificationError):
+        adapter.verify_settlement("not-a-hash", 10**29)
 
 
 def test_nano_settlement_invalid_block_hash():
