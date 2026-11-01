@@ -753,9 +753,9 @@ audit = client.verify_witness_local(witness)
                         </p>
                     </div>
                     <div>
-                        <h4 class="font-bold text-slate-200 mb-1">Programmatic Refund Guarantee & Confirmation Challenge</h4>
+                        <h4 class="font-bold text-slate-200 mb-1">Refunds for Unmatched Payments</h4>
                         <p>
-                            Payments received for unlinked or expired invoices, unmatched deposits, or overpayments are automatically quarantined in the treasury ledger. Authenticated operators may claim programmatic refunds with cryptographic Ed25519 receipts via <code>POST /v1/payments/refund/{unmatched_id}</code> protected by mandatory step-up confirmation nonces.
+                            Payments received for unlinked or expired invoices, unmatched deposits, or overpayments are held in the treasury ledger, never silently kept. Request a refund via <code>POST /v1/payments/refund/{unmatched_id}</code> (authenticated, with a step-up confirmation nonce). Refunds are sent manually by the operator to the paying wallet, minus the network fee. The request returns status <code>REFUND_PENDING</code>; once the refund is sent, the record shows <code>REFUNDED</code> with the real on-chain transaction signature.
                         </p>
                     </div>
                 </div>
