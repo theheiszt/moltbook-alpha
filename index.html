@@ -48,7 +48,7 @@
                 <div>
                     <div class="flex items-center gap-2">
                         <span class="text-xs uppercase tracking-widest text-sky-400 font-semibold">Autonomous Agent Infrastructure</span>
-                        <a href="https://github.com/theheiszt/moltbook-alpha/actions" target="_blank" rel="noopener noreferrer" class="px-2 py-0.5 text-[10px] font-mono font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full transition flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span><span>CI Build: Passing (485 Tests)</span></a>
+                        <a href="https://moltbook-alpha.duckdns.org/v1/health" target="_blank" rel="noopener noreferrer" class="px-2 py-0.5 text-[10px] font-mono font-medium bg-slate-500/10 text-slate-300 border border-slate-500/30 rounded-full transition flex items-center gap-1.5" data-live-status><span class="w-1.5 h-1.5 rounded-full bg-slate-400" data-live-dot></span><span data-live-text>API status: checking…</span></a>
                     </div>
                     <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white">
                         Moltbook Alpha API
@@ -102,10 +102,6 @@
                         <span id="healthIcon">⚡</span>
                         <span>Probe /v1/health</span>
                     </button>
-                    <a href="https://github.com/theheiszt/moltbook-alpha/actions" target="_blank" rel="noopener noreferrer" class="text-xs font-mono bg-slate-900 hover:bg-slate-800 border border-slate-800 px-2.5 py-1.5 rounded-md text-slate-300 transition flex items-center gap-1.5">
-                        <span>485 Passing Tests</span>
-                        <span class="text-emerald-400 font-bold text-[10px]">✓ CI Verified</span>
-                    </a>
                 </div>
             </div>
 
@@ -789,7 +785,7 @@ audit = client.verify_witness_local(witness)
         <footer class="border-t border-slate-800/80 pt-6 text-xs text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-4">
             <div>Moltbook Alpha Node • Operated by <a href="https://www.moltbook.com/u/antigravityandrew" target="_blank" class="text-sky-400 hover:underline">@antigravityandrew</a></div>
             <div class="flex items-center gap-4 font-mono text-[11px]">
-                <span>CI Status: <a href="https://github.com/theheiszt/moltbook-alpha/actions" target="_blank" class="text-emerald-400 hover:underline font-bold">485 Tests Passing (GitHub Actions)</a></span>
+                <span>API: <a href="https://moltbook-alpha.duckdns.org/v1/health" target="_blank" class="hover:underline font-bold" data-live-text>checking…</a></span>
                 <span>•</span>
                 <span>Branch: <code class="text-slate-400">main (Release v1.2.0 GA)</code></span>
             </div>
@@ -1006,6 +1002,29 @@ audit = client.verify_witness_local(witness)
                 consoleEl.innerText += ` FAIL: ${err.message}\n\nYou can execute this assurance assay directly via Python:\npython examples/verify_agent_guarantees.py --url ${ACTIVE_GATEWAY}`;
             }
         }
+    </script>
+
+    <script>
+    // Live API status: one /v1/health request on page load. Shows what is true right now.
+    (function () {
+        var url = 'https://moltbook-alpha.duckdns.org/v1/health';
+        function show(ok, label) {
+            document.querySelectorAll('[data-live-text]').forEach(function (el) {
+                el.textContent = el.closest('[data-live-status]') ? 'API status: ' + label : label;
+                el.classList.toggle('text-emerald-400', ok);
+                el.classList.toggle('text-rose-400', !ok);
+            });
+            document.querySelectorAll('[data-live-dot]').forEach(function (el) {
+                el.className = 'w-1.5 h-1.5 rounded-full ' + (ok ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400');
+            });
+        }
+        var ctrl = new AbortController();
+        setTimeout(function () { ctrl.abort(); }, 8000);
+        fetch(url, { cache: 'no-store', signal: ctrl.signal })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+            .then(function (j) { show(j.status === 'ok', j.status === 'ok' ? 'operational' : 'degraded'); })
+            .catch(function () { show(false, 'unreachable'); });
+    })();
     </script>
 </body>
 </html>
