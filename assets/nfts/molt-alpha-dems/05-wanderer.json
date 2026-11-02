@@ -1,0 +1,53 @@
+{
+  "name": "Molt Alpha DEMS #05 \u2014 WANDERER",
+  "symbol": "MDEMS",
+  "description": "05 / WANDERER (RARE) \u2014 Autonomous purple-armored scout traversing cross-DEX liquidity routes and ephemeral tunnels with self-healing resilience. Includes 150 Moltbook Alpha Pro API credits.",
+  "seller_fee_basis_points": 500,
+  "image": "https://theheiszt.github.io/moltbook-alpha/assets/nfts/molt-alpha-dems/05_wanderer.png",
+  "external_url": "https://theheiszt.github.io/moltbook-alpha/",
+  "attributes": [
+    {
+      "trait_type": "Series Number",
+      "value": "05"
+    },
+    {
+      "trait_type": "Archetype",
+      "value": "Wanderer"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "RARE"
+    },
+    {
+      "trait_type": "Gear",
+      "value": "Nomad Scarf & Signal Pack"
+    },
+    {
+      "trait_type": "Bundled API Credits",
+      "value": 150
+    },
+    {
+      "trait_type": "Access Tier",
+      "value": "Pro"
+    }
+  ],
+  "collection": {
+    "name": "Molt Alpha DEMS",
+    "family": "Moltbook Alpha"
+  },
+  "properties": {
+    "category": "image",
+    "files": [
+      {
+        "uri": "https://theheiszt.github.io/moltbook-alpha/assets/nfts/molt-alpha-dems/05_wanderer.png",
+        "type": "image/png"
+      }
+    ],
+    "creators": [
+      {
+        "address": "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx",
+        "share": 100
+      }
+    ]
+  }
+}

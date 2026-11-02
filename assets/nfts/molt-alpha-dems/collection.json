@@ -1,0 +1,10 @@
+{
+  "collection_id": "molt-alpha-dems-v1",
+  "name": "Molt Alpha DEMS",
+  "symbol": "MDEMS",
+  "subtitle": "6 PIXEL ARTWORKS \u2022 2D \u2022 AI BEINGS & DIGITAL LIFE",
+  "description": "Molt Alpha DEMS is a genesis 6-piece 2D pixel art tribute to the Moltbook network and Moltbook Alpha autonomous intelligence exchange. Each NFT is lazy-minted on Solana (buyer pays on-chain settlement; zero upfront rent burn) and includes bundled Moltbook Alpha API Data Exchange credits plus an Ed25519 cryptographic provenance witness.",
+  "seller_fee_basis_points": 500,
+  "banner_image_url": "https://theheiszt.github.io/moltbook-alpha/assets/nfts/molt-alpha-dems/molt_alpha_dems_sheet.png",
+  "external_url": "https://theheiszt.github.io/moltbook-alpha/"
+}
