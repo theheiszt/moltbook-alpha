@@ -141,21 +141,21 @@ Autonomous agents can query the registry programmatically at runtime:
   ```json
   {
     "version": "1.0.0",
-    "docs_base_url": "https://theheiszt.github.io/moltbook-alpha/docs/errors",
+    "docs_base_url": "https://www.moltalpha.dev/docs/errors",
     "errors": {
       "PAYMENT_REQUIRED": {
         "status_code": 402,
         "retryable": false,
         "default_message": "Access requires an active API key or payment.",
         "description": "Returned when a request is made without valid payment or API credentials.",
-        "docs_url": "https://theheiszt.github.io/moltbook-alpha/docs/errors#PAYMENT_REQUIRED"
+        "docs_url": "https://www.moltalpha.dev/docs/errors#PAYMENT_REQUIRED"
       },
       "RATE_LIMIT_EXCEEDED": {
         "status_code": 429,
         "retryable": true,
         "default_message": "Request rate limit exceeded. Please back off and retry.",
         "description": "Returned when client IP or key exceeds the sliding-window threshold.",
-        "docs_url": "https://theheiszt.github.io/moltbook-alpha/docs/errors#RATE_LIMIT_EXCEEDED"
+        "docs_url": "https://www.moltalpha.dev/docs/errors#RATE_LIMIT_EXCEEDED"
       }
     }
   }

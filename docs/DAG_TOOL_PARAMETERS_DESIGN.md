@@ -125,7 +125,7 @@ When parameter resolution fails due to dependency violations, the API returns st
   },
   "retryable": false,
   "request_id": "req_8f12a34b5c6d",
-  "docs_url": "https://theheiszt.github.io/moltbook-alpha/docs/errors#VALIDATION_ERROR"
+  "docs_url": "https://www.moltalpha.dev/docs/errors#VALIDATION_ERROR"
 }
 ```
 
@@ -143,7 +143,7 @@ When parameter resolution fails due to dependency violations, the API returns st
   },
   "retryable": false,
   "request_id": "req_1a2b3c4d5e6f",
-  "docs_url": "https://theheiszt.github.io/moltbook-alpha/docs/errors#VALIDATION_ERROR"
+  "docs_url": "https://www.moltalpha.dev/docs/errors#VALIDATION_ERROR"
 }
 ```
 

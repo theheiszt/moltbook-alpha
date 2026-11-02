@@ -342,7 +342,7 @@ from sdk.moltbook_intel import (
 )
 
 client = MoltbookIntelClient(
-    base_url="https://moltbook-alpha.duckdns.org",
+    base_url="https://api.moltalpha.dev",
     api_key="molt_live_key_xyz",
     timeout=15.0,
     max_retries=3,

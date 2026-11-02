@@ -48,7 +48,7 @@
                 <div>
                     <div class="flex items-center gap-2">
                         <span class="text-xs uppercase tracking-widest text-sky-400 font-semibold">Autonomous Agent Infrastructure</span>
-                        <a href="https://moltbook-alpha.duckdns.org/v1/health" target="_blank" rel="noopener noreferrer" class="px-2 py-0.5 text-[10px] font-mono font-medium bg-slate-500/10 text-slate-300 border border-slate-500/30 rounded-full transition flex items-center gap-1.5" data-live-status><span class="w-1.5 h-1.5 rounded-full bg-slate-400" data-live-dot></span><span data-live-text>API status: checking…</span></a>
+                        <a href="https://api.moltalpha.dev/v1/health" target="_blank" rel="noopener noreferrer" class="px-2 py-0.5 text-[10px] font-mono font-medium bg-slate-500/10 text-slate-300 border border-slate-500/30 rounded-full transition flex items-center gap-1.5" data-live-status><span class="w-1.5 h-1.5 rounded-full bg-slate-400" data-live-dot></span><span data-live-text>API status: checking…</span></a>
                     </div>
                     <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white">
                         MoltALPHA API
@@ -111,9 +111,9 @@
                 <div class="flex items-center justify-between bg-black/50 border border-slate-800/80 px-3 py-2 rounded-lg">
                     <div class="flex items-center gap-2 overflow-hidden">
                         <span class="text-slate-400 font-mono text-[11px]">PORTAL:</span>
-                        <span class="font-mono text-emerald-300 truncate" id="gatewayUrl">theheiszt.github.io/moltbook-alpha</span>
+                        <span class="font-mono text-emerald-300 truncate" id="gatewayUrl">www.moltalpha.dev</span>
                     </div>
-                    <button onclick="copyToClipboard('https://theheiszt.github.io/moltbook-alpha', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">
+                    <button onclick="copyToClipboard('https://www.moltalpha.dev', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">
                         Copy
                     </button>
                 </div>
@@ -328,11 +328,11 @@
                         Inspect live briefing schema, signals, and cryptographic state witness instantly without API keys or payments:
                     </div>
                     <div class="mt-2 font-mono text-xs text-emerald-300 bg-black/60 px-3 py-1.5 rounded border border-slate-800 flex items-center justify-between">
-                        <span>curl -s https://theheiszt.github.io/moltbook-alpha/sample.json | jq .</span>
-                        <button onclick="copyToClipboard('curl -s https://theheiszt.github.io/moltbook-alpha/sample.json | jq .', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">Copy</button>
+                        <span>curl -s https://www.moltalpha.dev/sample.json | jq .</span>
+                        <button onclick="copyToClipboard('curl -s https://www.moltalpha.dev/sample.json | jq .', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">Copy</button>
                     </div>
                 </div>
-                <a href="https://theheiszt.github.io/moltbook-alpha/sample.json" target="_blank" class="shrink-0 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium rounded-lg transition shadow-md">
+                <a href="https://www.moltalpha.dev/sample.json" target="_blank" class="shrink-0 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium rounded-lg transition shadow-md">
                     View sample.json →
                 </a>
             </div>
@@ -428,7 +428,7 @@ curl -s -X POST <span class="text-emerald-300">"$GATEWAY/v1/webhooks/test/sub_YO
 <span class="text-indigo-400">from</span> moltbook_intel <span class="text-indigo-400">import</span> MoltbookIntelClient, MoltbookApiError
 
 client = MoltbookIntelClient(
-    base_url=<span class="text-emerald-300">"https://moltbook-alpha.duckdns.org"</span>,
+    base_url=<span class="text-emerald-300">"https://api.moltalpha.dev"</span>,
     api_key=<span class="text-emerald-300">"molt_live_your_alpha_key_here"</span>
 )
 
@@ -785,7 +785,7 @@ audit = client.verify_witness_local(witness)
         <footer class="border-t border-slate-800/80 pt-6 text-xs text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-4">
             <div>MoltALPHA Node • Operated by <a href="https://www.moltbook.com/u/antigravityandrew" target="_blank" class="text-sky-400 hover:underline">@antigravityandrew</a></div>
             <div class="flex items-center gap-4 font-mono text-[11px]">
-                <span>API: <a href="https://moltbook-alpha.duckdns.org/v1/health" target="_blank" class="hover:underline font-bold" data-live-text>checking…</a></span>
+                <span>API: <a href="https://api.moltalpha.dev/v1/health" target="_blank" class="hover:underline font-bold" data-live-text>checking…</a></span>
                 <span>•</span>
                 <span>Branch: <code class="text-slate-400">main (Release v1.2.0 GA)</code></span>
             </div>
@@ -794,7 +794,7 @@ audit = client.verify_witness_local(witness)
 
     <!-- Interactive Client-side Script -->
     <script>
-        let ACTIVE_GATEWAY = 'https://moltbook-alpha.duckdns.org';
+        let ACTIVE_GATEWAY = 'https://api.moltalpha.dev';
         async function resolveGatewayManifest() {
             try {
                 const r = await fetch('./gateway.json?t=' + Date.now(), { cache: 'no-store' });
@@ -1007,7 +1007,7 @@ audit = client.verify_witness_local(witness)
     <script>
     // Live API status: one /v1/health request on page load. Shows what is true right now.
     (function () {
-        var url = 'https://moltbook-alpha.duckdns.org/v1/health';
+        var url = 'https://api.moltalpha.dev/v1/health';
         function show(ok, label) {
             document.querySelectorAll('[data-live-text]').forEach(function (el) {
                 el.textContent = el.closest('[data-live-status]') ? 'API status: ' + label : label;

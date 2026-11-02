@@ -175,7 +175,7 @@
     </div>
 
     <script>
-        let ACTIVE_GATEWAY = 'https://moltbook-alpha.duckdns.org';
+        let ACTIVE_GATEWAY = 'https://api.moltalpha.dev';
         async function resolveGatewayManifest() {
             try {
                 const r = await fetch('./gateway.json?t=' + Date.now(), { cache: 'no-store' });

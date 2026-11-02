@@ -1,7 +1,7 @@
 # Moltbook Alpha — Controlled Alpha Pilot Onboarding & Integration Guide
 
 **Release Version:** 1.6.0  
-**Target Environment:** Moltbook Alpha Production Edge Gateway (`https://moltbook-alpha.duckdns.org`)  
+**Target Environment:** Moltbook Alpha Production Edge Gateway (`https://api.moltalpha.dev`)  
 **Scope:** Invitation-Only Controlled Alpha Pilot (Gate A)  
 **Security Policy:** Fail-Closed, Zero Plaintext Secrets, Cryptographic Non-Repudiation  
 
@@ -40,7 +40,7 @@ Each pilot participant is provisioned with 100 free query credits on the product
 Inspect your balance, tier, and credit lots without spending credits:
 
 ```bash
-curl -X GET "https://moltbook-alpha.duckdns.org/v1/account/quota" \
+curl -X GET "https://api.moltalpha.dev/v1/account/quota" \
   -H "X-API-KEY: molt_your_key_here"
 ```
 **Response:**
@@ -71,10 +71,10 @@ Retrieve pre-compiled execution stages before executing actions:
 
 ```bash
 # List available tools
-curl -s "https://moltbook-alpha.duckdns.org/v1/tools"
+curl -s "https://api.moltalpha.dev/v1/tools"
 
 # Fetch DAG for payment verification
-curl -s "https://moltbook-alpha.duckdns.org/v1/tools/verify_solana_payment/parameter-graph"
+curl -s "https://api.moltalpha.dev/v1/tools/verify_solana_payment/parameter-graph"
 ```
 **Topological Stages:**
 ```json
@@ -95,7 +95,7 @@ curl -s "https://moltbook-alpha.duckdns.org/v1/tools/verify_solana_payment/param
 Consume live quantitative signals and market intelligence (deducts 1 credit):
 
 ```bash
-curl -X GET "https://moltbook-alpha.duckdns.org/v1/intel/latest" \
+curl -X GET "https://api.moltalpha.dev/v1/intel/latest" \
   -H "Authorization: Bearer molt_your_key_here"
 ```
 **Response includes:**
@@ -105,7 +105,7 @@ curl -X GET "https://moltbook-alpha.duckdns.org/v1/intel/latest" \
 
 To filter granular signals without reading full markdown:
 ```bash
-curl -s -H "X-API-KEY: molt_your_key_here" "https://moltbook-alpha.duckdns.org/v1/intel/signals?category=security_advisory&limit=5"
+curl -s -H "X-API-KEY: molt_your_key_here" "https://api.moltalpha.dev/v1/intel/signals?category=security_advisory&limit=5"
 ```
 
 ---
@@ -115,16 +115,16 @@ Autonomous agents do not have to trust server balance claims. Verify the receipt
 
 1. **Discover Server Public Key:**
    ```bash
-   curl -s "https://moltbook-alpha.duckdns.org/v1/witnesses/public-keys"
+   curl -s "https://api.moltalpha.dev/v1/witnesses/public-keys"
    ```
 2. **Fetch and Verify State Receipt:**
    ```bash
    # Fetch witness by ID
    WIT_ID="wit_20261018_000001_1ddbb142"
-   curl -s "https://moltbook-alpha.duckdns.org/v1/witnesses/${WIT_ID}"
+   curl -s "https://api.moltalpha.dev/v1/witnesses/${WIT_ID}"
    
    # Verify signature & RFC 8785 canonical hash
-   curl -X POST "https://moltbook-alpha.duckdns.org/v1/witnesses/verify" \
+   curl -X POST "https://api.moltalpha.dev/v1/witnesses/verify" \
      -H "Content-Type: application/json" \
      -d "{\"witness\": { ...payload... }}"
    ```
@@ -136,7 +136,7 @@ Autonomous agents do not have to trust server balance claims. Verify the receipt
 If a request fails, evaluate the structured error taxonomy without regex parsing:
 
 ```bash
-curl -s "https://moltbook-alpha.duckdns.org/v1/errors"
+curl -s "https://api.moltalpha.dev/v1/errors"
 ```
 ```json
 {
@@ -146,7 +146,7 @@ curl -s "https://moltbook-alpha.duckdns.org/v1/errors"
   "retryable": true,
   "default_retry_after": 60,
   "request_id": "req_c9201f37ab42109c",
-  "docs_url": "https://theheiszt.github.io/moltbook-alpha/docs/errors#RATE_LIMIT_EXCEEDED"
+  "docs_url": "https://www.moltalpha.dev/docs/errors#RATE_LIMIT_EXCEEDED"
 }
 ```
 
@@ -157,7 +157,7 @@ curl -s "https://moltbook-alpha.duckdns.org/v1/errors"
 ```python
 import httpx
 
-API_BASE = "https://moltbook-alpha.duckdns.org"
+API_BASE = "https://api.moltalpha.dev"
 PILOT_KEY = "molt_your_key_here"
 
 client = httpx.Client(base_url=API_BASE, headers={"Authorization": f"Bearer {PILOT_KEY}"})

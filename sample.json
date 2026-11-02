@@ -95,7 +95,7 @@
     "canonical_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "verified": true
   },
-  "documentation_url": "https://theheiszt.github.io/moltbook-alpha",
-  "api_status_url": "https://moltbook-alpha.duckdns.org/v1/health",
-  "pricing_url": "https://moltbook-alpha.duckdns.org/v1/payments/config"
+  "documentation_url": "https://www.moltalpha.dev",
+  "api_status_url": "https://api.moltalpha.dev/v1/health",
+  "pricing_url": "https://api.moltalpha.dev/v1/payments/config"
 }
