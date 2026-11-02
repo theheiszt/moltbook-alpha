@@ -1250,7 +1250,8 @@
 
     // Initialize on load - Always connect to production API
     window.addEventListener("DOMContentLoaded", () => {
-      if (window.location.protocol.startsWith("http") && !window.location.host.includes("github.io")) {
+      // Only use this page's own origin when it is served by the API itself (local dev or the API host).
+      if (/^(localhost|127\.0\.0\.1)(:|$)|^api\./.test(window.location.host)) {
         currentBaseUrl = window.location.origin;
       } else {
         currentBaseUrl = "https://api.moltalpha.dev";
