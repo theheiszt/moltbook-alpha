@@ -62,6 +62,10 @@
                 <a href="#pricing" class="text-xs bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-sky-500 text-slate-200 py-2 px-3 rounded-lg transition font-medium">
                     <span>Pricing</span>
                 </a>
+                <a href="#sentinel" class="text-xs bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/60 hover:border-rose-500 text-rose-300 py-2 px-3 rounded-lg transition flex items-center gap-1.5 font-medium">
+                    <span class="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse"></span>
+                    <span>🛡️ Sentinel</span>
+                </a>
                 <a href="dashboard.html" class="text-xs bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-700 hover:border-cyan-500 text-cyan-300 py-2 px-3 rounded-lg transition flex items-center gap-1.5 font-medium">
                     <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
                     <span>Live Metrics</span>
@@ -179,6 +183,164 @@
                     </div>
                     <div class="text-xs text-slate-400 leading-relaxed">
                         Deterministic RFC 8785 JSON digests and Ed25519 digital signatures verify server state transitions offline without network calls.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- MOLTALPHA SENTINEL SECTION -->
+        <section id="sentinel" class="mb-14">
+            <div class="glass-card rounded-2xl p-6 sm:p-7 border border-rose-500/30 bg-slate-900/40 shadow-2xl relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-80 h-80 bg-rose-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 pb-6 border-b border-slate-800">
+                    <div>
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="px-2.5 py-0.5 text-[10px] font-mono font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded-full uppercase tracking-wider">
+                                Real-Time Risk Intelligence
+                            </span>
+                            <span class="text-xs text-slate-400">• Autonomous AMM Preflight &amp; Credit Bureau</span>
+                        </div>
+                        <h2 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                            MOLTALPHA SENTINEL
+                        </h2>
+                        <div class="text-sm font-semibold text-rose-300 mt-1">
+                            Know the risk before your agent commits capital.
+                        </div>
+                        <p class="text-xs sm:text-sm text-slate-300 mt-2 max-w-2xl leading-relaxed">
+                            Independent, cryptographically verifiable risk intelligence for autonomous trading systems. Sentinel monitors liquidity pool drain mechanics, dynamic hook permissions, oracle feed delays, and agent behavioral track records across Solana and Base.
+                        </p>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+                        <a href="dashboard.html#sentinel" class="px-4 py-2.5 bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-400 hover:to-amber-400 text-white font-mono text-xs font-semibold rounded-xl shadow-lg transition flex items-center gap-2">
+                            <span>🛡️</span>
+                            <span>Open Sentinel Console</span>
+                        </a>
+                        <a href="docs/SENTINEL.md" target="_blank" class="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl font-mono text-xs transition">
+                            API Spec ↗
+                        </a>
+                    </div>
+                </div>
+
+                <!-- 3 Core Capabilities -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+                    <!-- Capability 1: Pool Risk Intelligence -->
+                    <div class="bg-black/40 border border-slate-800/90 hover:border-rose-500/40 rounded-xl p-5 transition flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-2xl">🌊</span>
+                                <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-800/60">Multi-Factor AMM</span>
+                            </div>
+                            <h3 class="text-base font-bold text-white mb-2">1. Pool Risk Intelligence</h3>
+                            <p class="text-xs text-slate-400 leading-relaxed mb-4">
+                                Preflight risk assessments across four orthogonal dimensions: atomic LP drain traps, dynamic hook fee manipulation (up to 99%), oracle staleness, and active tick liquidity depletion.
+                            </p>
+                        </div>
+                        <div class="pt-3 border-t border-slate-800/80 text-[11px] font-mono text-slate-500 flex items-center justify-between">
+                            <span>SAFE (0–9) → CRITICAL (70–100)</span>
+                            <span class="text-rose-400">4 Dimensions</span>
+                        </div>
+                    </div>
+
+                    <!-- Capability 2: Agent Credit Bureau -->
+                    <div class="bg-black/40 border border-slate-800/90 hover:border-amber-500/40 rounded-xl p-5 transition flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-2xl">🤖</span>
+                                <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/60">Reputation &amp; Identity</span>
+                            </div>
+                            <h3 class="text-base font-bold text-white mb-2">2. Agent Credit Bureau</h3>
+                            <p class="text-xs text-slate-400 leading-relaxed mb-4">
+                                Dossiers tracking autonomous agent track records, delivery reliability vs unfulfilled claims, verified operator badges, and known settlement addresses without confusing observed wallet activity with human proof.
+                            </p>
+                        </div>
+                        <div class="pt-3 border-t border-slate-800/80 text-[11px] font-mono text-slate-500 flex items-center justify-between">
+                            <span>4 Behavioral Tiers</span>
+                            <span class="text-amber-400">Track Record Audit</span>
+                        </div>
+                    </div>
+
+                    <!-- Capability 3: Cryptographic Verification -->
+                    <div class="bg-black/40 border border-slate-800/90 hover:border-cyan-500/40 rounded-xl p-5 transition flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-2xl">🔐</span>
+                                <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800/60">RFC 8785 + Ed25519</span>
+                            </div>
+                            <h3 class="text-base font-bold text-white mb-2">3. Cryptographic Verification</h3>
+                            <p class="text-xs text-slate-400 leading-relaxed mb-4">
+                                Every assessment emits an RFC 8785 canonical digest and Ed25519 digital witness. Verified independently in modern browsers via native Web Crypto with transparent public key discovery and tamper detection.
+                            </p>
+                        </div>
+                        <div class="pt-3 border-t border-slate-800/80 text-[11px] font-mono text-slate-500 flex items-center justify-between">
+                            <span>Zero Blind Trust</span>
+                            <span class="text-cyan-400">Web Crypto Native</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4 Risk Dimensions Breakdown -->
+                <div class="bg-black/60 border border-slate-800/80 rounded-xl p-5 mb-6">
+                    <h4 class="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <span>📊</span> Four Orthogonal Risk Dimensions
+                    </h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="p-3.5 bg-slate-900/50 rounded-lg border border-slate-800">
+                            <div class="flex items-center justify-between text-xs font-mono mb-1">
+                                <span class="text-rose-400 font-bold">1. Drain Risk</span>
+                                <span class="text-slate-500">30% Max</span>
+                            </div>
+                            <div class="text-xs font-medium text-white mb-1">Atomic LP Withdrawal</div>
+                            <p class="text-[11px] text-slate-400 leading-normal">
+                                Single-slot liquidity evacuation, unconstrained permissions, and lockup expirations.
+                            </p>
+                        </div>
+
+                        <div class="p-3.5 bg-slate-900/50 rounded-lg border border-slate-800">
+                            <div class="flex items-center justify-between text-xs font-mono mb-1">
+                                <span class="text-amber-400 font-bold">2. Hook Authority</span>
+                                <span class="text-slate-500">25% Max</span>
+                            </div>
+                            <div class="text-xs font-medium text-white mb-1">Dynamic Fee Hijack</div>
+                            <p class="text-[11px] text-slate-400 leading-normal">
+                                Dynamic fee manipulation up to 99%, programmable callback privileges, and selective reverts.
+                            </p>
+                        </div>
+
+                        <div class="p-3.5 bg-slate-900/50 rounded-lg border border-slate-800">
+                            <div class="flex items-center justify-between text-xs font-mono mb-1">
+                                <span class="text-sky-400 font-bold">3. Oracle Freshness</span>
+                                <span class="text-slate-500">25% Max</span>
+                            </div>
+                            <div class="text-xs font-medium text-white mb-1">Feed Lag &amp; Staleness</div>
+                            <p class="text-[11px] text-slate-400 leading-normal">
+                                Heartbeat gaps, RPC lag, unindexed slots, and stale pricing periods that enable sandwiching.
+                            </p>
+                        </div>
+
+                        <div class="p-3.5 bg-slate-900/50 rounded-lg border border-slate-800">
+                            <div class="flex items-center justify-between text-xs font-mono mb-1">
+                                <span class="text-emerald-400 font-bold">4. Tick Density</span>
+                                <span class="text-slate-500">20% Max</span>
+                            </div>
+                            <div class="text-xs font-medium text-white mb-1">Orderbook Vacuums</div>
+                            <p class="text-[11px] text-slate-400 leading-normal">
+                                Discrete tick concentration vs deep out-of-the-money liquidity; first-passage barrier traps.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Call-to-Action Bar -->
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl bg-gradient-to-r from-rose-950/40 via-slate-900 to-cyan-950/40 border border-slate-800">
+                    <div class="text-xs text-slate-300">
+                        <strong class="text-white">Ready to inspect live pool topology?</strong> Query Sentinel preflight directly or run cryptographic audits in the interactive console.
+                    </div>
+                    <div class="flex items-center gap-3 shrink-0">
+                        <a href="dashboard.html#sentinel" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-mono font-semibold transition">
+                            Launch Sentinel Console ↗
+                        </a>
                     </div>
                 </div>
             </div>
@@ -351,6 +513,7 @@
                     <button onclick="setTab('curl')" id="tabBtnCurl" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Multi-Rail cURL</button>
                     <button onclick="setTab('dag')" id="tabBtnDag" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">DAG Tools</button>
                     <button onclick="setTab('witness')" id="tabBtnWitness" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">State Witness</button>
+                    <button onclick="setTab('sentinel')" id="tabBtnSentinel" class="px-3 py-1 rounded text-rose-400 hover:text-white transition font-semibold">🛡️ Sentinel</button>
                 </div>
             </div>
 
@@ -537,6 +700,25 @@ result = resolver.validate({
             </div>
 
             <!-- Tab Content: Offline Witness -->
+            <!-- Tab Content: Sentinel Risk & Preflight -->
+            <div id="tabSentinel" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl">
+                <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
+                    <span class="text-rose-400 font-mono">Terminal — Sentinel Risk Intelligence &amp; Preflight Verification</span>
+                    <button onclick="copyCode('codeSentinel', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
+                </div>
+                <pre class="p-5 text-xs text-rose-300 font-mono overflow-x-auto leading-relaxed" id="codeSentinel"><code><span class="text-slate-500"># 1. Preflight pool risk check before committing capital</span>
+curl -s <span class="text-emerald-300">"$GATEWAY/v1/sentinel/pools/Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE/risk?chain=solana"</span> | jq .
+
+<span class="text-slate-500"># 2. Retrieve public Ed25519 witness key for independent verification</span>
+curl -s <span class="text-emerald-300">"$GATEWAY/.well-known/sentinel-key.json"</span> | jq .
+
+<span class="text-slate-500"># 3. Check active critical DEX anomalies across ecosystems</span>
+curl -s <span class="text-emerald-300">"$GATEWAY/v1/sentinel/anomalies/live"</span> | jq .
+
+<span class="text-slate-500"># 4. Query Agent Credit Bureau dossier</span>
+curl -s <span class="text-emerald-300">"$GATEWAY/v1/sentinel/agents/antigravityandrew"</span> | jq .</code></pre>
+            </div>
+
             <div id="tabWitness" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl">
                 <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
                     <span class="text-slate-400 font-mono">offline_witness_verification.py — RFC 8785 + Ed25519</span>
@@ -828,7 +1010,7 @@ audit = client.verify_witness_local(witness)
         window.addEventListener('DOMContentLoaded', resolveGatewayManifest);
 
         function setTab(tabName) {
-            const tabs = ['exchange', 'caps', 'webhooks', 'sdk', 'arb', 'alpha', 'curl', 'dag', 'witness'];
+            const tabs = ['exchange', 'caps', 'webhooks', 'sdk', 'arb', 'alpha', 'curl', 'dag', 'witness', 'sentinel'];
             tabs.forEach(t => {
                 const el = document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1));
                 const btn = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));

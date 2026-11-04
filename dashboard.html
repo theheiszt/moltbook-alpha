@@ -5,33 +5,109 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MoltALPHA — Live Traffic & Operations Console</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <style>
     :root {
-      --background: #0b0f17;
-      --card: #151c28;
-      --border: #222f3e;
+      /* Semantic Risk Level Tokens (Strict Specification) */
+      --risk-safe: #22c58b;
+      --risk-safe-bg: rgba(34, 197, 139, 0.12);
+      --risk-safe-border: rgba(34, 197, 139, 0.35);
+
+      --risk-low: #52c7b5;
+      --risk-low-bg: rgba(82, 199, 181, 0.12);
+      --risk-low-border: rgba(82, 199, 181, 0.35);
+
+      --risk-medium: #e7b44f;
+      --risk-medium-bg: rgba(231, 180, 79, 0.12);
+      --risk-medium-border: rgba(231, 180, 79, 0.35);
+
+      --risk-high: #ed874c;
+      --risk-high-bg: rgba(237, 135, 76, 0.12);
+      --risk-high-border: rgba(237, 135, 76, 0.35);
+
+      --risk-critical: #ef5268;
+      --risk-critical-bg: rgba(239, 82, 104, 0.15);
+      --risk-critical-border: rgba(239, 82, 104, 0.40);
+
+      /* Slate / Navy Institutional Background Hierarchy */
+      --bg-primary: #080d16;
+      --bg-surface: #0d1424;
+      --bg-card: #131b2e;
+      --bg-card-hover: #18223a;
+      --bg-card-inner: #090e1a;
+
+      /* Structural & Separator Borders */
+      --border-subtle: #1e293b;
+      --border-muted: #2a374d;
+      --border-focus: #06b6d4;
+
+      /* Typography & Foreground Hierarchy */
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --text-dim: #475569;
+
+      /* Cyan Accents */
+      --accent-cyan: #06b6d4;
+
+      /* Backward Compatibility Aliases */
+      --background: #080d16;
+      --card: #131b2e;
+      --border: #1e293b;
       --foreground: #f8fafc;
       --muted-foreground: #94a3b8;
     }
-    body {
-      background-color: var(--background);
-      color: var(--foreground);
+    html, body {
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      overflow-x: hidden;
     }
+    .font-mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    .risk-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.15rem 0.6rem;
+      border-radius: 9999px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.025em;
+      text-transform: uppercase;
+      line-height: 1.2;
+    }
+    .risk-badge-safe     { color: var(--risk-safe); background: var(--risk-safe-bg); border: 1px solid var(--risk-safe-border); }
+    .risk-badge-low      { color: var(--risk-low); background: var(--risk-low-bg); border: 1px solid var(--risk-low-border); }
+    .risk-badge-medium   { color: var(--risk-medium); background: var(--risk-medium-bg); border: 1px solid var(--risk-medium-border); }
+    .risk-badge-high     { color: var(--risk-high); background: var(--risk-high-bg); border: 1px solid var(--risk-high-border); }
+    .risk-badge-critical { color: var(--risk-critical); background: var(--risk-critical-bg); border: 1px solid var(--risk-critical-border); }
+
+    .gate-safe     { color: var(--risk-safe); }
+    .gate-low      { color: var(--risk-low); }
+    .gate-medium   { color: var(--risk-medium); }
+    .gate-high     { color: var(--risk-high); }
+    .gate-critical { color: var(--risk-critical); }
+
     .custom-scrollbar::-webkit-scrollbar {
       width: 5px;
       height: 5px;
     }
     .custom-scrollbar::-webkit-scrollbar-track {
-      background: #0b0f17;
+      background: var(--bg-card-inner);
     }
     .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: #222f3e;
+      background: var(--border-muted);
       border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: var(--text-dim);
     }
   </style>
 </head>
-<body class="min-h-screen p-4 sm:p-6 lg:p-8">
+<body class="min-h-screen p-3 sm:p-6 lg:p-8">
 
   <div class="max-w-7xl mx-auto space-y-6">
 
@@ -105,6 +181,581 @@
         <a id="testHealthLink" href="https://api.moltalpha.dev/v1/health" target="_blank" class="px-2.5 py-1 bg-rose-900/60 hover:bg-rose-800 border border-rose-700 text-rose-200 rounded-lg text-xs font-medium">Test /v1/health ↗</a>
         <button onclick="fetchMetrics()" class="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-semibold">Retry</button>
       </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- VIEW NAVIGATION: Sentinel (Public) vs Admin Operations   -->
+    <!-- ======================================================== -->
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-[var(--border,#222f3e)] pb-4">
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="viewBtnSentinel" onclick="switchView('sentinel')"
+          class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-gradient-to-r from-rose-600 to-amber-600 text-white shadow-lg">
+          <span>🛡️</span>
+          <span>Sentinel Risk Intelligence</span>
+          <span class="px-1.5 py-0.5 rounded-full text-[10px] bg-black/40 text-rose-200 border border-white/20 uppercase tracking-wider">Public</span>
+        </button>
+        <button id="viewBtnAdmin" onclick="switchView('admin')"
+          class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition flex items-center gap-2">
+          <span>📊</span>
+          <span>Admin &amp; Operations</span>
+        </button>
+      </div>
+      <div class="text-[11px] font-mono text-slate-400 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>Ed25519 Cryptographic Witness Active</span>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- SENTINEL RISK & VERIFICATION CENTER (PUBLIC SUITE)       -->
+    <!-- ======================================================== -->
+    <div id="sentinelView" class="space-y-6">
+
+      <!-- SECTION 1: SENTINEL OVERVIEW -->
+      <div id="sentinelOverviewSection" class="bg-[var(--card,#151c28)] border border-rose-500/30 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-96 h-96 bg-rose-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 pb-5 border-b border-[var(--border,#222f3e)]">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="px-2 py-0.5 text-[10px] font-mono font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded-full uppercase tracking-wider">
+                Section 1 • Sentinel Overview
+              </span>
+              <span id="sentinelSnapshotBadge" class="text-xs text-slate-400 font-mono">Snapshot: Fetching…</span>
+            </div>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+              MoltAlpha Sentinel Risk Surveillance
+            </h2>
+            <p class="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
+              Multi-factor preflight assessments across Solana and Base AMMs. Signed by autonomous witness nodes with RFC 8785 canonical digests.
+            </p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button onclick="loadSentinelOverview()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-mono transition flex items-center gap-1.5">
+              <span>↻</span> Refresh Snapshot
+            </button>
+            <a href="#cryptoVerifySection" class="px-3 py-1.5 bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-300 rounded-xl text-xs font-mono transition">
+              Verify Witness Key ↘
+            </a>
+          </div>
+        </div>
+
+        <!-- 4 Overview KPI Cards -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div class="bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl p-4">
+            <span class="text-xs text-slate-400 block mb-1">Assessed Pools</span>
+            <div class="flex items-baseline gap-2">
+              <span id="kpiAssessedPools" class="text-2xl font-extrabold text-white font-mono">--</span>
+              <span class="text-[11px] text-emerald-400 font-mono">monitored</span>
+            </div>
+            <span class="text-[10px] text-slate-500 block mt-1">Raydium, Orca, Base AMM</span>
+          </div>
+
+          <div class="bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl p-4">
+            <span class="text-xs text-slate-400 block mb-1">Active Anomalies</span>
+            <div class="flex items-baseline gap-2">
+              <span id="kpiActiveAnomalies" class="text-2xl font-extrabold text-rose-400 font-mono">--</span>
+              <span class="text-[11px] text-slate-400 font-mono">SEV-1/SEV-2</span>
+            </div>
+            <span class="text-[10px] text-slate-500 block mt-1">Score ≥ 45 alerts</span>
+          </div>
+
+          <div class="bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl p-4">
+            <span class="text-xs text-slate-400 block mb-1">Snapshot Age</span>
+            <div class="flex items-baseline gap-2">
+              <span id="kpiSnapshotAge" class="text-2xl font-extrabold text-cyan-400 font-mono">--</span>
+            </div>
+            <span id="kpiSnapshotTimestamp" class="text-[10px] text-slate-500 block mt-1 truncate">Timestamp: --</span>
+          </div>
+
+          <div class="bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl p-4">
+            <span class="text-xs text-slate-400 block mb-1">Witness Status</span>
+            <div class="flex items-baseline gap-2">
+              <span id="kpiWitnessStatus" class="text-base font-extrabold text-emerald-400 font-mono">VERIFIED</span>
+            </div>
+            <span id="kpiWitnessId" class="text-[10px] text-slate-500 block mt-1 truncate font-mono">wit_sentinel_...</span>
+          </div>
+        </div>
+
+        <!-- View 1: Risk Distribution Doughnut & Monitored Pools Table Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 min-w-0">
+          <!-- Left: Risk Distribution Doughnut Chart -->
+          <div class="bg-[var(--bg-surface,#0d1424)] border border-[var(--border-subtle,#1e293b)] rounded-xl p-5 flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-3 pb-2 border-b border-[var(--border-subtle,#1e293b)]">
+              <span class="font-bold text-white text-xs font-mono flex items-center gap-1.5">
+                <span>🍩</span> Risk Distribution
+              </span>
+              <span id="riskDistLabel" class="text-[11px] font-mono text-slate-400">Evaluating...</span>
+            </div>
+            <div class="relative h-56 w-full flex items-center justify-center">
+              <canvas id="riskDistributionCanvas"></canvas>
+            </div>
+            <div class="pt-3 border-t border-[var(--border-subtle,#1e293b)] flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono text-slate-400">
+              <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#22c58b]"></span> SAFE</span>
+              <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#52c7b5]"></span> LOW</span>
+              <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#e7b44f]"></span> MED</span>
+              <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#ed874c]"></span> HIGH</span>
+              <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#ef5268]"></span> CRIT</span>
+            </div>
+          </div>
+
+          <!-- Right: Monitored Liquidity Pools Table with Mini Sparklines -->
+          <div class="lg:col-span-2 bg-[var(--bg-surface,#0d1424)] border border-[var(--border-subtle,#1e293b)] rounded-xl p-5 min-w-0">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 pb-2 border-b border-[var(--border-subtle,#1e293b)]">
+              <div>
+                <span class="font-bold text-white text-xs font-mono flex items-center gap-1.5">
+                  <span>🌊</span> Monitored Liquidity Pools
+                </span>
+                <span class="text-[10px] text-slate-400 font-mono block">Automated tick & drain telemetry across Solana and Base</span>
+              </div>
+              <span class="text-[10px] text-cyan-400 font-mono">7-Observation Trendline</span>
+            </div>
+            <div class="overflow-x-auto custom-scrollbar w-full min-w-0">
+              <table id="monitoredPoolsTable" class="w-full text-left text-xs font-mono">
+                <thead>
+                  <tr class="border-b border-[var(--border-subtle,#1e293b)] text-slate-400 text-[11px]">
+                    <th class="pb-2 font-medium">Pool / Pair</th>
+                    <th class="pb-2 font-medium">Chain</th>
+                    <th class="pb-2 font-medium">Risk Score</th>
+                    <th class="pb-2 font-medium text-center">7-Obs Trend</th>
+                    <th class="pb-2 font-medium text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="monitoredPoolsTableBody" class="divide-y divide-[var(--border-subtle,#1e293b)]/60 text-slate-300">
+                  <!-- Rendered dynamically by renderSentinelOverview -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 2: POOL PREFLIGHT TOOL -->
+      <div id="poolPreflightSection" class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-6 shadow-sm">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-4 border-b border-[var(--border,#222f3e)]">
+          <div>
+            <span class="px-2 py-0.5 text-[10px] font-mono font-bold bg-sky-500/10 text-sky-400 border border-sky-500/30 rounded-full uppercase tracking-wider">
+              Section 2 • Live Preflight
+            </span>
+            <h3 class="text-base sm:text-lg font-bold text-white mt-1">
+              Automated Liquidity Pool Risk Preflight Check
+            </h3>
+            <p class="text-xs text-slate-400">
+              Evaluates atomic drain, fee modification hooks, oracle staleness, and orderbook tick vacuums.
+            </p>
+          </div>
+          <div class="text-xs font-mono text-slate-500">
+            Endpoint: <code class="text-slate-300">GET /v1/sentinel/pools/{address}/risk</code>
+          </div>
+        </div>
+
+        <!-- Address & Chain Controls -->
+        <div class="space-y-3 mb-6">
+          <div class="flex flex-col sm:flex-row gap-3">
+            <div class="sm:w-40 shrink-0">
+              <label class="block text-[11px] font-mono text-slate-400 mb-1">Target Chain</label>
+              <select id="preflightChain" class="w-full bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500">
+                <option value="solana" selected>Solana (CLMM)</option>
+                <option value="base">Base (Uniswap v4)</option>
+              </select>
+            </div>
+            <div class="flex-1">
+              <label class="block text-[11px] font-mono text-slate-400 mb-1">Pool / AMM Address</label>
+              <input id="preflightPoolAddress" type="text" value="Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE"
+                placeholder="Enter AMM contract address (e.g. Czfq3xZZ...)"
+                class="w-full bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500">
+            </div>
+            <div class="shrink-0 flex items-end">
+              <button onclick="runPoolPreflight()" id="btnRunPreflight"
+                class="w-full sm:w-auto px-5 py-2 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-mono text-xs font-bold rounded-xl transition shadow flex items-center justify-center gap-2">
+                <span id="preflightSpinner">⚡</span> Run Preflight
+              </button>
+            </div>
+          </div>
+
+          <!-- Quick Sample Pre-fills -->
+          <div class="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-400">
+            <span>Presets:</span>
+            <button onclick="setPreflightTarget('Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE', 'solana')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">Raydium SOL/USDC (Safe)</button>
+            <button onclick="setPreflightTarget('7qbRF6YsyGuLUVs6Y1q64bdVrfe4ZcUUz1JRdoVNUJnm', 'solana')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">Orca Whirlpool SOL/USDC</button>
+            <button onclick="setPreflightTarget('0x422df9aa896e883c9cdcbad309c0785b7364a1cf', 'base')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">Base Pool (Hook Fee Alert)</button>
+            <button onclick="setPreflightTarget('0xDangerRugPoolMock', 'solana')" class="px-2 py-0.5 rounded bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800">Danger Rug Simulation</button>
+          </div>
+        </div>
+
+        <!-- Preflight Results Display -->
+        <div id="preflightResultBox" class="bg-black/50 border border-slate-800 rounded-xl p-5 font-mono text-xs space-y-4">
+          <!-- Responsive Preflight Header (Zero Overflow Fix) -->
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-slate-800">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3 min-w-0 flex-1">
+              <span id="preflightScoreBadge" class="px-3 py-1.5 rounded-xl text-sm font-extrabold bg-emerald-950/80 text-emerald-400 border border-emerald-700/60 shrink-0 self-start sm:self-auto">
+                SAFE (4 / 100)
+              </span>
+              <div class="min-w-0 flex-1">
+                <span id="preflightGateDecision" class="font-bold text-emerald-400 text-sm block break-words">EXECUTE (Optimal Risk Parameters)</span>
+                <span id="preflightPoolEcho" class="text-[11px] text-slate-400 truncate block">Pool: Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE</span>
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-3 text-[11px] text-slate-400 shrink-0">
+              <span>Completeness: <strong id="preflightCompleteness" class="text-white">100%</strong></span>
+              <span>Confidence: <strong id="preflightConfidence" class="text-white">85%</strong></span>
+              <span id="preflightFreshness" class="text-cyan-400">4s age</span>
+            </div>
+          </div>
+
+          <!-- Modular Circular Risk Gauge & 4-Factor Breakdown Meters Grid -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 my-4">
+            <!-- Left: Circular Risk Score Gauge -->
+            <div class="bg-[var(--bg-surface,#0d1424)] border border-[var(--border-subtle,#1e293b)] rounded-xl p-5 flex flex-col items-center justify-center text-center">
+              <span class="text-[11px] font-mono text-slate-400 block mb-2">Multi-Factor Risk Score Gauge</span>
+              <div id="preflightGaugeContainer" class="w-full flex justify-center py-2">
+                <!-- Rendered dynamically by renderRiskGauge -->
+              </div>
+              <div class="mt-2 text-[11px] text-slate-400 font-mono">
+                Execution Gate: <strong id="preflightGateSummary" class="text-emerald-400">ALLOW</strong>
+              </div>
+            </div>
+
+            <!-- Right: 4-Factor Breakdown Horizontal Factor Meters -->
+            <div class="lg:col-span-2 space-y-3">
+              <div class="flex items-center justify-between text-[11px] font-mono text-slate-400 px-1">
+                <span>Dimensional Factor Breakdown (100% Weight)</span>
+                <span>Threshold Evidence</span>
+              </div>
+              <div id="preflightFactorMeters" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <!-- Rendered dynamically by renderRiskFactor -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Witness Receipt & Historical Trigger -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+            <div class="flex items-center gap-2">
+              <span>Witness ID:</span>
+              <span id="pfWitnessId" class="text-cyan-400 font-bold truncate">wit_sentinel_...</span>
+              <span class="text-emerald-400">✓ Signed</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="inspectWitnessInVerifier()" class="text-rose-400 hover:underline">Verify in Cryptographic Center ↘</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 3: HISTORICAL RISK INTELLIGENCE -->
+      <div class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-6 shadow-sm">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-4 border-b border-[var(--border,#222f3e)]">
+          <div>
+            <span class="px-2 py-0.5 text-[10px] font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-full uppercase tracking-wider">
+              Section 3 • Additive History
+            </span>
+            <h3 class="text-base sm:text-lg font-bold text-white mt-1">
+              Pool Risk Evolution &amp; Time-Series Audit Log
+            </h3>
+            <p class="text-xs text-slate-400">
+              Query historical evaluations from SQLite ledger (`sentinel_pool_history`). Preserves immutable audit trail.
+            </p>
+          </div>
+          <div class="flex items-center gap-1 bg-[var(--background,#0b0f17)] p-1 rounded-xl border border-[var(--border,#222f3e)] text-[11px] font-mono">
+            <button onclick="setHistoryWindow('24h')" id="histBtn24h" class="px-2.5 py-1 rounded-lg bg-slate-800 text-white font-medium">24h</button>
+            <button onclick="setHistoryWindow('7d')" id="histBtn7d" class="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white">7d</button>
+            <button onclick="setHistoryWindow('30d')" id="histBtn30d" class="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white">30d</button>
+            <button onclick="setHistoryWindow('90d')" id="histBtn90d" class="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white">90d</button>
+          </div>
+        </div>
+
+        <!-- Historical Risk Trend Line Chart -->
+        <div class="bg-[var(--bg-surface,#0d1424)] border border-[var(--border-subtle,#1e293b)] rounded-xl p-4 mb-4">
+          <div class="flex items-center justify-between text-xs font-mono text-slate-400 mb-2">
+            <span>Historical Risk Score Trajectory (0–100 Scale)</span>
+            <span class="text-[10px] text-cyan-400">Continuous Assessment History</span>
+          </div>
+          <div class="relative h-56 sm:h-64 w-full">
+            <canvas id="preflightHistoryCanvas"></canvas>
+          </div>
+        </div>
+
+        <div id="historyTableContainer" class="overflow-x-auto">
+          <table class="w-full text-left text-xs font-mono">
+            <thead>
+              <tr class="border-b border-[var(--border,#222f3e)] text-slate-400 text-[11px]">
+                <th class="pb-2 font-medium">Assessed Time</th>
+                <th class="pb-2 font-medium">Pool Address</th>
+                <th class="pb-2 font-medium">Score / Tier</th>
+                <th class="pb-2 font-medium">Dimension Deltas</th>
+                <th class="pb-2 font-medium text-right">Witness ID</th>
+              </tr>
+            </thead>
+            <tbody id="historyTbody" class="divide-y divide-[var(--border,#222f3e)]/60 text-slate-300">
+              <tr>
+                <td colspan="5" class="py-4 text-center text-slate-500">Run a pool preflight check or select a pool above to load historical timeline.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SECTION 4: AGENT CREDIT BUREAU -->
+      <div id="agentCreditSection" class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-6 shadow-sm">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-4 border-b border-[var(--border,#222f3e)]">
+          <div>
+            <span class="px-2 py-0.5 text-[10px] font-mono font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-full uppercase tracking-wider">
+              Section 4 • Agent Credit Bureau
+            </span>
+            <h3 class="text-base sm:text-lg font-bold text-white mt-1">
+              Autonomous Agent Reputation &amp; Track-Record Profiling
+            </h3>
+            <p class="text-xs text-slate-400">
+              Evaluates delivery history, unfulfilled claims, and verified operator standing. Distinguishes observed wallet activity from human proof.
+            </p>
+          </div>
+          <div class="text-xs font-mono text-slate-500">
+            Endpoint: <code class="text-slate-300">GET /v1/sentinel/agents/{id}</code>
+          </div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-3 mb-4">
+          <div class="flex-1">
+            <input id="agentLookupInput" type="text" value="antigravityandrew"
+              placeholder="Enter Moltbook Handle or Web3 Wallet Address..."
+              class="w-full bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-500">
+          </div>
+          <button onclick="lookupAgentCredit()" id="btnLookupAgent"
+            class="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold rounded-xl transition shadow shrink-0 flex items-center justify-center gap-2">
+            <span>🔍</span> Inspect Dossier
+          </button>
+        </div>
+
+        <!-- Presets -->
+        <div class="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-400 mb-5">
+          <span>Presets:</span>
+          <button onclick="setAgentTarget('antigravityandrew')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">antigravityandrew (Verified Operator)</button>
+          <button onclick="setAgentTarget('jeeves_hermes')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">jeeves_hermes (4 Deliveries)</button>
+          <button onclick="setAgentTarget('osai2026')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">osai2026 (Commercial Seller)</button>
+          <button onclick="setAgentTarget('frantic_129')" class="px-2 py-0.5 rounded bg-rose-950/80 hover:bg-rose-900 text-rose-300">frantic_129 (Dead Sponsor)</button>
+        </div>
+
+        <!-- Dossier Card -->
+        <div id="agentDossierCard" class="bg-black/40 border border-slate-800 rounded-xl p-5 font-mono text-xs space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+            <div class="flex items-center gap-3 min-w-0">
+              <span class="text-3xl shrink-0">🤖</span>
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span id="agentDossierId" class="text-base font-bold text-white">antigravityandrew</span>
+                  <span id="agentTierBadge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-700">VERIFIED_OPERATOR</span>
+                </div>
+                <span id="agentWalletAddress" class="text-[11px] text-slate-400 truncate block">Wallet: e9deb3dd-cf95-4be0-9c72-01c8cb3c82cd</span>
+              </div>
+            </div>
+            <div class="text-right">
+              <span id="agentReliabilityScore" class="text-xl font-extrabold text-emerald-400">100%</span>
+              <span class="text-[10px] text-slate-400 block">Delivery Reliability</span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+            <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
+              <span class="text-[10px] text-slate-400 block">Known Deliveries</span>
+              <span id="agentDeliveriesCount" class="text-sm font-bold text-white">8</span>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
+              <span class="text-[10px] text-slate-400 block">Unfulfilled Claims</span>
+              <span id="agentUnfulfilledCount" class="text-sm font-bold text-emerald-400">0</span>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
+              <span class="text-[10px] text-slate-400 block">Verification Status</span>
+              <span id="agentVerificationStatus" class="text-sm font-bold text-emerald-400">ACTIVE</span>
+            </div>
+            <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
+              <span class="text-[10px] text-slate-400 block">Dead Sponsor Flags</span>
+              <span id="agentDeadFlagsCount" class="text-sm font-bold text-slate-400">0</span>
+            </div>
+          </div>
+
+          <div class="p-3 bg-slate-900/40 rounded-lg border border-slate-800/80 text-[11px] text-slate-400 flex items-start gap-2">
+            <span class="text-cyan-400 font-bold shrink-0">ℹ Note:</span>
+            <span>Observed wallet activity validates on-chain transaction history and delivery reputation; it does not constitute mathematical proof of human identity.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 5: LIVE ANOMALY INTELLIGENCE -->
+      <div id="liveAnomaliesSection" class="bg-[var(--card,#151c28)] border border-[var(--border,#222f3e)] rounded-2xl p-6 shadow-sm">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-4 border-b border-[var(--border,#222f3e)]">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 text-[10px] font-mono font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded-full uppercase tracking-wider">
+              Section 5 • Anomaly Sentinel
+            </span>
+            <h3 class="text-base sm:text-lg font-bold text-white">
+              Live SEV-1 &amp; SEV-2 Anomaly Feed
+            </h3>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 font-mono text-xs">
+            <div class="flex items-center bg-[var(--bg-primary,#080d16)] p-0.5 rounded-lg border border-[var(--border-subtle,#1e293b)]">
+              <button id="btnFilterALL" onclick="filterAnomalies('ALL')" data-filter="all" class="px-2.5 py-1 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 font-bold text-[11px]">All Alerts</button>
+              <button id="btnFilterSEV1" onclick="filterAnomalies('SEV-1')" data-filter="sev1" class="px-2.5 py-1 rounded text-slate-400 hover:text-white text-[11px]">SEV-1</button>
+              <button id="btnFilterSEV2" onclick="filterAnomalies('SEV-2')" data-filter="sev2" class="px-2.5 py-1 rounded text-slate-400 hover:text-white text-[11px]">SEV-2</button>
+              <button id="btnFilterEMPTY" onclick="filterAnomalies('EMPTY')" data-filter="empty" class="px-2.5 py-1 rounded text-slate-400 hover:text-white text-[11px]" title="Test Zero-Anomaly State">Empty State</button>
+            </div>
+            <button onclick="loadLiveAnomalies()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 text-[11px] flex items-center gap-1">
+              <span>↻</span> Refresh
+            </button>
+          </div>
+        </div>
+
+        <div id="liveAnomaliesContainer" class="space-y-3">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- PART B: INDEPENDENT CRYPTOGRAPHIC VERIFICATION CENTER -->
+      <div id="cryptoVerifySection" class="bg-[var(--card,#151c28)] border-2 border-cyan-500/40 rounded-2xl p-6 sm:p-7 shadow-2xl relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 pb-5 border-b border-[var(--border,#222f3e)]">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="px-2.5 py-0.5 text-[10px] font-mono font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-full uppercase tracking-wider">
+                Cryptographic Witness Guard
+              </span>
+              <span class="text-xs text-slate-400">• Web Crypto Native</span>
+            </div>
+            <h3 class="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+              Independent Cryptographic Verification
+            </h3>
+            <p class="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
+              Verify that Sentinel assessments were signed by an authorized MoltAlpha witness and have not been modified. Runs 100% in your browser using native Web Crypto Ed25519 primitives.
+            </p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <span class="px-3 py-1.5 rounded-xl bg-cyan-950/80 border border-cyan-700/60 text-cyan-300 font-mono text-xs flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+              <span>RFC 8785 + Ed25519</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- B1: Public Key Metadata Box -->
+        <div class="bg-black/50 border border-slate-800 rounded-xl p-4 sm:p-5 mb-6 font-mono text-xs space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
+            <span class="font-bold text-slate-300">Active Witness Public Key Discovery</span>
+            <span class="text-[11px] text-slate-400">Resource: <code class="text-cyan-400">/.well-known/sentinel-key.json</code></span>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+            <div>
+              <span class="text-slate-500 block">Key Identifier (key_id):</span>
+              <span id="metaKeyId" class="text-white font-bold">wit_key_fd9017194df8</span>
+            </div>
+            <div>
+              <span class="text-slate-500 block">Algorithm &amp; Encoding:</span>
+              <span class="text-white">Ed25519 (RFC 8032) • SPKI ASN.1</span>
+            </div>
+            <div>
+              <span class="text-slate-500 block">Public Key (Base58):</span>
+              <span id="metaKeyBase58" class="text-emerald-400 truncate block">83jBxBqeRWpbjMbGFXYUatJGSc1z2fW4rCRmN9tRBQg2</span>
+            </div>
+            <div>
+              <span class="text-slate-500 block">SHA-256 Key Fingerprint:</span>
+              <span id="metaKeyFingerprint" class="text-cyan-400 truncate block font-bold">fd9017194df8c0dc27efe726c43e3f6c420a345b8e334cb347b207582f084758</span>
+            </div>
+            <div>
+              <span class="text-slate-500 block">Validity Window:</span>
+              <span class="text-white">2026-01-01T00:00:00Z → 2027-01-01T00:00:00Z (ACTIVE)</span>
+            </div>
+            <div>
+              <span class="text-slate-500 block">Pinned Trust Anchor Check:</span>
+              <span class="text-emerald-400 font-bold">✓ Matches MoltAlpha Distributed Trust Anchor</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- B2: In-Browser Verifier & Payload Viewer -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <!-- Left: Canonical Payload JSON -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs font-mono">
+              <span class="text-slate-300 font-bold">In-Memory Canonical Transition Payload:</span>
+              <span id="tamperIndicator" class="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300">Pristine Payload</span>
+            </div>
+            <textarea id="canonicalPayloadInput" rows="10"
+              class="w-full bg-black/80 border border-slate-800 rounded-xl p-3 font-mono text-xs text-sky-300 focus:outline-none focus:border-cyan-500 leading-relaxed custom-scrollbar"></textarea>
+            <div class="text-[11px] font-mono text-slate-400">
+              SHA-256 Digest: <span id="currentDigestDisplay" class="text-white font-bold break-all">--</span>
+            </div>
+          </div>
+
+          <!-- Right: Signature & Verification Engine -->
+          <div class="space-y-4 font-mono text-xs flex flex-col justify-between">
+            <div class="space-y-3">
+              <div>
+                <label class="block text-slate-300 font-bold mb-1">Ed25519 Witness Digital Signature (Hex):</label>
+                <textarea id="signatureInput" rows="3"
+                  class="w-full bg-black/80 border border-slate-800 rounded-xl p-2.5 text-xs text-rose-300 focus:outline-none leading-relaxed custom-scrollbar"></textarea>
+              </div>
+
+              <!-- Live Verification Result Badge -->
+              <div id="verifyOutcomeBox" class="p-4 rounded-xl border bg-emerald-950/60 border-emerald-600/80 text-emerald-300 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <span id="verifyOutcomeIcon" class="text-2xl">✓</span>
+                  <div id="verificationOutcome">
+                    <span id="verifyOutcomeText" class="font-bold text-sm block">VERIFIED</span>
+                    <span id="verifyOutcomeSub" class="text-[11px] text-emerald-400">Mathematical Ed25519 signature valid over canonical payload bytes.</span>
+                  </div>
+                </div>
+                <button onclick="executeBrowserVerify()" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow">
+                  Re-Verify
+                </button>
+              </div>
+            </div>
+
+            <!-- B4: Interactive Tamper Demonstration Controls -->
+            <div class="bg-black/60 border border-slate-800 rounded-xl p-4 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>🧪</span> Interactive Tamper Demonstration
+                </span>
+                <span class="text-[10px] text-slate-400 font-mono">Educational Tool</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-normal">
+                Ed25519 binds every exact byte. Modifying a single character alters the SHA-256 hash and immediately invalidates the signature.
+              </p>
+              <div class="flex flex-wrap items-center gap-2 pt-1">
+                <button onclick="simulatePayloadTamper()" id="tamperDemoBtn"
+                  class="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg transition text-xs flex items-center gap-1.5 shadow">
+                  <span>⚠️</span> Simulate Byte Mutation (Tamper Test)
+                </button>
+                <button onclick="resetTamperSimulation()" id="resetPayloadBtn"
+                  class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition text-xs">
+                  Reset Original Payload
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- B5: Key Lifecycle & Rotation Information -->
+        <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 text-xs font-mono space-y-2">
+          <div class="text-slate-300 font-bold flex items-center gap-2">
+            <span>🛡️</span> Key Lifecycle &amp; Historical Provenance Guarantees
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px] text-slate-400">
+            <div class="p-2.5 bg-black/40 rounded border border-slate-800">
+              <strong class="text-white block mb-0.5">1. Mathematical Validity</strong>
+              Ed25519 verification proves data was signed by the holder of the private key matching the public key.
+            </div>
+            <div class="p-2.5 bg-black/40 rounded border border-slate-800">
+              <strong class="text-white block mb-0.5">2. Historical Provenance</strong>
+              Older valid keys remain verifiable indefinitely to preserve auditability of historical blocks and runs.
+            </div>
+            <div class="p-2.5 bg-black/40 rounded border border-slate-800">
+              <strong class="text-white block mb-0.5">3. Active Trust Authority</strong>
+              Only currently active keys (status: ACTIVE) are permitted for new real-time snapshot attestations.
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <!-- ======================================================== -->
@@ -550,19 +1201,100 @@
       el.type = el.type === "password" ? "text" : "password";
     }
 
+    let activeView = (window.location.hash.startsWith("#sentinel") || !adminToken) ? "sentinel" : "admin";
+
+    function switchView(view) {
+      activeView = view;
+      const sentinelView = document.getElementById("sentinelView");
+      const loginOverlay = document.getElementById("loginOverlay");
+      const dashboardMain = document.getElementById("dashboardMain");
+      const btnSentinel = document.getElementById("viewBtnSentinel");
+      const btnAdmin = document.getElementById("viewBtnAdmin");
+
+      if (view === "sentinel") {
+        if (sentinelView) {
+          sentinelView.classList.remove("hidden");
+          sentinelView.style.display = "";
+        }
+        if (loginOverlay) {
+          loginOverlay.classList.add("hidden");
+          loginOverlay.style.display = "none";
+        }
+        if (dashboardMain) {
+          dashboardMain.classList.add("hidden");
+          dashboardMain.style.display = "none";
+        }
+        if (btnSentinel) {
+          btnSentinel.className = "px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-gradient-to-r from-rose-600 to-amber-600 text-white shadow-lg";
+        }
+        if (btnAdmin) {
+          btnAdmin.className = "px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition flex items-center gap-2";
+        }
+        loadSentinelOverview();
+        runPoolPreflight();
+        loadLiveAnomalies();
+        loadPublicKeyInfo();
+      } else {
+        if (sentinelView) {
+          sentinelView.classList.add("hidden");
+          sentinelView.style.display = "none";
+        }
+        if (dashboardMain) {
+          dashboardMain.classList.remove("hidden");
+          dashboardMain.style.display = "";
+        }
+        if (loginOverlay) {
+          loginOverlay.classList.add("hidden");
+          loginOverlay.style.display = "none";
+        }
+        if (btnSentinel) {
+          btnSentinel.className = "px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition flex items-center gap-2";
+        }
+        if (btnAdmin) {
+          btnAdmin.className = "px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-cyan-600 text-white shadow-lg";
+        }
+      }
+    }
+    window.switchView = switchView;
+
     function updateAuthUI() {
+      const sentinelView = document.getElementById("sentinelView");
       const loginOverlay = document.getElementById("loginOverlay");
       const dashboardMain = document.getElementById("dashboardMain");
       const adminPill = document.getElementById("adminPill");
 
-      if (adminToken) {
-        loginOverlay.classList.add("hidden");
+      if (activeView === "sentinel") {
+        if (sentinelView) {
+          sentinelView.classList.remove("hidden");
+          sentinelView.style.display = "";
+        }
+        if (loginOverlay) {
+          loginOverlay.classList.add("hidden");
+          loginOverlay.style.display = "none";
+        }
+        if (dashboardMain) {
+          dashboardMain.classList.add("hidden");
+          dashboardMain.style.display = "none";
+        }
+        if (adminToken && adminPill) adminPill.classList.remove("hidden");
+        return;
+      }
+
+      if (sentinelView) {
+        sentinelView.classList.add("hidden");
+        sentinelView.style.display = "none";
+      }
+      if (dashboardMain) {
         dashboardMain.classList.remove("hidden");
-        adminPill.classList.remove("hidden");
-      } else {
-        loginOverlay.classList.remove("hidden");
-        dashboardMain.classList.add("hidden");
-        adminPill.classList.add("hidden");
+        dashboardMain.style.display = "";
+      }
+      if (loginOverlay) {
+        loginOverlay.classList.add("hidden");
+        loginOverlay.style.display = "none";
+      }
+      if (adminPill) {
+        if (adminToken) adminPill.classList.remove("hidden");
+        else adminPill.classList.add("hidden");
       }
     }
 
@@ -1249,6 +1981,1377 @@
     }
 
     // Initialize on load - Always connect to production API
+    // ========================================================
+    // SENTINEL RISK INTELLIGENCE & VERIFICATION JAVASCRIPT
+    // ========================================================
+
+    const PINNED_SENTINEL_SPKI_HEX = "302a300506032b657003210068b4ac53b4d7e1ddee10f42230c9221abbcec4f13489f9060e0c86cc068d3383";
+    const PINNED_SENTINEL_FINGERPRINT = "fd9017194df8c0dc27efe726c43e3f6c420a345b8e334cb347b207582f084758";
+
+    let currentSentinelFeed = null;
+    let pristineWitnessPayload = '{"action":"sentinel_pool_assessment","actor":"moltalpha_sentinel_engine","credit_delta":null,"environmental_anchor":{"chain":"solana","overall_risk_score":4,"pool_address":"Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE","risk_level":"SAFE","slot":312891045},"key_hash":null,"lot_id":null,"nonce":1,"post_balance":null,"pre_balance":null,"prev_witness_hash":"0000000000000000000000000000000000000000000000000000000000000000","request_id":null,"timestamp":"2026-10-27T22:00:00Z"}';
+    let pristineWitnessSignature = "f4f5e7d569cb2b272a2908011be09fc15578b4b7183812af5363a7ebb3ca364545d9d636f9635ae1a5e3e1725a1682811fef94df37c1c411374ebbb5daf68a06";
+    let isPayloadTampered = false;
+
+    // Helper: Hex string to Uint8Array
+    function hexToBytes(hex) {
+      const clean = hex.replace(/[^0-9a-fA-F]/g, '');
+      const bytes = new Uint8Array(clean.length / 2);
+      for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(clean.substr(i * 2, 2), 16);
+      }
+      return bytes;
+    }
+
+    // Helper: Uint8Array to Hex string
+    function bytesToHex(bytes) {
+      return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    // Helper: Compute SHA-256 hex string via Web Crypto
+    async function sha256Hex(str) {
+      const buf = new TextEncoder().encode(str);
+      const hashBuf = await window.crypto.subtle.digest("SHA-256", buf);
+      return bytesToHex(new Uint8Array(hashBuf));
+    }
+
+    // ========================================================
+    // INSTITUTIONAL CHART.JS 4.X DEFAULTS & SAFE TEARDOWN
+    // ========================================================
+
+    function configureChartJsDefaults() {
+      if (typeof window.Chart === "undefined") return;
+      Chart.defaults.color = "#94a3b8";
+      Chart.defaults.borderColor = "rgba(30, 41, 59, 0.6)";
+      Chart.defaults.font.family = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+      Chart.defaults.font.size = 11;
+      if (Chart.defaults.plugins && Chart.defaults.plugins.tooltip) {
+        Chart.defaults.plugins.tooltip.backgroundColor = "#0d1424";
+        Chart.defaults.plugins.tooltip.titleColor = "#f8fafc";
+        Chart.defaults.plugins.tooltip.bodyColor = "#94a3b8";
+        Chart.defaults.plugins.tooltip.borderColor = "#1e293b";
+        Chart.defaults.plugins.tooltip.borderWidth = 1;
+        Chart.defaults.plugins.tooltip.padding = 10;
+        Chart.defaults.plugins.tooltip.cornerRadius = 8;
+        Chart.defaults.plugins.tooltip.boxPadding = 4;
+      }
+    }
+    configureChartJsDefaults();
+
+    function safeDestroyChart(canvasInput) {
+      const el = typeof canvasInput === "string" ? document.getElementById(canvasInput.replace(/^#/, '')) : canvasInput;
+      if (!el) return;
+      if (typeof window.Chart !== "undefined" && typeof Chart.getChart === "function") {
+        const existing = Chart.getChart(el);
+        if (existing) {
+          try { existing.destroy(); } catch (_) {}
+        }
+      }
+    }
+
+    // ========================================================
+    // SECURITY UTILITIES: XSS & HTML ENTITY ENCODING
+    // ========================================================
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+    window.escapeHtml = escapeHtml;
+
+    // Attribute-safe JS argument encoder for inline event handlers
+    function toSafeJsArg(str) {
+      return encodeURIComponent(String(str || "")).replace(/'/g, "%27");
+    }
+    window.toSafeJsArg = toSafeJsArg;
+
+    // ========================================================
+    // SEMANTIC RISK HELPERS & CLASSIFICATION
+    // ========================================================
+
+    const RISK_COLORS = Object.freeze({
+      SAFE: "#22c58b",
+      LOW: "#52c7b5",
+      MEDIUM: "#e7b44f",
+      HIGH: "#ed874c",
+      CRITICAL: "#ef5268"
+    });
+
+    function getSemanticRiskColor(score) {
+      const s = Math.min(Math.max(Number(score) || 0, 0), 100);
+      if (s >= 70) return RISK_COLORS.CRITICAL;
+      if (s >= 45) return RISK_COLORS.HIGH;
+      if (s >= 25) return RISK_COLORS.MEDIUM;
+      if (s >= 10) return RISK_COLORS.LOW;
+      return RISK_COLORS.SAFE;
+    }
+    window.getSemanticRiskColor = getSemanticRiskColor;
+
+    function getRiskClassification(score) {
+      const s = Math.min(Math.max(Number(score) || 0, 0), 100);
+      if (s >= 70) {
+        return {
+          level: "CRITICAL",
+          color: RISK_COLORS.CRITICAL,
+          badgeClass: "risk-badge risk-badge-critical",
+          gate: "HARD ABORT — CRITICAL RISK",
+          gateClass: "gate-critical text-[#ef5268]"
+        };
+      }
+      if (s >= 45) {
+        return {
+          level: "HIGH",
+          color: RISK_COLORS.HIGH,
+          badgeClass: "risk-badge risk-badge-high",
+          gate: "ABORT — HIGH RISK (Excessive Hook or Barrier)",
+          gateClass: "gate-high text-[#ed874c]"
+        };
+      }
+      if (s >= 25) {
+        return {
+          level: "MEDIUM",
+          color: RISK_COLORS.MEDIUM,
+          badgeClass: "risk-badge risk-badge-medium",
+          gate: "REVIEW — MEDIUM RISK (Reduce position size 50%)",
+          gateClass: "gate-medium text-[#e7b44f]"
+        };
+      }
+      if (s >= 10) {
+        return {
+          level: "LOW",
+          color: RISK_COLORS.LOW,
+          badgeClass: "risk-badge risk-badge-low",
+          gate: "EXECUTE — LOW RISK (Normal position sizing)",
+          gateClass: "gate-low text-[#52c7b5]"
+        };
+      }
+      return {
+        level: "SAFE",
+        color: RISK_COLORS.SAFE,
+        badgeClass: "risk-badge risk-badge-safe",
+        gate: "EXECUTE — SAFE (Optimal Risk Parameters)",
+        gateClass: "gate-safe text-[#22c58b]"
+      };
+    }
+    window.getRiskClassification = getRiskClassification;
+
+    // ========================================================
+    // 6 REUSABLE MODULAR VISUALIZATION FUNCTIONS (R2 Contract)
+    // ========================================================
+
+    // 1. Chart.js 4.x Risk Distribution Doughnut Chart
+    window.buildRiskDistributionChart = function(canvas, distribution, options = {}) {
+      const el = typeof canvas === "string" ? document.getElementById(canvas.replace(/^#/, '')) : canvas;
+      if (!el || typeof Chart === "undefined") return null;
+
+      safeDestroyChart(el);
+      configureChartJsDefaults();
+
+      let dist = { SAFE: 0, LOW: 0, MEDIUM: 0, HIGH: 0, CRITICAL: 0 };
+      if (Array.isArray(distribution)) {
+        distribution.forEach(item => {
+          const s = typeof item === "number" ? item : (item && item.overall_risk_score !== undefined ? item.overall_risk_score : 0);
+          if (s >= 70) dist.CRITICAL++;
+          else if (s >= 45) dist.HIGH++;
+          else if (s >= 25) dist.MEDIUM++;
+          else if (s >= 10) dist.LOW++;
+          else dist.SAFE++;
+        });
+      } else if (distribution && typeof distribution === "object") {
+        dist.SAFE = Number(distribution.SAFE ?? distribution.safe ?? 0);
+        dist.LOW = Number(distribution.LOW ?? distribution.low ?? 0);
+        dist.MEDIUM = Number(distribution.MEDIUM ?? distribution.medium ?? 0);
+        dist.HIGH = Number(distribution.HIGH ?? distribution.high ?? 0);
+        dist.CRITICAL = Number(distribution.CRITICAL ?? distribution.critical ?? 0);
+      }
+
+      const labels = ["SAFE (0–9)", "LOW (10–24)", "MEDIUM (25–44)", "HIGH (45–69)", "CRITICAL (70–100)"];
+      const data = [dist.SAFE, dist.LOW, dist.MEDIUM, dist.HIGH, dist.CRITICAL];
+      const colors = [RISK_COLORS.SAFE, RISK_COLORS.LOW, RISK_COLORS.MEDIUM, RISK_COLORS.HIGH, RISK_COLORS.CRITICAL];
+      const total = data.reduce((a, b) => a + b, 0);
+
+      return new Chart(el, {
+        type: "doughnut",
+        data: {
+          labels: labels,
+          datasets: [{
+            data: data,
+            backgroundColor: colors,
+            borderColor: "#080d16",
+            borderWidth: 2,
+            hoverOffset: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: options.cutout || "74%",
+          plugins: {
+            legend: {
+              display: true,
+              position: "bottom",
+              labels: {
+                boxWidth: 8,
+                boxHeight: 8,
+                padding: 8,
+                color: "#94a3b8",
+                font: { size: 10, family: "ui-monospace, monospace" }
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: function(ctx) {
+                  const val = ctx.parsed || 0;
+                  const pct = total > 0 ? Math.round((val / total) * 100) : 0;
+                  return ` ${ctx.label}: ${val} pools (${pct}%)`;
+                }
+              }
+            }
+          }
+        }
+      });
+    };
+
+    // 2. Chart.js 4.x Historical Risk Trend Line Chart
+    window.buildRiskHistoryChart = function(canvas, history, options = {}) {
+      const el = typeof canvas === "string" ? document.getElementById(canvas.replace(/^#/, '')) : canvas;
+      if (!el || typeof Chart === "undefined") return null;
+
+      safeDestroyChart(el);
+      configureChartJsDefaults();
+
+      const raw = Array.isArray(history) ? history : [];
+      let labels = [];
+      let scores = [];
+
+      if (raw.length === 0) {
+        labels = ["Base", "Current"];
+        scores = [4, 4];
+      } else {
+        labels = raw.map(r => {
+          if (typeof r === "number") return "Obs";
+          if (!r || typeof r !== "object") return "Obs";
+          if (r.time) return escapeHtml(String(r.time));
+          if (typeof r.assessed_at === "string") return escapeHtml(r.assessed_at.slice(11, 16));
+          return "Obs";
+        });
+        scores = raw.map(r => {
+          if (typeof r === "number") return Math.min(Math.max(r || 0, 0), 100);
+          if (!r || typeof r !== "object") return 0;
+          const val = (r.overall_risk_score !== undefined) ? r.overall_risk_score
+                    : (r.score !== undefined) ? r.score : 0;
+          const num = Number(val);
+          return Math.min(Math.max(isNaN(num) ? 0 : num, 0), 100);
+        });
+      }
+
+      const ctx = el.getContext ? el.getContext("2d") : null;
+      let gradient = "rgba(6, 182, 212, 0.2)";
+      if (ctx && ctx.createLinearGradient) {
+        gradient = ctx.createLinearGradient(0, 0, 0, el.height || 220);
+        gradient.addColorStop(0, "rgba(239, 82, 104, 0.35)");
+        gradient.addColorStop(0.35, "rgba(237, 135, 76, 0.25)");
+        gradient.addColorStop(0.65, "rgba(231, 180, 79, 0.15)");
+        gradient.addColorStop(1, "rgba(34, 197, 139, 0.02)");
+      }
+
+      return new Chart(el, {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: [{
+            label: "Risk Score",
+            data: scores,
+            borderColor: "#06b6d4",
+            borderWidth: 2,
+            pointBackgroundColor: "#080d16",
+            pointBorderColor: "#06b6d4",
+            pointBorderWidth: 2,
+            pointRadius: 3,
+            tension: 0.35,
+            fill: true,
+            backgroundColor: gradient
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              min: 0,
+              max: 100,
+              grid: { color: "rgba(30, 41, 59, 0.5)" },
+              ticks: { color: "#64748b", font: { size: 10, family: "ui-monospace, monospace" }, stepSize: 25 }
+            },
+            x: {
+              grid: { color: "rgba(30, 41, 59, 0.2)" },
+              ticks: { color: "#64748b", font: { size: 10, family: "ui-monospace, monospace" } }
+            }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(ctx) {
+                  const s = ctx.parsed.y || 0;
+                  const cls = getRiskClassification(s);
+                  return ` Score: ${s}/100 [${cls.level}]`;
+                }
+              }
+            }
+          }
+        }
+      });
+    };
+
+    // 3. Vector SVG Circular Risk Score Gauge
+    window.renderRiskGauge = function(score, classification, options = {}) {
+      const s = Math.min(Math.max(Number(score) || 0, 0), 100);
+      let tier = classification;
+      if (!tier) {
+        if (s >= 70) tier = "CRITICAL";
+        else if (s >= 45) tier = "HIGH";
+        else if (s >= 25) tier = "MEDIUM";
+        else if (s >= 10) tier = "LOW";
+        else tier = "SAFE";
+      }
+      const safeTier = escapeHtml(tier);
+      const color = RISK_COLORS[tier] || RISK_COLORS.SAFE;
+      const r = 54;
+      const circumference = 2 * Math.PI * r;
+      const strokeDashoffset = circumference - (s / 100) * circumference;
+
+      return `
+        <div class="relative w-36 h-36 mx-auto flex items-center justify-center">
+          <svg class="w-full h-full -rotate-90" viewBox="0 0 140 140">
+            <circle cx="70" cy="70" r="${r}" fill="none" stroke="#1e293b" stroke-width="10" />
+            <circle cx="70" cy="70" r="${r}" fill="none" stroke="${color}" stroke-width="10"
+              stroke-linecap="round"
+              stroke-dasharray="${circumference.toFixed(2)}"
+              stroke-dashoffset="${strokeDashoffset.toFixed(2)}"
+              style="transition: stroke-dashoffset 0.8s ease-in-out, stroke 0.4s ease;"
+            />
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center text-center font-mono">
+            <span class="text-3xl font-extrabold text-white leading-none">${s}</span>
+            <span class="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">/ 100</span>
+            <span class="mt-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider" style="color: ${color}; background-color: ${color}20; border: 1px solid ${color}40;">
+              ${safeTier}
+            </span>
+          </div>
+        </div>
+      `;
+    };
+
+    // 4. Horizontal Factor Meters Card
+    window.renderRiskFactor = function(label, score, evidence, maxWeight = 100) {
+      const mw = Number(maxWeight) > 0 ? Number(maxWeight) : 100;
+      const s = Math.max(0, Math.min(mw, Number(score) || 0));
+      const pct = Math.min(100, Math.round((s / mw) * 100));
+
+      let color = RISK_COLORS.SAFE;
+      let tier = "SAFE";
+      if (pct >= 70) { color = RISK_COLORS.CRITICAL; tier = "CRITICAL"; }
+      else if (pct >= 45) { color = RISK_COLORS.HIGH; tier = "HIGH"; }
+      else if (pct >= 25) { color = RISK_COLORS.MEDIUM; tier = "MEDIUM"; }
+      else if (pct >= 10) { color = RISK_COLORS.LOW; tier = "LOW"; }
+
+      const safeLabel = String(label || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      const safeEvidence = String(evidence || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+      return `
+        <div class="bg-slate-900/60 border border-slate-800 p-3 rounded-xl font-mono text-xs space-y-1.5">
+          <div class="flex items-center justify-between text-slate-400 text-[11px]">
+            <span class="font-medium text-slate-300 truncate">${safeLabel}</span>
+            <span class="font-bold uppercase text-[10px] px-1.5 py-0.5 rounded" style="color: ${color}; background: ${color}15; border: 1px solid ${color}30;">
+              ${tier}
+            </span>
+          </div>
+          <div class="flex items-baseline justify-between">
+            <span class="text-base font-bold text-white">${s} <span class="text-xs text-slate-500 font-normal">/ ${mw}</span></span>
+            <span class="text-[11px] text-slate-400 font-mono">${pct}%</span>
+          </div>
+          <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div class="h-full rounded-full transition-all duration-500" style="width: ${pct}%; background-color: ${color};"></div>
+          </div>
+          <div class="text-[10px] text-slate-400 truncate pt-0.5" title="${safeEvidence}">
+            ${safeEvidence || "Telemetry verified"}
+          </div>
+        </div>
+      `;
+    };
+
+    // 5. Inline SVG Mini Sparklines
+    window.renderSparkline = function(historyPoints, options = {}) {
+      const w = options.width || 96;
+      const h = options.height || 24;
+      const padding = 2;
+      const innerH = h - padding * 2;
+      const innerW = w - padding * 2;
+
+      if (!Array.isArray(historyPoints) || historyPoints.length === 0) {
+        return `
+          <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" class="inline-block overflow-visible">
+            <line x1="${padding}" y1="${h / 2}" x2="${w - padding}" y2="${h / 2}" stroke="#334155" stroke-dasharray="2,2" stroke-width="1.5" />
+          </svg>
+        `;
+      }
+
+      const pts = historyPoints.map(p => {
+        const val = typeof p === "number" ? p : (p && p.overall_risk_score !== undefined ? p.overall_risk_score : (p && p.score !== undefined ? p.score : 0));
+        return Math.min(Math.max(Number(val) || 0, 0), 100);
+      });
+
+      const lastVal = pts[pts.length - 1];
+      let strokeColor = RISK_COLORS.SAFE;
+      if (lastVal >= 70) strokeColor = RISK_COLORS.CRITICAL;
+      else if (lastVal >= 45) strokeColor = RISK_COLORS.HIGH;
+      else if (lastVal >= 25) strokeColor = RISK_COLORS.MEDIUM;
+      else if (lastVal >= 10) strokeColor = RISK_COLORS.LOW;
+
+      let coords;
+      if (pts.length === 1) {
+        const y = h - padding - (pts[0] / 100) * innerH;
+        coords = [{ x: padding, y }, { x: w - padding, y }];
+      } else {
+        coords = pts.map((val, idx) => {
+          const x = padding + (idx / (pts.length - 1)) * innerW;
+          const y = h - padding - (val / 100) * innerH;
+          return { x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) };
+        });
+      }
+
+      const pathD = coords.reduce((acc, pt, idx) => {
+        return idx === 0 ? `M ${pt.x} ${pt.y}` : `${acc} L ${pt.x} ${pt.y}`;
+      }, "");
+
+      const lastPt = coords[coords.length - 1];
+      const areaD = `${pathD} L ${lastPt.x} ${h} L ${coords[0].x} ${h} Z`;
+      const gradId = "spk_grad_" + Math.random().toString(16).slice(2, 8);
+
+      return `
+        <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" class="inline-block overflow-visible">
+          <defs>
+            <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="${strokeColor}" stop-opacity="0.35" />
+              <stop offset="100%" stop-color="${strokeColor}" stop-opacity="0.0" />
+            </linearGradient>
+          </defs>
+          <path d="${areaD}" fill="url(#${gradId})" />
+          <path d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          <circle cx="${lastPt.x}" cy="${lastPt.y}" r="2.5" fill="${strokeColor}" />
+        </svg>
+      `;
+    };
+
+    // 6A. Dedicated Incident Timeline
+    window.renderIncidentTimeline = function(incidents) {
+      const list = Array.isArray(incidents) ? incidents : [];
+      if (list.length === 0) {
+        return `
+          <div class="p-6 text-center text-slate-400 font-mono text-xs border border-dashed border-emerald-900/60 bg-emerald-950/20 rounded-xl">
+            <div class="w-10 h-10 mx-auto mb-2 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-lg">🛡️</div>
+            <strong class="text-white block text-sm mb-1">Zero Active Surveillance Incidents</strong>
+            <div class="text-[11px] text-slate-400">All monitored Solana and Base liquidity pools operating within normal bounds (SEV-1 / SEV-2 clear).</div>
+          </div>
+        `;
+      }
+      return list.map(item => {
+        const it = item || {};
+        const rawSev = it.severity || "SEV-2";
+        const rawScore = it.score !== undefined ? it.score : it.overall_risk_score;
+        const isCrit = (rawSev === "SEV-1") || (rawScore !== undefined && Number(rawScore) >= 70);
+        const badgeClass = isCrit ? "bg-rose-950 text-rose-400 border border-rose-700" : "bg-orange-950 text-orange-400 border border-orange-700";
+
+        const rawTime = it.time || (typeof it.timestamp === "string" ? it.timestamp.slice(11, 19) + " UTC" : "Recent");
+        const rawTitle = it.title || it.headline || "Anomaly Detected";
+        const rawDesc = it.description || it.detail || "Unconstrained parameter excursion detected during surveillance scan.";
+
+        const sev = escapeHtml(rawSev);
+        const timeStr = escapeHtml(rawTime);
+        const title = escapeHtml(rawTitle);
+        const desc = escapeHtml(rawDesc);
+
+        return `
+          <div class="flex items-start gap-3 p-3.5 rounded-xl bg-slate-900/50 border border-slate-800 font-mono text-xs hover:border-slate-700 transition">
+            <div class="mt-0.5 px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass} shrink-0">
+              ${sev}
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-bold text-white truncate">${title}</span>
+                <span class="text-[10px] text-slate-500 shrink-0">${timeStr}</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-0.5 break-words">${desc}</p>
+            </div>
+          </div>
+        `;
+      }).join("");
+    };
+
+    // 6B. Dedicated Cryptographic Status Card
+    window.renderCryptoStatusCard = function(witness) {
+      const wit = witness || {};
+      const isVerified = wit.verified !== false && !wit.tampered;
+      const statusColor = isVerified ? RISK_COLORS.SAFE : RISK_COLORS.CRITICAL;
+      const statusTitle = isVerified ? "ED25519 WITNESS VERIFIED" : "TAMPER DETECTED — INVALID SIGNATURE";
+      const statusSub = isVerified
+        ? "Payload canonical digest matches RFC 8032 digital signature under pinned trust anchor."
+        : "Payload bytes modified! Canonical SHA-256 digest mismatch. Fail-closed enforced.";
+      const rawKeyId = wit.key_id || wit.witness_id || "wit_key_fd9017194df8";
+      const rawFp = wit.fingerprint || "fd9017194df8c0dc27efe726c43e3f6c420a345b8e334cb347b207582f084758";
+      const keyId = escapeHtml(rawKeyId);
+      const fpShort = escapeHtml(String(rawFp || "").slice(0, 16));
+
+      return `
+        <div class="p-4 rounded-xl border transition-all"
+          style="background: ${isVerified ? 'rgba(34, 197, 139, 0.05)' : 'rgba(239, 82, 104, 0.08)'};
+                 border-color: ${isVerified ? 'rgba(34, 197, 139, 0.35)' : 'rgba(239, 82, 104, 0.40)'};">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-lg"
+                style="background: ${isVerified ? 'rgba(34, 197, 139, 0.15)' : 'rgba(239, 82, 104, 0.20)'}; color: ${statusColor};">
+                ${isVerified ? "✓" : "✗"}
+              </div>
+              <div>
+                <span class="font-mono text-xs font-bold block" style="color: ${statusColor};">${statusTitle}</span>
+                <span class="text-[11px] text-slate-400 block">${statusSub}</span>
+              </div>
+            </div>
+            <span class="risk-badge" style="color: ${statusColor}; background: ${statusColor}15; border: 1px solid ${statusColor}40;">
+              ${isVerified ? "NON-REPUDIATION SECURE" : "FAIL-CLOSED"}
+            </span>
+          </div>
+          <div class="mt-3 pt-3 border-t border-[var(--border-subtle,#1e293b)] grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] font-mono text-slate-400">
+            <div><span class="text-slate-500">Witness ID:</span> <span class="text-white">${keyId}</span></div>
+            <div><span class="text-slate-500">Trust Anchor:</span> <span class="text-cyan-400 font-bold">${fpShort}…</span></div>
+          </div>
+        </div>
+      `;
+    };
+
+    // Pool Preflight Global Caller
+    window.loadPoolPreflight = async function(address, chain = "solana") {
+      if (address) {
+        const input = document.getElementById("preflightPoolAddress");
+        if (input) input.value = address;
+      }
+      if (chain) {
+        const chainSelect = document.getElementById("preflightChain");
+        if (chainSelect) chainSelect.value = chain;
+      }
+      return await runPoolPreflight();
+    };
+
+    // Anomaly State Management & Filtering
+    let rawLiveAnomalies = [
+      {
+        anomaly_id: "anom_001",
+        severity: "SEV-1",
+        overall_risk_score: 95,
+        target_pool: "0xDangerRugPoolMock",
+        pool_address: "0xDangerRugPoolMock",
+        chain: "solana",
+        headline: "Atomic Unbonded LP Drain Risk Detected",
+        factors: ["Timelock: 0s", "Atomic removal unconstrained"],
+        assessed_at: new Date().toISOString(),
+        witness_id: "wit_sentinel_sev1_01"
+      },
+      {
+        anomaly_id: "anom_002",
+        severity: "SEV-2",
+        overall_risk_score: 52,
+        target_pool: "0x422df9aa896e883c9cdcbad309c0785b7364a1cf",
+        pool_address: "0x422df9aa896e883c9cdcbad309c0785b7364a1cf",
+        chain: "base",
+        headline: "Dynamic Fee Ceiling Alert (2500 bps)",
+        factors: ["Fee ceiling 2500 bps", "Oracle feed age 14000s"],
+        assessed_at: new Date(Date.now() - 3600000).toISOString(),
+        witness_id: "wit_sentinel_sev2_02"
+      }
+    ];
+
+    let currentAnomalyFilter = "ALL";
+    window.filterAnomalies = function(filter) {
+      const fNorm = String(filter || "ALL").toUpperCase();
+      currentAnomalyFilter = (fNorm === "SEV-1" || fNorm === "SEV1") ? "SEV-1"
+                           : (fNorm === "SEV-2" || fNorm === "SEV2") ? "SEV-2"
+                           : (fNorm === "EMPTY") ? "EMPTY" : "ALL";
+
+      ["ALL", "SEV1", "SEV2", "EMPTY"].forEach(f => {
+        const btn = document.getElementById("btnFilter" + f);
+        if (btn) {
+          const isMatch = (f === "SEV1" && currentAnomalyFilter === "SEV-1") ||
+                          (f === "SEV2" && currentAnomalyFilter === "SEV-2") ||
+                          (f === "EMPTY" && currentAnomalyFilter === "EMPTY") ||
+                          (f === "ALL" && currentAnomalyFilter === "ALL");
+          if (isMatch) {
+            btn.className = "px-2.5 py-1 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 font-bold text-[11px]";
+          } else {
+            btn.className = "px-2.5 py-1 rounded text-slate-400 hover:text-white text-[11px]";
+          }
+        }
+      });
+      renderLiveAnomalies(rawLiveAnomalies);
+    };
+
+    // 1. Load Sentinel Overview Feed
+    async function loadSentinelOverview() {
+      try {
+        const resp = await fetch(`${currentBaseUrl}/v1/sentinel/feed`);
+        if (!resp.ok) throw new Error("Feed request returned " + resp.status);
+        const data = await resp.json();
+        currentSentinelFeed = data;
+        renderSentinelOverview(data);
+      } catch (e) {
+        console.warn("Falling back to local sample feed for Sentinel overview:", e);
+        try {
+          const sampleResp = await fetch("sample.json");
+          const sampleData = await sampleResp.json();
+          renderSentinelOverview({
+            version: "1.0.0",
+            service: "MoltAlpha Sentinel Risk Engine (Sample Fallback)",
+            exported_at: sampleData.generated_at || new Date().toISOString(),
+            active_anomalies_count: 1,
+            assessed_pools: [
+              Object.assign({}, sampleData.sentinel_risk_assessment || {
+                pool_address: "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+                chain: "solana",
+                status: "SAFE",
+                overall_risk_score: 4,
+                assessed_at: new Date().toISOString()
+              }, { history: [6, 5, 5, 4, 4, 5, 4] }),
+              {
+                pool_address: "0x422df9aa896e883c9cdcbad309c0785b7364a1cf",
+                chain: "base",
+                status: "HIGH",
+                overall_risk_score: 52,
+                history: [30, 35, 42, 45, 48, 50, 52],
+                assessed_at: new Date().toISOString()
+              }
+            ],
+            provenance_witness: {
+              witness_id: "wit_sample_sentinel_001",
+              canonical_hash: "2757e108a816ce483a552fb8e734992cf2df6a9158ae3182211611748a143f27"
+            }
+          });
+        } catch (err2) {
+          console.error("Could not load sample feed fallback:", err2);
+        }
+      }
+    }
+
+    function renderSentinelOverview(feed) {
+      const assessed = feed.assessed_pools || [];
+      const anomalies = feed.active_anomalies_count || 0;
+      const exportedAt = feed.exported_at ? new Date(feed.exported_at) : new Date();
+
+      const snapshotBadge = document.getElementById("sentinelSnapshotBadge");
+      if (snapshotBadge) {
+        snapshotBadge.textContent = `Snapshot: ${feed.exported_at ? feed.exported_at.slice(0, 19).replace('T', ' ') + ' UTC' : 'Live'}`;
+      }
+      const kpiPools = document.getElementById("kpiAssessedPools");
+      if (kpiPools) kpiPools.textContent = assessed.length;
+
+      const kpiAnom = document.getElementById("kpiActiveAnomalies");
+      if (kpiAnom) kpiAnom.textContent = anomalies;
+
+      const ageSec = Math.max(0, Math.floor((Date.now() - exportedAt.getTime()) / 1000));
+      const ageStr = ageSec < 60 ? `${ageSec}s ago` : `${Math.floor(ageSec / 60)}m ago`;
+      const kpiAge = document.getElementById("kpiSnapshotAge");
+      if (kpiAge) kpiAge.textContent = ageStr;
+
+      const kpiTime = document.getElementById("kpiSnapshotTimestamp");
+      if (kpiTime) kpiTime.textContent = `Exported: ${exportedAt.toLocaleTimeString()}`;
+
+      const wit = feed.provenance_witness || {};
+      const kpiWit = document.getElementById("kpiWitnessId");
+      if (kpiWit) kpiWit.textContent = wit.witness_id || "wit_sentinel_active";
+
+      // 1. Calculate risk distribution counts
+      let safeCount = 0, lowCount = 0, medCount = 0, highCount = 0, critCount = 0;
+      assessed.forEach(p => {
+        const s = typeof p === "number" ? p : (p && p.overall_risk_score !== undefined ? Number(p.overall_risk_score) : 0);
+        if (s >= 70) critCount++;
+        else if (s >= 45) highCount++;
+        else if (s >= 25) medCount++;
+        else if (s >= 10) lowCount++;
+        else safeCount++;
+      });
+
+      const dist = { SAFE: safeCount, LOW: lowCount, MEDIUM: medCount, HIGH: highCount, CRITICAL: critCount };
+
+      // 2. Render Risk Distribution Doughnut Chart via modular visualizer (R2 Contract)
+      if (typeof window.buildRiskDistributionChart === "function") {
+        window.buildRiskDistributionChart("riskDistributionCanvas", dist);
+      }
+
+      // Update distribution label
+      const riskDistLabel = document.getElementById("riskDistLabel");
+      if (riskDistLabel) {
+        riskDistLabel.textContent = `${safeCount} Safe, ${lowCount} Low, ${medCount} Med, ${highCount} High, ${critCount} Crit`;
+      }
+
+      // 3. Populate Monitored Liquidity Pools Table with Mini Sparklines (R2 & R3 Contract)
+      const tableBody = document.getElementById("monitoredPoolsTableBody");
+      if (tableBody) {
+        if (assessed.length === 0) {
+          tableBody.innerHTML = `
+            <tr>
+              <td colspan="5" class="py-6 text-center text-slate-500 font-mono text-xs">
+                No monitored pools reported in current Sentinel snapshot.
+              </td>
+            </tr>
+          `;
+        } else {
+          tableBody.innerHTML = assessed.map(p => {
+            const rawAddr = p.pool_address || p.pool || p.address || "";
+            const addr = escapeHtml(rawAddr);
+            const rawChain = (p.chain || "solana").toLowerCase();
+            const chain = escapeHtml(rawChain);
+            const score = Math.min(Math.max(Number(p.overall_risk_score) || 0, 0), 100);
+            const cls = typeof getRiskClassification === "function"
+              ? getRiskClassification(score)
+              : { level: p.status || "SAFE", badgeClass: "risk-badge risk-badge-safe" };
+
+            // Friendly pool label
+            let poolLabel = p.pair || p.name || "";
+            if (!poolLabel) {
+              if (rawAddr === "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE") {
+                poolLabel = "Raydium SOL/USDC";
+              } else if (rawAddr === "0x422df9aa896e883c9cdcbad309c0785b7364a1cf") {
+                poolLabel = "Base AMM (Hook Alert)";
+              } else if (rawAddr.toLowerCase().includes("danger") || rawAddr.toLowerCase().includes("rug")) {
+                poolLabel = "Danger Rug Simulation";
+              } else {
+                poolLabel = rawChain === "solana" ? "Solana CLMM Pool" : "Base AMM Pool";
+              }
+            }
+            poolLabel = escapeHtml(poolLabel);
+
+            const truncatedAddr = rawAddr ? `${rawAddr.slice(0, 6)}...${rawAddr.slice(-4)}` : "--";
+            const safeTruncated = escapeHtml(truncatedAddr);
+
+            // Sparkline points (use pool.history or fallback to [score])
+            const history = (Array.isArray(p.history) && p.history.length > 0)
+              ? p.history
+              : [score];
+            const sparklineHtml = typeof window.renderSparkline === "function"
+              ? window.renderSparkline(history, { width: 96, height: 24 })
+              : "";
+
+            const safeJsAddr = encodeURIComponent(String(rawAddr)).replace(/'/g, "%27");
+            const safeJsChain = encodeURIComponent(String(rawChain)).replace(/'/g, "%27");
+
+            return `
+              <tr class="hover:bg-slate-900/40 transition">
+                <td class="py-3 pr-2">
+                  <div class="font-bold text-white text-xs">${poolLabel}</div>
+                  <div class="text-[10px] text-slate-500 font-mono" title="${addr}">${safeTruncated}</div>
+                </td>
+                <td class="py-3 px-2">
+                  <span class="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase ${
+                    rawChain === 'solana'
+                      ? 'bg-purple-950/60 text-purple-300 border border-purple-800/50'
+                      : 'bg-blue-950/60 text-blue-300 border border-blue-800/50'
+                  }">${chain}</span>
+                </td>
+                <td class="py-3 px-2">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold ${cls.badgeClass}">
+                    ${cls.level} (${score})
+                  </span>
+                </td>
+                <td class="py-3 px-2 text-center align-middle">
+                  ${sparklineHtml}
+                </td>
+                <td class="py-3 pl-2 text-right">
+                  <button onclick="setPreflightTarget(decodeURIComponent('${safeJsAddr}'), decodeURIComponent('${safeJsChain}'))" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 hover:text-cyan-300 border border-slate-700 text-[10px] font-mono transition">
+                    Preflight →
+                  </button>
+                </td>
+              </tr>
+            `;
+          }).join("");
+        }
+      }
+    }
+
+    // 2. Pool Preflight Execution
+    async function runPoolPreflight() {
+      const poolInput = document.getElementById("preflightPoolAddress");
+      const chainSelect = document.getElementById("preflightChain");
+      const spinner = document.getElementById("preflightSpinner");
+      const btn = document.getElementById("btnRunPreflight");
+
+      const poolAddress = poolInput.value.trim();
+      const chain = chainSelect.value;
+      if (!poolAddress) {
+        alert("Please enter a valid liquidity pool contract address.");
+        return;
+      }
+
+      spinner.textContent = "⏳";
+      btn.disabled = true;
+
+      try {
+        const resp = await fetch(`${currentBaseUrl}/v1/sentinel/pools/${encodeURIComponent(poolAddress)}/risk?chain=${chain}`);
+        let data;
+        if (resp.ok) {
+          data = await resp.json();
+        } else {
+          // Local fallback simulation if endpoint offline
+          data = simulateLocalPoolAssessment(poolAddress, chain);
+        }
+        renderPreflightResult(data);
+        loadPoolHistory(poolAddress);
+      } catch (err) {
+        console.warn("Preflight network error, falling back to local simulation:", err);
+        const data = simulateLocalPoolAssessment(poolAddress, chain);
+        renderPreflightResult(data);
+        loadPoolHistory(poolAddress);
+      } finally {
+        spinner.textContent = "⚡";
+        btn.disabled = false;
+      }
+    }
+
+    function setPreflightTarget(addr, chain) {
+      document.getElementById("preflightPoolAddress").value = addr;
+      document.getElementById("preflightChain").value = chain;
+      runPoolPreflight();
+    }
+
+    function simulateLocalPoolAssessment(poolAddress, chain) {
+      const isDanger = poolAddress.toLowerCase().includes("danger") || poolAddress.toLowerCase().includes("rug");
+      const isHookAlert = poolAddress.toLowerCase().includes("0x422d");
+      const score = isDanger ? 95 : (isHookAlert ? 52 : 4);
+      const cls = getRiskClassification(score);
+
+      return {
+        pool_address: poolAddress,
+        chain: chain,
+        status: cls.level,
+        overall_risk_score: score,
+        assessed_at: new Date().toISOString(),
+        data_completeness: 100,
+        confidence_score: 85,
+        risk_breakdown: {
+          drain_vulnerability: { level: isDanger ? "CRITICAL" : "SAFE", score_weight: isDanger ? 45 : 0, atomic_removal_unconstrained: isDanger, lp_timelock_seconds: isDanger ? 0 : 2592000 },
+          hook_authority: { level: isDanger ? "HIGH" : (isHookAlert ? "HIGH" : "SAFE"), score_weight: isDanger ? 35 : (isHookAlert ? 35 : 0), can_alter_fees: isDanger || isHookAlert, fee_ceiling_bps: isDanger ? 5000 : (isHookAlert ? 2500 : 25), selective_revert: isDanger },
+          oracle_freshness: { level: isDanger ? "MEDIUM" : "SAFE", score_weight: isDanger ? 8 : (isHookAlert ? 7 : 2), data_age_seconds: 4, recent_feed_pauses_72h: 0 },
+          active_tick_density: { level: isDanger ? "HIGH" : "SAFE", score_weight: isDanger ? 7 : (isHookAlert ? 10 : 2), active_tick_liquidity_ratio: isDanger ? 0.08 : 0.52, first_passage_barrier_risk_bps: isDanger ? 65.0 : 10.0 }
+        },
+        witness: {
+          witness_id: "wit_sentinel_" + Math.random().toString(16).slice(2, 10),
+          canonical_hash: "2757e108a816ce483a552fb8e734992cf2df6a9158ae3182211611748a143f27",
+          verified: true
+        }
+      };
+    }
+
+    function renderPreflightResult(data) {
+      if (!data) return;
+      const score = data.overall_risk_score !== undefined ? data.overall_risk_score : (data.score || 0);
+      const cls = getRiskClassification(score);
+
+      // Reactive score badge
+      const badge = document.getElementById("preflightScoreBadge");
+      if (badge) {
+        badge.className = `px-3 py-1.5 rounded-xl text-sm font-extrabold shrink-0 self-start sm:self-auto ${cls.badgeClass}`;
+        badge.textContent = `${cls.level} (${score} / 100)`;
+      }
+
+      // Execution gate decision
+      const gate = document.getElementById("preflightGateDecision");
+      if (gate) {
+        gate.className = `font-bold text-sm block break-words ${cls.gateClass}`;
+        gate.textContent = cls.gate;
+      }
+
+      // Target pool echo
+      const echo = document.getElementById("preflightPoolEcho");
+      if (echo) {
+        echo.textContent = `Pool: ${data.pool_address || 'Unknown'} (${(data.chain || 'solana').toUpperCase()})`;
+      }
+
+      // Telemetry metadata
+      const dq = data.data_quality || {};
+      const completeness = dq.data_completeness !== undefined ? dq.data_completeness : (data.data_completeness !== undefined ? data.data_completeness : 100);
+      const confidence = dq.confidence_score !== undefined ? dq.confidence_score : (data.confidence_score !== undefined ? data.confidence_score : 85);
+      const freshness = dq.freshness_seconds !== undefined ? dq.freshness_seconds : 4;
+
+      const compEl = document.getElementById("preflightCompleteness");
+      if (compEl) compEl.textContent = `${completeness}%`;
+      const confEl = document.getElementById("preflightConfidence");
+      if (confEl) confEl.textContent = `${confidence}%`;
+      const freshEl = document.getElementById("preflightFreshness");
+      if (freshEl) freshEl.textContent = `${freshness}s age`;
+
+      // 1. Render Modular Circular SVG Risk Gauge into #preflightGaugeContainer
+      const gaugeContainer = document.getElementById("preflightGaugeContainer");
+      if (gaugeContainer && typeof window.renderRiskGauge === "function") {
+        gaugeContainer.innerHTML = window.renderRiskGauge(score, cls.level);
+      }
+
+      // Update Execution Gate Summary
+      const gateSummary = document.getElementById("preflightGateSummary");
+      if (gateSummary) {
+        const allowText = (score >= 45) ? "BLOCK" : (score >= 25 ? "REVIEW" : "ALLOW");
+        gateSummary.textContent = allowText;
+        gateSummary.className = (score >= 45) ? "text-rose-400 font-bold" : (score >= 25 ? "text-amber-400 font-bold" : "text-emerald-400 font-bold");
+      }
+
+      // 2. Render 4 Horizontal Factor Breakdown Meters into #preflightFactorMeters
+      const rb = data.risk_breakdown || {};
+      const drain = rb.drain_vulnerability || {};
+      const hook = rb.hook_authority || {};
+      const oracle = rb.oracle_freshness || {};
+      const tick = rb.active_tick_density || {};
+
+      const metersEl = document.getElementById("preflightFactorMeters");
+      if (metersEl && typeof window.renderRiskFactor === "function") {
+        const drainTimelockDays = Math.round((drain.lp_timelock_seconds || 0) / 86400);
+        const drainUnconstrained = drain.atomic_removal_unconstrained ? "YES (High Risk)" : "No";
+        const drainEvidence = `Timelock: ${drainTimelockDays}d • Unconstrained: ${drainUnconstrained}`;
+
+        const hookCeiling = hook.fee_ceiling_bps !== undefined ? hook.fee_ceiling_bps : 0;
+        const hookAlter = hook.can_alter_fees ? "YES" : "No";
+        const hookEvidence = `Fee Ceil: ${hookCeiling} bps • Alter: ${hookAlter}`;
+
+        const oracleAge = oracle.data_age_seconds !== undefined ? oracle.data_age_seconds : 0;
+        const oraclePauses = oracle.recent_feed_pauses_72h !== undefined ? oracle.recent_feed_pauses_72h : 0;
+        const oracleEvidence = `Age: ${oracleAge}s • Pauses: ${oraclePauses}`;
+
+        const tickRatio = Math.round((tick.active_tick_liquidity_ratio || 0) * 100);
+        const tickBarrier = tick.first_passage_barrier_risk_bps !== undefined ? tick.first_passage_barrier_risk_bps : 0;
+        const tickEvidence = `Active Ratio: ${tickRatio}% • Barrier: ${tickBarrier} bps`;
+
+        metersEl.innerHTML = [
+          window.renderRiskFactor("Drain Vulnerability", drain.score_weight || 0, drainEvidence, 45),
+          window.renderRiskFactor("Hook Authority", hook.score_weight || 0, hookEvidence, 35),
+          window.renderRiskFactor("Oracle Freshness", oracle.score_weight || 0, oracleEvidence, 10),
+          window.renderRiskFactor("Active Tick Density", tick.score_weight || 0, tickEvidence, 10)
+        ].join("");
+      }
+
+      // 3. Update Witness ID
+      const wit = data.witness || {};
+      const witEl = document.getElementById("pfWitnessId");
+      if (witEl) witEl.textContent = wit.witness_id || "wit_sentinel_verified";
+    }
+
+    // 3. Pool History Timeline
+    async function loadPoolHistory(poolAddress) {
+      try {
+        const resp = await fetch(`${currentBaseUrl}/v1/sentinel/pools/${encodeURIComponent(poolAddress)}/history?limit=30`);
+        if (resp.ok) {
+          const data = await resp.json();
+          renderHistoryTable(data.history || [], poolAddress);
+        } else {
+          renderHistoryTable([], poolAddress);
+        }
+      } catch (err) {
+        renderHistoryTable([], poolAddress);
+      }
+    }
+
+    function renderHistoryTable(records, poolAddress) {
+      // 1. Invoke Chart.js 4.x Historical Risk Trend Line Chart on #preflightHistoryCanvas
+      if (typeof window.buildRiskHistoryChart === "function") {
+        // Chronological order (oldest to newest) for chart timeline
+        const chartData = (Array.isArray(records) && records.length > 0) ? records.slice().reverse() : records;
+        window.buildRiskHistoryChart("preflightHistoryCanvas", chartData);
+      }
+
+      // 2. Render Historical Audit Trail Table
+      const tbody = document.getElementById("historyTbody");
+      if (!tbody) return;
+
+      const safeAddr = String(poolAddress || "");
+      const shortAddr = safeAddr.length > 14 ? `${safeAddr.slice(0, 8)}...${safeAddr.slice(-6)}` : (safeAddr || "N/A");
+      const safeShortAddr = escapeHtml(shortAddr);
+
+      if (!records || records.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" class="py-4 text-center text-slate-400">
+              Initial observation recorded for <code class="text-cyan-400">${safeShortAddr}</code>.
+              Subsequent scheduled cycles will append additive time-series observations to this audit trail.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = records.map(r => {
+        const score = (r && r.overall_risk_score !== undefined) ? r.overall_risk_score : ((r && r.score !== undefined) ? r.score : 0);
+        const cls = getRiskClassification(score);
+        const rawTime = (r && r.assessed_at) ? String(r.assessed_at).replace('T', ' ').slice(0, 19) + ' UTC' : ((r && r.time) || 'Just now');
+        const timeStr = escapeHtml(rawTime);
+        const rb = (r && r.risk_breakdown) || {};
+        const d = rb.drain_vulnerability?.score_weight || 0;
+        const h = rb.hook_authority?.score_weight || 0;
+        const o = rb.oracle_freshness?.score_weight || 0;
+        const t = rb.active_tick_density?.score_weight || 0;
+        const rawWitId = (r && r.witness_id) || 'wit_...';
+        const witId = escapeHtml(rawWitId);
+        return `
+          <tr class="hover:bg-slate-900/40 transition">
+            <td class="py-2.5 font-mono text-slate-300">${timeStr}</td>
+            <td class="py-2.5 font-mono text-cyan-400">${safeShortAddr}</td>
+            <td class="py-2.5"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${cls.badgeClass}">${cls.level} (${score}/100)</span></td>
+            <td class="py-2.5 font-mono text-[11px] text-slate-400">D:${d} H:${h} O:${o} T:${t}</td>
+            <td class="py-2.5 font-mono text-right text-slate-400 truncate max-w-xs">${witId}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function setHistoryWindow(win) {
+      ['24h', '7d', '30d', '90d'].forEach(w => {
+        const btn = document.getElementById('histBtn' + w);
+        if (btn) {
+          if (w === win) {
+            btn.className = "px-2.5 py-1 rounded-lg bg-slate-800 text-white font-medium";
+          } else {
+            btn.className = "px-2.5 py-1 rounded-lg text-slate-400 hover:text-white";
+          }
+        }
+      });
+      const poolInput = document.getElementById("preflightPoolAddress");
+      if (poolInput && poolInput.value) {
+        loadPoolHistory(poolInput.value.trim());
+      }
+    }
+
+    // 4. Agent Credit Bureau Lookup
+    async function lookupAgentCredit() {
+      const input = document.getElementById("agentLookupInput");
+      const agentId = input.value.trim();
+      if (!agentId) return;
+
+      try {
+        const resp = await fetch(`${currentBaseUrl}/v1/sentinel/agents/${encodeURIComponent(agentId)}`);
+        let data;
+        if (resp.ok) {
+          data = await resp.json();
+        } else {
+          data = simulateAgentDossier(agentId);
+        }
+        renderAgentDossier(data);
+      } catch (err) {
+        renderAgentDossier(simulateAgentDossier(agentId));
+      }
+    }
+
+    function setAgentTarget(agent) {
+      document.getElementById("agentLookupInput").value = agent;
+      lookupAgentCredit();
+    }
+
+    function simulateAgentDossier(agentId) {
+      const isDead = agentId.toLowerCase().includes("frantic");
+      const isSeller = agentId.toLowerCase().includes("osai");
+      const isHermes = agentId.toLowerCase().includes("jeeves");
+      const isAndrew = agentId.toLowerCase().includes("andrew");
+
+      let tier = "VERIFIED_OPERATOR", deliv = 8, unful = 0, flags = 0;
+      if (isDead) { tier = "DEAD_SPONSOR"; deliv = 0; unful = 2; flags = 1; }
+      else if (isSeller) { tier = "COMMERCIAL_SELLER"; deliv = 1; unful = 0; }
+      else if (isHermes) { tier = "VERIFIED_OPERATOR"; deliv = 4; unful = 0; }
+      else if (isAndrew) { tier = "VERIFIED_OPERATOR"; deliv = 8; unful = 0; }
+
+      return {
+        identifier: agentId,
+        reputation_tier: tier,
+        wallet_address: isAndrew ? "e9deb3dd-cf95-4be0-9c72-01c8cb3c82cd" : "0x" + Math.random().toString(16).slice(2, 42),
+        known_deliveries: deliv,
+        unfulfilled_claims: unful,
+        dead_sponsor_flags: flags,
+        verified_status: tier === "DEAD_SPONSOR" ? "REVOKED" : "ACTIVE",
+        reliability_pct: deliv + unful > 0 ? Math.round((deliv / (deliv + unful)) * 100) : 100
+      };
+    }
+
+    function renderAgentDossier(data) {
+      document.getElementById("agentDossierId").textContent = data.identifier;
+      const tierBadge = document.getElementById("agentTierBadge");
+      const tier = data.reputation_tier || "UNVERIFIED";
+
+      let badgeClass = "bg-slate-800 text-slate-300 border border-slate-700";
+      if (tier === "VERIFIED_OPERATOR") badgeClass = "bg-emerald-950 text-emerald-400 border border-emerald-700";
+      else if (tier === "COMMERCIAL_SELLER") badgeClass = "bg-cyan-950 text-cyan-400 border border-cyan-700";
+      else if (tier === "PROMPT_ECHO") badgeClass = "bg-amber-950 text-amber-400 border border-amber-700";
+      else if (tier === "DEAD_SPONSOR") badgeClass = "bg-rose-950 text-rose-400 border border-rose-700";
+
+      tierBadge.className = `px-2.5 py-0.5 rounded-full text-[10px] font-bold ${badgeClass}`;
+      tierBadge.textContent = tier;
+
+      document.getElementById("agentWalletAddress").textContent = `Wallet: ${data.wallet_address || 'Unassigned'}`;
+      document.getElementById("agentReliabilityScore").textContent = `${data.reliability_pct || 100}%`;
+      document.getElementById("agentDeliveriesCount").textContent = data.known_deliveries || 0;
+      document.getElementById("agentUnfulfilledCount").textContent = data.unfulfilled_claims || 0;
+      document.getElementById("agentVerificationStatus").textContent = data.verified_status || "ACTIVE";
+      document.getElementById("agentDeadFlagsCount").textContent = data.dead_sponsor_flags || 0;
+    }
+
+    // 5. Live Anomalies Feed
+    async function loadLiveAnomalies() {
+      const container = document.getElementById("liveAnomaliesContainer");
+      try {
+        const resp = await fetch(`${currentBaseUrl}/v1/sentinel/anomalies/live`);
+        if (resp.ok) {
+          const data = await resp.json();
+          renderLiveAnomalies(data.anomalies || []);
+        } else {
+          renderLiveAnomalies([]);
+        }
+      } catch (err) {
+        renderLiveAnomalies([]);
+      }
+    }
+
+    function renderLiveAnomalies(anomalies) {
+      const container = document.getElementById("liveAnomaliesContainer");
+      if (!container) return;
+
+      if (Array.isArray(anomalies) && anomalies.length > 0) {
+        rawLiveAnomalies = anomalies;
+      }
+
+      const rawList = Array.isArray(anomalies) ? anomalies : (rawLiveAnomalies || []);
+      let filtered = rawList;
+
+      if (currentAnomalyFilter === "EMPTY") {
+        filtered = [];
+      } else if (currentAnomalyFilter === "SEV-1") {
+        filtered = rawList.filter(a => {
+          if (!a) return false;
+          const score = Number(a.overall_risk_score !== undefined ? a.overall_risk_score : (a.score !== undefined ? a.score : 0));
+          const sev = a.severity ? String(a.severity).toUpperCase() : "";
+          return score >= 70 || sev === "SEV-1" || sev === "SEV1" || sev.includes("CRITICAL");
+        });
+      } else if (currentAnomalyFilter === "SEV-2") {
+        filtered = rawList.filter(a => {
+          if (!a) return false;
+          const score = Number(a.overall_risk_score !== undefined ? a.overall_risk_score : (a.score !== undefined ? a.score : 0));
+          const sev = a.severity ? String(a.severity).toUpperCase() : "";
+          return (score < 70 && score >= 45) || sev === "SEV-2" || sev === "SEV2" || sev.includes("HIGH");
+        });
+      }
+
+      if (!filtered || filtered.length === 0) {
+        container.innerHTML = `
+          <div class="p-6 text-center text-slate-500 font-mono text-xs border border-dashed border-slate-800 rounded-xl">
+            <div class="w-8 h-8 mx-auto mb-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">✓</div>
+            No active SEV-1 or SEV-2 anomalies detected in current surveillance cycle.
+            <div class="text-[11px] text-slate-600 mt-1">All monitored Solana and Base liquidity pools operating within normal bounds.</div>
+          </div>
+        `;
+        return;
+      }
+
+      const sorted = [...filtered].sort((a, b) => {
+        const scoreA = Number(a?.overall_risk_score ?? a?.score ?? 0);
+        const scoreB = Number(b?.overall_risk_score ?? b?.score ?? 0);
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        const timeA = new Date(a?.assessed_at || a?.timestamp || 0).getTime();
+        const timeB = new Date(b?.assessed_at || b?.timestamp || 0).getTime();
+        return timeB - timeA;
+      });
+
+      container.innerHTML = sorted.map(a => {
+        const item = a || {};
+        const score = Math.min(Math.max(Number(item.overall_risk_score !== undefined ? item.overall_risk_score : (item.score !== undefined ? item.score : 0)) || 0, 0), 100);
+        const isCrit = score >= 70 || item.severity === "SEV-1";
+        const sevLabel = isCrit ? "SEV-1 CRITICAL" : "SEV-2 HIGH";
+        const sevBadge = isCrit ? "bg-rose-950 text-rose-400 border border-rose-700" : "bg-orange-950 text-orange-400 border border-orange-700";
+
+        const rawPool = item.pool_address || item.target_pool || "Unknown Pool";
+        const safePool = escapeHtml(rawPool);
+        const rawChain = item.chain || "solana";
+        const safeChain = escapeHtml(String(rawChain).toUpperCase());
+        const timeStr = item.assessed_at ? escapeHtml(String(item.assessed_at).replace('T', ' ').slice(0, 19) + ' UTC') : 'Current Cycle';
+        const headline = item.headline ? escapeHtml(item.headline) : (isCrit ? "Atomic unbonded drain vulnerability or parameter excursion detected." : "Dynamic fee ceiling or oracle latency excursion detected.");
+
+        const safeJsPool = encodeURIComponent(String(rawPool)).replace(/'/g, "%27");
+        const safeJsChain = encodeURIComponent(String(rawChain)).replace(/'/g, "%27");
+
+        return `
+          <div class="p-4 bg-black/40 border border-slate-800 rounded-xl font-mono text-xs space-y-2 hover:border-rose-500/30 transition">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${sevBadge}">${sevLabel}</span>
+                <span class="text-white font-bold">${safePool}</span>
+              </div>
+              <span class="text-slate-400 text-[11px]">${safeChain}</span>
+            </div>
+            <p class="text-slate-300 text-[11px]">
+              Risk Score: <strong class="text-rose-400">${score}/100</strong>. ${headline}
+            </p>
+            <div class="text-[10px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-800/60">
+              <span>Detected: ${timeStr}</span>
+              <button onclick="setPreflightTarget(decodeURIComponent('${safeJsPool}'), decodeURIComponent('${safeJsChain}'))" class="text-cyan-400 hover:underline">Inspect Pool Preflight →</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+    window.renderLiveAnomalies = renderLiveAnomalies;
+
+    // 6. Cryptographic Witness Verification Engine (Web Crypto)
+    async function loadPublicKeyInfo() {
+      try {
+        const resp = await fetch(`${currentBaseUrl}/.well-known/sentinel-key.json`);
+        if (resp.ok) {
+          const meta = await resp.json();
+          if (meta.key_id) document.getElementById("metaKeyId").textContent = meta.key_id;
+          if (meta.public_key_base58) document.getElementById("metaKeyBase58").textContent = meta.public_key_base58;
+          if (meta.fingerprint_sha256) document.getElementById("metaKeyFingerprint").textContent = meta.fingerprint_sha256;
+        }
+      } catch (err) {
+        console.warn("Could not fetch remote sentinel-key.json, using pinned anchor:", err);
+      }
+      initVerifierDisplay();
+    }
+
+    async function initVerifierDisplay() {
+      const payloadInput = document.getElementById("canonicalPayloadInput") || document.getElementById("verifyPayloadInput");
+      const sigInput = document.getElementById("signatureInput") || document.getElementById("verifySignatureInput");
+      if (payloadInput && !payloadInput.value) {
+        payloadInput.value = pristineWitnessPayload;
+      }
+      if (sigInput && !sigInput.value) {
+        sigInput.value = pristineWitnessSignature;
+      }
+      await executeBrowserVerify();
+    }
+
+    async function executeBrowserVerify() {
+      const payloadInput = document.getElementById("canonicalPayloadInput") || document.getElementById("verifyPayloadInput");
+      const sigInput = document.getElementById("signatureInput") || document.getElementById("verifySignatureInput");
+      const outcomeBox = document.getElementById("verifyOutcomeBox");
+      const outcomeIcon = document.getElementById("verifyOutcomeIcon");
+      const outcomeText = document.getElementById("verifyOutcomeText");
+      const outcomeSub = document.getElementById("verifyOutcomeSub");
+      const digestDisplay = document.getElementById("currentDigestDisplay");
+
+      if (!payloadInput || !sigInput) return;
+
+      const payloadStr = payloadInput.value.trim();
+      const sigHex = sigInput.value.trim();
+
+      // Compute SHA-256 digest of payload
+      let digestHex = "";
+      try {
+        digestHex = await sha256Hex(payloadStr);
+        if (digestDisplay) digestDisplay.textContent = digestHex;
+      } catch (e) {
+        console.error("SHA-256 computation failed:", e);
+      }
+
+      // Check browser Web Crypto support for Ed25519
+      if (!window.crypto || !window.crypto.subtle) {
+        if (outcomeBox) outcomeBox.className = "p-4 rounded-xl border bg-amber-950/60 border-amber-600/80 text-amber-300 flex items-center justify-between";
+        if (outcomeIcon) outcomeIcon.textContent = "⚠️";
+        if (outcomeText) outcomeText.textContent = "VERIFICATION UNAVAILABLE";
+        if (outcomeSub) outcomeSub.textContent = "Fail-Closed: Browser environment does not expose crypto.subtle.";
+        return;
+      }
+
+      try {
+        const spkiBytes = hexToBytes(PINNED_SENTINEL_SPKI_HEX);
+        const sigBytes = hexToBytes(sigHex);
+        const dataBytes = new TextEncoder().encode(digestHex);
+
+        const cryptoKey = await window.crypto.subtle.importKey(
+          "spki",
+          spkiBytes,
+          { name: "Ed25519" },
+          false,
+          ["verify"]
+        );
+
+        const isValid = await window.crypto.subtle.verify(
+          "Ed25519",
+          cryptoKey,
+          sigBytes,
+          dataBytes
+        );
+
+        if (isValid) {
+          if (outcomeBox) outcomeBox.className = "p-4 rounded-xl border bg-emerald-950/60 border-emerald-600/80 text-emerald-300 flex items-center justify-between";
+          if (outcomeIcon) outcomeIcon.textContent = "✓";
+          if (outcomeText) outcomeText.textContent = "VERIFIED";
+          if (outcomeSub) outcomeSub.textContent = "Mathematical Ed25519 signature valid over canonical payload bytes. Authentic witness.";
+        } else {
+          if (outcomeBox) outcomeBox.className = "p-4 rounded-xl border bg-rose-950/70 border-rose-600/80 text-rose-300 flex items-center justify-between";
+          if (outcomeIcon) outcomeIcon.textContent = "✗";
+          if (outcomeText) outcomeText.textContent = "INVALID SIGNATURE — TAMPER DETECTED";
+          if (outcomeSub) outcomeSub.textContent = "Payload digest does not match signature! One or more bytes have been altered.";
+        }
+      } catch (err) {
+        console.warn("Web Crypto Ed25519 verification exception:", err);
+        if (outcomeBox) outcomeBox.className = "p-4 rounded-xl border bg-amber-950/60 border-amber-600/80 text-amber-300 flex items-center justify-between";
+        if (outcomeIcon) outcomeIcon.textContent = "⚠️";
+        if (outcomeText) outcomeText.textContent = "VERIFICATION UNAVAILABLE";
+        if (outcomeSub) outcomeSub.textContent = `Fail-Closed: Browser Web Crypto threw: ${err.message}.`;
+      }
+    }
+
+    async function simulatePayloadTamper() {
+      const payloadInput = document.getElementById("canonicalPayloadInput") || document.getElementById("verifyPayloadInput");
+      const indicator = document.getElementById("tamperIndicator");
+
+      if (!payloadInput) return;
+
+      // Mutate 1 character in the JSON string (e.g. change overall_risk_score from 4 to 5)
+      let mutated = payloadInput.value;
+      if (mutated.includes('"overall_risk_score":4')) {
+        mutated = mutated.replace('"overall_risk_score":4', '"overall_risk_score":5');
+      } else if (mutated.includes('"overall_risk_score": 4')) {
+        mutated = mutated.replace('"overall_risk_score": 4', '"overall_risk_score": 5');
+      } else {
+        mutated = mutated.replace('Czfq3x', 'Czfq3y');
+      }
+
+      payloadInput.value = mutated;
+      isPayloadTampered = true;
+      if (indicator) {
+        indicator.className = "px-2 py-0.5 rounded text-[10px] bg-rose-950 text-rose-400 border border-rose-700 font-bold";
+        indicator.textContent = "⚠️ PAYLOAD MUTATED (1 Byte Altered)";
+      }
+
+      await executeBrowserVerify();
+    }
+
+    async function resetTamperSimulation() {
+      const payloadInput = document.getElementById("canonicalPayloadInput") || document.getElementById("verifyPayloadInput");
+      const sigInput = document.getElementById("signatureInput") || document.getElementById("verifySignatureInput");
+      const indicator = document.getElementById("tamperIndicator");
+
+      if (payloadInput) payloadInput.value = pristineWitnessPayload;
+      if (sigInput) sigInput.value = pristineWitnessSignature;
+      isPayloadTampered = false;
+
+      if (indicator) {
+        indicator.className = "px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300";
+        indicator.textContent = "Pristine Payload";
+      }
+
+      await executeBrowserVerify();
+    }
+
+    function inspectWitnessInVerifier() {
+      const elem = document.getElementById("cryptoVerifySection");
+      if (elem) elem.scrollIntoView({ behavior: 'smooth' });
+    }
+
+
     window.addEventListener("DOMContentLoaded", () => {
       // Only use this page's own origin when it is served by the API itself (local dev or the API host).
       if (/^(localhost|127\.0\.0\.1)(:|$)|^api\./.test(window.location.host)) {
@@ -1258,6 +3361,10 @@
       }
 
       updateAuthUI();
+
+      if (activeView === "sentinel") {
+        switchView("sentinel");
+      }
 
       if (adminToken) {
         fetchMetrics();

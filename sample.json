@@ -49,7 +49,10 @@
       "confidence_tier": "HIGH",
       "risk_rating": "LOW",
       "entry_price": 182.15,
-      "price_targets": [186.7, 193.99],
+      "price_targets": [
+        186.7,
+        193.99
+      ],
       "stop_loss": 178.87,
       "risk_reward_ratio": 2.36,
       "timeframe": "1h",
@@ -97,5 +100,85 @@
   },
   "documentation_url": "https://www.moltalpha.dev",
   "api_status_url": "https://api.moltalpha.dev/v1/health",
-  "pricing_url": "https://api.moltalpha.dev/v1/payments/config"
+  "pricing_url": "https://api.moltalpha.dev/v1/payments/config",
+  "sentinel_risk_assessment": {
+    "pool_address": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+    "chain": "solana",
+    "status": "SAFE",
+    "overall_risk_score": 4,
+    "assessed_at": "2026-10-27T22:00:00Z",
+    "data_completeness": 100,
+    "confidence_score": 85,
+    "data_quality": {
+      "data_completeness": 100,
+      "confidence_score": 85,
+      "missing_dimensions": [],
+      "freshness_seconds": 4
+    },
+    "risk_breakdown": {
+      "drain_vulnerability": {
+        "level": "SAFE",
+        "score_weight": 0,
+        "atomic_removal_unconstrained": false,
+        "lp_timelock_seconds": 2592000
+      },
+      "hook_authority": {
+        "level": "SAFE",
+        "score_weight": 0,
+        "can_alter_fees": false,
+        "fee_ceiling_bps": 25,
+        "selective_revert": false
+      },
+      "oracle_freshness": {
+        "level": "SAFE",
+        "score_weight": 8,
+        "data_age_seconds": 4,
+        "recent_feed_pauses_72h": 0
+      },
+      "active_tick_density": {
+        "level": "SAFE",
+        "score_weight": 7,
+        "active_tick_liquidity_ratio": 0.52,
+        "first_passage_barrier_risk_bps": 10.0
+      }
+    },
+    "witness": {
+      "witness_id": "wit_20261027_000001_sample",
+      "canonical_hash": "2757e108a816ce483a552fb8e734992cf2df6a9158ae3182211611748a143f27",
+      "signature": "f4f5e7d569cb2b272a2908011be09fc15578b4b7183812af5363a7ebb3ca364545d9d636f9635ae1a5e3e1725a1682811fef94df37c1c411374ebbb5daf68a06",
+      "key_id": "wit_key_fd9017194df8",
+      "public_key_base58": "83jBxBqeRWpbjMbGFXYUatJGSc1z2fW4rCRmN9tRBQg2",
+      "public_key_spki_hex": "302a300506032b657003210068b4ac53b4d7e1ddee10f42230c9221abbcec4f13489f9060e0c86cc068d3383",
+      "fingerprint_sha256": "fd9017194df8c0dc27efe726c43e3f6c420a345b8e334cb347b207582f084758",
+      "environmental_anchor": {
+        "chain": "solana",
+        "overall_risk_score": 4,
+        "pool_address": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+        "risk_level": "SAFE",
+        "slot": 312891045
+      },
+      "signed_transition_payload": {
+        "action": "sentinel_pool_assessment",
+        "actor": "moltalpha_sentinel_engine",
+        "credit_delta": null,
+        "environmental_anchor": {
+          "chain": "solana",
+          "overall_risk_score": 4,
+          "pool_address": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+          "risk_level": "SAFE",
+          "slot": 312891045
+        },
+        "key_hash": null,
+        "lot_id": null,
+        "nonce": 1,
+        "post_balance": null,
+        "pre_balance": null,
+        "prev_witness_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "request_id": null,
+        "timestamp": "2026-10-27T22:00:00Z"
+      },
+      "schema": "https://moltalpha.dev/schemas/sentinel-risk-v1.json",
+      "verified": true
+    }
+  }
 }
