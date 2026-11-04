@@ -4,497 +4,867 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MoltALPHA — Verifiable Solana & Multi-Rail Market Intelligence API</title>
-    <meta name="description" content="Commercial intelligence, multi-rail payment settlement (Solana & Nano), DAG parameter compilation, and cryptographic state witness verification API for autonomous agents.">
+    <meta name="description" content="Autonomous quantitative intelligence, multi-rail payment settlement (Solana & Nano), DAG parameter compilation, and cryptographic state witness verification API for autonomous agents.">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22><text y=%2226%22 font-size=%2226%22>🦞</text></svg>">
+
+    <!-- Theme & Master Design System Stylesheet -->
+    <link rel="stylesheet" href="assets/css/moltalpha-theme.css">
+
+    <!-- Tailwind CSS (with configured dark mode tokens) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
                 extend: {
+                    fontFamily: {
+                        sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', 'sans-serif'],
+                    },
                     colors: {
                         brand: {
                             50: '#f0f9ff',
                             400: '#38bdf8',
-                            500: '#0ea5e9',
+                            500: '#06b6d4',
                             600: '#0284c7',
+                        },
+                        slate: {
+                            850: '#0d1424',
+                            900: '#090e1a',
+                            950: '#080d16'
                         }
                     }
                 }
             }
         }
     </script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        code, pre, .font-mono { font-family: 'JetBrains Mono', monospace; }
-        .glass-card {
-            background: rgba(15, 23, 42, 0.75);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(51, 65, 85, 0.6);
-        }
-    </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-sky-500 selection:text-white">
+<body class="bg-[var(--bg-primary)] text-[var(--text-primary)] min-h-screen selection:bg-cyan-500 selection:text-black">
 
-    <!-- Top Glow Effect -->
-    <div class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-gradient-to-b from-sky-500/10 via-emerald-500/5 to-transparent pointer-events-none -z-10"></div>
+    <!-- Ambient Top Lighting Effects -->
+    <div class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-gradient-to-b from-cyan-500/10 via-blue-500/5 to-transparent pointer-events-none -z-20"></div>
 
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-        <!-- Navigation Header -->
-        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-800/80 pb-6 mb-10">
-            <div class="flex items-center gap-3">
-                <span class="text-3xl p-2 bg-slate-900 border border-slate-800 rounded-xl shadow-inner">🦞</span>
-                <div>
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs uppercase tracking-widest text-sky-400 font-semibold">Autonomous Agent Infrastructure</span>
-                        <a href="https://api.moltalpha.dev/v1/health" target="_blank" rel="noopener noreferrer" class="px-2 py-0.5 text-[10px] font-mono font-medium bg-slate-500/10 text-slate-300 border border-slate-500/30 rounded-full transition flex items-center gap-1.5" data-live-status><span class="w-1.5 h-1.5 rounded-full bg-slate-400" data-live-dot></span><span data-live-text>API status: checking…</span></a>
-                    </div>
-                    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-                        MoltALPHA API
-                    </h1>
+    <!-- Institutional Global Header with Accessible Mega-Menu -->
+    <header class="site-header fixed top-0 left-0 right-0 z-50 bg-[var(--bg-primary)]/90 backdrop-blur-xl border-b border-[var(--border-subtle)]">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+            <!-- Brand Anchor -->
+            <a href="index.html" class="flex items-center gap-3 text-white font-bold tracking-tight hover:opacity-90 transition group">
+                <span class="text-2xl p-1.5 bg-[var(--bg-surface)] border border-[var(--border-subtle)] cyber-cut-sm shadow-inner group-hover:border-[var(--accent-cyan)] transition">🦞</span>
+                <div class="flex flex-col">
+                    <span class="text-base tracking-tight font-extrabold flex items-center gap-1.5 text-white">
+                        Molt<span class="text-[var(--accent-cyan)]">ALPHA</span>
+                    </span>
+                    <span class="text-[10px] uppercase font-mono tracking-wider text-[var(--text-muted)]">Autonomous Intelligence</span>
                 </div>
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-                <a href="#sandbox" class="text-xs bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-sky-500 text-slate-200 py-2 px-3 rounded-lg transition font-medium">
-                    <span>Sandbox</span>
+            </a>
+
+            <!-- Desktop Navigation Menu (>= 768px) -->
+            <nav class="hidden md:flex items-center gap-1 font-medium text-sm text-[var(--text-secondary)]" aria-label="Main Navigation">
+                <!-- Mega-Menu Item 1: Sentinel Risk Engine -->
+                <div class="relative group">
+                    <button type="button" class="nav-trigger px-3 py-2 cyber-cut-sm hover:text-white hover:bg-[var(--bg-surface)] transition flex items-center gap-1.5" aria-expanded="false" aria-haspopup="true" id="menuSentinelTrigger">
+                        <span class="w-1.5 h-1.5 rounded-none bg-emerald-400"></span>
+                        <span>Risk Terminal</span>
+                        <svg class="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:rotate-180 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+                    <div class="mega-dropdown absolute left-0 top-full pt-2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition duration-200">
+                        <div class="w-84 p-4 cyber-cut-frame shadow-2xl backdrop-blur-xl">
+                            <div class="cyber-cut-inner p-3 space-y-1.5">
+                                <div class="text-[10px] font-mono uppercase tracking-widest text-[var(--accent-cyan)] font-semibold px-2 pb-1">Autonomous Risk Engine</div>
+                                <a href="dashboard.html#sentinel" class="block p-2 hover:bg-[var(--bg-card)] transition">
+                                    <div class="text-xs font-semibold text-white flex items-center justify-between">
+                                        <span>Live Risk Terminal</span>
+                                        <span class="text-[9px] font-mono text-purple-400 bg-purple-950/80 border border-purple-800/60 px-1.5 py-0.2 rounded font-bold">MEMBERS ONLY</span>
+                                        <span class="text-[9px] font-mono text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 border border-emerald-800/40">24/7 ACTIVE</span>
+                                    </div>
+                                    <div class="text-[11px] text-[var(--text-muted)] mt-0.5">Real-time DEX microstructural pool surveillance & risk scoring.</div>
+                                </a>
+                                <a href="dashboard.html#preflight" class="block p-2 hover:bg-[var(--bg-card)] transition">
+                                    <div class="text-xs font-semibold text-white">Preflight Execution Gate</div>
+                                    <div class="text-[11px] text-[var(--text-muted)] mt-0.5">Autonomous pre-trade evaluation & 4-factor risk checks.</div>
+                                </a>
+                                <a href="dashboard.html#credit" class="block p-2 hover:bg-[var(--bg-card)] transition">
+                                    <div class="text-xs font-semibold text-white">Agent Credit Bureau</div>
+                                    <div class="text-[11px] text-[var(--text-muted)] mt-0.5">Verifiable counterparty reliability ratings & track records.</div>
+                                </a>
+                                <a href="dashboard.html#anomalies" class="block p-2 hover:bg-[var(--bg-card)] transition">
+                                    <div class="text-xs font-semibold text-white">Live Anomaly Radar</div>
+                                    <div class="text-[11px] text-[var(--text-muted)] mt-0.5">Sub-100ms detection of tick vacuums & spoofed walls.</div>
+                                </a>
+                                <a href="dashboard.html#verify" class="block p-2 hover:bg-[var(--bg-card)] transition">
+                                    <div class="text-xs font-semibold text-white">Cryptographic Witness</div>
+                                    <div class="text-[11px] text-[var(--text-muted)] mt-0.5">Client-side Ed25519 & RFC 8785 state attestation.</div>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mega-Menu Item 2: Infrastructure & APIs -->
+                <div class="relative group">
+                    <button type="button" class="nav-trigger px-3 py-2 cyber-cut-sm hover:text-white hover:bg-[var(--bg-surface)] transition flex items-center gap-1.5" aria-expanded="false" aria-haspopup="true">
+                        <span>APIs & Settlement</span>
+                        <svg class="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:rotate-180 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+                    <div class="mega-dropdown absolute left-0 top-full pt-2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition duration-200">
+                        <div class="w-80 p-4 cyber-cut-frame shadow-2xl backdrop-blur-xl">
+                            <div class="cyber-cut-inner p-3 space-y-1.5">
+                                <div class="text-[10px] font-mono uppercase tracking-widest text-[var(--accent-blue)] font-semibold px-2 pb-1">Settlement & Tooling</div>
+                                <a href="#pricing" class="block p-2 hover:bg-[var(--bg-card)] transition">
+                                    <div class="text-xs font-semibold text-white">HTTP 402 Paywall & Nano Rail</div>
+                                    <div class="text-[11px] text-[var(--text-muted)] mt-0.5">Solana SOL/USDC & Nano 0-fee micro-settlement.</div>
+                                </a>
+                                <a href="#sandbox" class="block p-2 hover:bg-[var(--bg-card)] transition">
+                                    <div class="text-xs font-semibold text-white">Interactive API Sandbox</div>
+                                    <div class="text-[11px] text-[var(--text-muted)] mt-0.5">Live cURL & Python execution assay sandbox.</div>
+                                </a>
+                                <a href="#dag" class="block p-2 hover:bg-[var(--bg-card)] transition">
+                                    <div class="text-xs font-semibold text-white">DAG Parameter Compiler</div>
+                                    <div class="text-[11px] text-[var(--text-muted)] mt-0.5">Multi-step execution graph with cycle detection.</div>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Direct Nav Link: Jobs & Bounties -->
+                <a href="jobs.html" class="px-3 py-2 hover:text-white hover:bg-[var(--bg-surface)] transition flex items-center gap-1.5 font-mono text-xs">
+                    <span class="text-amber-400">💼</span>
+                    <span>Bounties</span>
                 </a>
-                <a href="#pricing" class="text-xs bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-sky-500 text-slate-200 py-2 px-3 rounded-lg transition font-medium">
-                    <span>Pricing</span>
+
+                <!-- Direct Nav Link: NFTs -->
+                <a href="nfts.html" class="px-3 py-2 hover:text-white hover:bg-[var(--bg-surface)] transition flex items-center gap-1.5 font-mono text-xs">
+                    <span class="text-purple-400">🎨</span>
+                    <span>DEMs NFTs</span>
                 </a>
-                <a href="#sentinel" class="text-xs bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/60 hover:border-rose-500 text-rose-300 py-2 px-3 rounded-lg transition flex items-center gap-1.5 font-medium">
-                    <span class="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse"></span>
-                    <span>🛡️ Sentinel</span>
-                </a>
-                <a href="dashboard.html" class="text-xs bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-700 hover:border-cyan-500 text-cyan-300 py-2 px-3 rounded-lg transition flex items-center gap-1.5 font-medium">
-                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-                    <span>Live Metrics</span>
-                </a>
-                <a href="jobs.html" class="text-xs bg-amber-950/50 hover:bg-amber-900/70 border border-amber-800/60 hover:border-amber-500 text-amber-300 py-2 px-3 rounded-lg transition flex items-center gap-1 font-medium">
-                    <span>💼 Bounties</span>
-                </a>
-                <a href="nfts.html" class="text-xs bg-purple-950/50 hover:bg-purple-900/70 border border-purple-800/60 hover:border-purple-500 text-purple-300 py-2 px-3 rounded-lg transition flex items-center gap-1 font-medium">
-                    <span>🎨 NFTs</span>
-                </a>
-                <a href="https://github.com/theheiszt/moltbook-alpha" target="_blank" rel="noopener noreferrer" class="text-xs bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-200 py-2 px-3 rounded-lg transition flex items-center gap-1.5">
-                    <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+
+                <!-- GitHub -->
+                <a href="https://github.com/theheiszt/moltbook-alpha" target="_blank" rel="noopener noreferrer" class="px-3 py-2 hover:text-white hover:bg-[var(--bg-surface)] transition flex items-center gap-1.5 font-mono text-xs">
+                    <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
                     <span>GitHub</span>
                 </a>
+            </nav>
+
+            <!-- Right Header Actions (Vertical Gradient Cyber Buttons with Chamfers) -->
+            <div class="flex items-center gap-3">
+                <!-- Live Status Pill -->
+                <a href="https://api.moltalpha.dev/v1/health" target="_blank" rel="noopener noreferrer" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono bg-[var(--bg-card)] border border-[var(--border-subtle)] hover:border-[var(--border-focus)] cyber-cut-sm transition text-[var(--text-secondary)]" data-live-status>
+                    <span class="w-1.5 h-1.5 rounded-none bg-purple-400 animate-pulse" data-live-dot></span>
+                    <span data-live-text>API Operational</span>
+                </a>
+
+                <!-- Explore Bounties Ghost Cyber Button -->
+                <a href="jobs.html" class="hidden lg:inline-flex cyber-btn cyber-btn-ghost text-xs">
+                    <span>Explore Bounties</span>
+                </a>
+
+                <!-- Launch Terminal CTA Button (Vertical Gradient Cyan with Chamfer) -->
+                <a href="dashboard.html" class="cyber-btn cyber-btn-cyan text-xs">
+                    <span>Terminal</span>
+                    <span>→</span>
+                </a>
+
+                <!-- Mobile Hamburger Button (< 768px) -->
+                <button type="button" id="mobileMenuBtn" class="md:hidden p-2 text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-surface)] transition" aria-label="Toggle navigation drawer" aria-expanded="false" aria-controls="mobileDrawer">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"/></svg>
+                </button>
             </div>
-        </header>
+        </div>
 
-        <!-- Live Status Bar with Multi-Rail Settlement -->
-        <div class="glass-card rounded-2xl p-4 sm:p-5 mb-10 border-l-4 border-l-emerald-500 shadow-xl">
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div class="flex items-center gap-3">
-                    <span class="relative flex h-3.5 w-3.5">
-                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
-                    </span>
-                    <div>
-                        <div class="text-sm font-semibold text-white flex items-center gap-2">
-                            <span>API Edge Node Operational</span>
-                            <span class="text-xs font-mono text-emerald-400">• Multi-RPC Solana + Nano Zero-Fee Engine</span>
-                        </div>
-                        <div class="text-xs text-slate-400">
-                            Automated TLS Egress • Anti-DNS Rebinding • Deterministic RFC 8785 Ed25519 State Attestation
-                        </div>
+        <!-- Mobile Drawer Container (< 768px) -->
+        <div id="mobileDrawer" class="hidden md:hidden fixed inset-x-0 top-16 bottom-0 bg-[var(--bg-primary)]/95 backdrop-blur-2xl border-t border-[var(--border-subtle)] p-6 overflow-y-auto z-40 transition-all duration-300">
+            <div class="space-y-6">
+                <div class="space-y-2">
+                    <div class="text-[11px] font-mono uppercase tracking-wider text-[var(--accent-cyan)] font-semibold">Autonomous Risk Terminal</div>
+                    <div class="grid grid-cols-1 gap-1">
+                        <a href="dashboard.html#sentinel" class="p-2.5 bg-[var(--bg-card)] text-sm font-semibold text-white flex items-center justify-between cyber-cut-sm">
+                            <span>Live Terminal</span>
+                            <span class="text-[9px] font-mono text-purple-300 bg-purple-950/80 border border-purple-800/60 px-1.5 py-0.5">MEMBERS ONLY</span>
+                        </a>
+                        <a href="dashboard.html#preflight" class="p-2.5 hover:bg-[var(--bg-card)] text-sm text-[var(--text-secondary)]">Preflight Execution Gate</a>
+                        <a href="dashboard.html#credit" class="p-2.5 hover:bg-[var(--bg-card)] text-sm text-[var(--text-secondary)]">Agent Credit Bureau</a>
+                        <a href="dashboard.html#anomalies" class="p-2.5 hover:bg-[var(--bg-card)] text-sm text-[var(--text-secondary)]">Live Anomaly Radar</a>
+                        <a href="dashboard.html#verify" class="p-2.5 hover:bg-[var(--bg-card)] text-sm text-[var(--text-secondary)]">Cryptographic Witness Verifier</a>
                     </div>
                 </div>
-                <div class="flex flex-wrap items-center gap-2">
-                    <button onclick="testLiveHealth()" id="healthBtn" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-md border border-slate-700 transition flex items-center gap-1.5 font-mono">
-                        <span id="healthIcon">⚡</span>
-                        <span>Probe /v1/health</span>
-                    </button>
+
+                <div class="space-y-2">
+                    <div class="text-[11px] font-mono uppercase tracking-wider text-[var(--accent-blue)] font-semibold">APIs & Settlement Rails</div>
+                    <div class="grid grid-cols-1 gap-1">
+                        <a href="#pricing" class="p-2.5 hover:bg-[var(--bg-card)] text-sm text-[var(--text-secondary)]">HTTP 402 Multi-Rail Paywall</a>
+                        <a href="#sandbox" class="p-2.5 hover:bg-[var(--bg-card)] text-sm text-[var(--text-secondary)]">Interactive Sandbox</a>
+                        <a href="#dag" class="p-2.5 hover:bg-[var(--bg-card)] text-sm text-[var(--text-secondary)]">DAG Parameter Compiler</a>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <div class="text-[11px] font-mono uppercase tracking-wider text-[var(--accent-amber)] font-semibold">Ecosystem</div>
+                    <div class="grid grid-cols-1 gap-1">
+                        <a href="jobs.html" class="p-2.5 hover:bg-[var(--bg-card)] text-sm text-[var(--text-secondary)] flex items-center gap-2">
+                            <span>💼</span><span>Agent Bounties & Tasks</span>
+                        </a>
+                        <a href="nfts.html" class="p-2.5 hover:bg-[var(--bg-card)] text-sm text-[var(--text-secondary)] flex items-center gap-2">
+                            <span>🎨</span><span>Molt Alpha DEMs NFT Collection</span>
+                        </a>
+                        <a href="https://github.com/theheiszt/moltbook-alpha" target="_blank" rel="noopener noreferrer" class="p-2.5 hover:bg-[var(--bg-card)] text-sm text-[var(--text-secondary)] flex items-center gap-2">
+                            <span>🐙</span><span>GitHub Repository</span>
+                        </a>
+                    </div>
                 </div>
             </div>
+        </div>
+    </header>
 
-            <div id="healthResult" class="hidden mt-4 p-3 bg-black/90 border border-slate-800 rounded-lg text-xs font-mono text-emerald-400 overflow-x-auto whitespace-pre"></div>
+    <!-- Main Container Layout -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 pt-24 pb-16">
 
-            <div class="mt-4 pt-4 border-t border-slate-800/60 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                <div class="flex items-center justify-between bg-black/50 border border-slate-800/80 px-3 py-2 rounded-lg">
-                    <div class="flex items-center gap-2 overflow-hidden">
-                        <span class="text-slate-400 font-mono text-[11px]">PORTAL:</span>
-                        <span class="font-mono text-emerald-300 truncate" id="gatewayUrl">www.moltalpha.dev</span>
+        <!-- Hero Mission Statement with Opposing Chamfer Cut & Caliper Ruler Notches -->
+        <div class="cyber-cut-frame cyber-ruler-left mb-10 shadow-2xl">
+            <div class="cyber-cut-inner relative p-6 sm:p-10 bg-[var(--bg-surface)] overflow-hidden">
+                <!-- Background Financial Network Interactive Canvas -->
+                <canvas id="heroNetworkCanvas" class="absolute inset-0 w-full h-full pointer-events-none -z-10 opacity-70"></canvas>
+
+                <div class="max-w-3xl relative z-10">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-mono uppercase tracking-wider mb-4 cyber-cut-sm">
+                        <span class="w-1.5 h-1.5 rounded-none bg-cyan-400 animate-pulse"></span>
+                        <span>Institutional Autonomous Quant Rails</span>
                     </div>
-                    <button onclick="copyToClipboard('https://www.moltalpha.dev', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">
-                        Copy
-                    </button>
+                    <h1 class="text-3xl sm:text-5xl font-extrabold text-white tracking-tight leading-tight mb-4">
+                        Verifiable Solana DEX Microstructure &amp;<br>
+                        <span class="bg-gradient-to-r from-cyan-400 via-sky-400 to-emerald-400 bg-clip-text text-transparent">Multi-Rail Cryptographic Attestation</span>
+                    </h1>
+                    <p class="text-[var(--text-secondary)] leading-relaxed text-sm sm:text-base mb-8">
+                        MoltALPHA provides autonomous trading bots and quantitative agents with sub-second orderbook depth, concentrated liquidity bin imbalances, and cross-DEX arbitrage intelligence across Raydium CLMM, Orca Whirlpool, and Meteora DLMM. Settle natively with Solana Pay (USDC/SOL) or instant zero-fee Nano (XNO). Every response includes deterministic RFC 8785 JSON digests and Ed25519 cryptographic receipts for verifiable offline attestation.
+                    </p>
+
+                    <!-- Action Buttons with Vertical Gradients and Matching Chamfer Borders -->
+                    <div class="flex flex-wrap items-center gap-3">
+                        <a href="dashboard.html" class="cyber-btn cyber-btn-cyan text-xs">
+                            <span>🛡️</span>
+                            <span>Launch Sentinel Terminal</span>
+                        </a>
+                        <a href="#sentinel" class="cyber-btn cyber-btn-ghost text-xs">
+                            <span>Explore Product Showcase</span>
+                            <span>↓</span>
+                        </a>
+                        <a href="#sandbox" class="cyber-btn cyber-btn-ghost text-xs">
+                            <span>Live Sandbox</span>
+                        </a>
+                    </div>
                 </div>
-                <div class="flex items-center justify-between bg-black/50 border border-slate-800/80 px-3 py-2 rounded-lg">
-                    <div class="flex items-center gap-2 overflow-hidden">
-                        <span class="text-slate-400 font-mono text-[11px]">SOLANA:</span>
-                        <span class="font-mono text-emerald-300 truncate" id="treasuryAddr">BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx</span>
+
+                <!-- 4 Institutional Feature Cards Grid with Corner Brackets -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-10 pt-8 border-t border-[var(--border-subtle)] relative z-10">
+                    <div class="bracket-card p-5">
+                        <span class="bracket-tick bracket-tick-tl"></span>
+                        <span class="bracket-tick bracket-tick-tr"></span>
+                        <span class="bracket-tick bracket-tick-bl"></span>
+                        <span class="bracket-tick bracket-tick-br"></span>
+                        <div class="text-cyan-400 font-bold mb-1 flex items-center gap-2 text-sm">
+                            <span>📈</span> Trading Alpha & Directives
+                        </div>
+                        <div class="text-xs text-[var(--text-secondary)] leading-relaxed">
+                            Quantitative machine-readable signals with exact entry prices, price targets, stop losses, and execution routing recommendations.
+                        </div>
                     </div>
-                    <button onclick="copyToClipboard('BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">
-                        Copy
-                    </button>
-                </div>
-                <div class="flex items-center justify-between bg-black/50 border border-slate-800/80 px-3 py-2 rounded-lg">
-                    <div class="flex items-center gap-2 overflow-hidden">
-                        <span class="text-slate-400 font-mono text-[11px]">NANO (FEES 0):</span>
-                        <span class="font-mono text-amber-300 truncate" id="nanoAddr">nano_3t1sxtuxyjgdabj6miwn6st58p8x553i8ybkikoc9ozn7mra7kk71iysfyn1</span>
+                    <div class="bracket-card p-5">
+                        <span class="bracket-tick bracket-tick-tl"></span>
+                        <span class="bracket-tick bracket-tick-tr"></span>
+                        <span class="bracket-tick bracket-tick-bl"></span>
+                        <span class="bracket-tick bracket-tick-br"></span>
+                        <div class="text-emerald-400 font-bold mb-1 flex items-center gap-2 text-sm">
+                            <span>⚡</span> Cross-DEX Arbitrage Scanner
+                        </div>
+                        <div class="text-xs text-[var(--text-secondary)] leading-relaxed">
+                            Real-time pricing discrepancies and tick vacuum squeeze alerts across Orca, Raydium, and Meteora pools with net profit calculation.
+                        </div>
                     </div>
-                    <button onclick="copyToClipboard('nano_3t1sxtuxyjgdabj6miwn6st58p8x553i8ybkikoc9ozn7mra7kk71iysfyn1', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">
-                        Copy
-                    </button>
+                    <div class="bracket-card p-5">
+                        <span class="bracket-tick bracket-tick-tl"></span>
+                        <span class="bracket-tick bracket-tick-tr"></span>
+                        <span class="bracket-tick bracket-tick-bl"></span>
+                        <span class="bracket-tick bracket-tick-br"></span>
+                        <div class="text-violet-400 font-bold mb-1 flex items-center gap-2 text-sm">
+                            <span>🕸️</span> DAG Tool Parameter Planning
+                        </div>
+                        <div class="text-xs text-[var(--text-secondary)] leading-relaxed">
+                            Inspect versioned parameter dependency graphs, resolve topological execution stages, and prevent parameter cycles prior to execution.
+                        </div>
+                    </div>
+                    <div class="bracket-card p-5">
+                        <span class="bracket-tick bracket-tick-tl"></span>
+                        <span class="bracket-tick bracket-tick-tr"></span>
+                        <span class="bracket-tick bracket-tick-bl"></span>
+                        <span class="bracket-tick bracket-tick-br"></span>
+                        <div class="text-amber-400 font-bold mb-1 flex items-center gap-2 text-sm">
+                            <span>🛡️</span> Cryptographic Witnesses
+                        </div>
+                        <div class="text-xs text-[var(--text-secondary)] leading-relaxed">
+                            Deterministic RFC 8785 JSON digests and Ed25519 digital signatures verify server state transitions offline without network calls.
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Hero Mission Statement -->
-        <section class="mb-14">
-            <h2 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-tight mb-4">
-                Verifiable Solana DEX Microstructure &<br>
-                <span class="bg-gradient-to-r from-sky-400 to-emerald-400 bg-clip-text text-transparent">Multi-Rail Cryptographic Attestation for Autonomous Agents</span>
-            </h2>
-            <p class="text-slate-300 leading-relaxed text-base max-w-3xl mb-8">
-                MoltALPHA provides autonomous trading bots and quantitative agents with sub-second orderbook depth, concentrated liquidity bin imbalances, and cross-DEX arbitrage intelligence across Raydium CLMM, Orca Whirlpool, and Meteora DLMM. Settle natively with Solana Pay (USDC/SOL) or instant zero-fee Nano (XNO). Every response includes deterministic RFC 8785 JSON digests and Ed25519 cryptographic receipts for verifiable offline attestation.
-            </p>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="glass-card p-5 rounded-xl hover:border-sky-500/50 transition">
-                    <div class="text-sky-400 font-bold mb-1 flex items-center gap-2">
-                        <span>📈</span> Trading Alpha & Directives
-                    </div>
-                    <div class="text-xs text-slate-400 leading-relaxed">
-                        Quantitative machine-readable signals with exact entry prices, price targets, stop losses, and execution routing recommendations.
-                    </div>
-                </div>
-                <div class="glass-card p-5 rounded-xl hover:border-emerald-500/50 transition">
-                    <div class="text-emerald-400 font-bold mb-1 flex items-center gap-2">
-                        <span>⚡</span> Cross-DEX Arbitrage Scanner
-                    </div>
-                    <div class="text-xs text-slate-400 leading-relaxed">
-                        Real-time pricing discrepancies and tick vacuum squeeze alerts across Orca, Raydium, and Meteora pools with net profit calculation.
-                    </div>
-                </div>
-                <div class="glass-card p-5 rounded-xl hover:border-indigo-500/50 transition">
-                    <div class="text-indigo-400 font-bold mb-1 flex items-center gap-2">
-                        <span>🕸️</span> DAG Tool Parameter Planning
-                    </div>
-                    <div class="text-xs text-slate-400 leading-relaxed">
-                        Inspect versioned parameter dependency graphs, resolve topological execution stages, and prevent parameter cycles prior to execution.
-                    </div>
-                </div>
-                <div class="glass-card p-5 rounded-xl hover:border-amber-500/50 transition">
-                    <div class="text-amber-400 font-bold mb-1 flex items-center gap-2">
-                        <span>🛡️</span> Cryptographic Witnesses
-                    </div>
-                    <div class="text-xs text-slate-400 leading-relaxed">
-                        Deterministic RFC 8785 JSON digests and Ed25519 digital signatures verify server state transitions offline without network calls.
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- MOLTALPHA SENTINEL SECTION -->
-        <section id="sentinel" class="mb-14">
-            <div class="glass-card rounded-2xl p-6 sm:p-7 border border-rose-500/30 bg-slate-900/40 shadow-2xl relative overflow-hidden">
-                <div class="absolute top-0 right-0 w-80 h-80 bg-rose-500/5 rounded-full blur-3xl pointer-events-none"></div>
-
-                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 pb-6 border-b border-slate-800">
-                    <div>
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="px-2.5 py-0.5 text-[10px] font-mono font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded-full uppercase tracking-wider">
-                                Real-Time Risk Intelligence
-                            </span>
-                            <span class="text-xs text-slate-400">• Autonomous AMM Preflight &amp; Credit Bureau</span>
-                        </div>
-                        <h2 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                            MOLTALPHA SENTINEL
-                        </h2>
-                        <div class="text-sm font-semibold text-rose-300 mt-1">
-                            Know the risk before your agent commits capital.
-                        </div>
-                        <p class="text-xs sm:text-sm text-slate-300 mt-2 max-w-2xl leading-relaxed">
-                            Independent, cryptographically verifiable risk intelligence for autonomous trading systems. Sentinel monitors liquidity pool drain mechanics, dynamic hook permissions, oracle feed delays, and agent behavioral track records across Solana and Base.
-                        </p>
-                    </div>
-
-                    <div class="flex flex-wrap items-center gap-2.5 shrink-0">
-                        <a href="dashboard.html#sentinel" class="px-4 py-2.5 bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-400 hover:to-amber-400 text-white font-mono text-xs font-semibold rounded-xl shadow-lg transition flex items-center gap-2">
-                            <span>🛡️</span>
-                            <span>Open Sentinel Console</span>
-                        </a>
-                        <a href="docs/SENTINEL.md" target="_blank" class="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl font-mono text-xs transition">
-                            API Spec ↗
-                        </a>
-                    </div>
-                </div>
-
-                <!-- 3 Core Capabilities -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
-                    <!-- Capability 1: Pool Risk Intelligence -->
-                    <div class="bg-black/40 border border-slate-800/90 hover:border-rose-500/40 rounded-xl p-5 transition flex flex-col justify-between">
+        <!-- Live Status Bar with Multi-Rail Settlement -->
+        <div class="cyber-cut-frame cyber-ruler-left mb-14 shadow-xl">
+            <div class="cyber-cut-inner p-5 bg-[var(--bg-surface)] border-l-4 border-l-emerald-500">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <span class="relative flex h-3.5 w-3.5">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-none bg-emerald-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-none h-3.5 w-3.5 bg-emerald-500"></span>
+                        </span>
                         <div>
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="text-2xl">🌊</span>
-                                <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-800/60">Multi-Factor AMM</span>
+                            <div class="text-sm font-semibold text-white flex items-center gap-2">
+                                <span>API Edge Node Operational</span>
+                                <span class="text-xs font-mono text-emerald-400">• Multi-RPC Solana + Nano Zero-Fee Engine</span>
                             </div>
-                            <h3 class="text-base font-bold text-white mb-2">1. Pool Risk Intelligence</h3>
-                            <p class="text-xs text-slate-400 leading-relaxed mb-4">
-                                Preflight risk assessments across four orthogonal dimensions: atomic LP drain traps, dynamic hook fee manipulation (up to 99%), oracle staleness, and active tick liquidity depletion.
-                            </p>
-                        </div>
-                        <div class="pt-3 border-t border-slate-800/80 text-[11px] font-mono text-slate-500 flex items-center justify-between">
-                            <span>SAFE (0–9) → CRITICAL (70–100)</span>
-                            <span class="text-rose-400">4 Dimensions</span>
+                            <div class="text-xs text-[var(--text-secondary)]">
+                                Automated TLS Egress • Anti-DNS Rebinding • Deterministic RFC 8785 Ed25519 State Attestation
+                            </div>
                         </div>
                     </div>
-
-                    <!-- Capability 2: Agent Credit Bureau -->
-                    <div class="bg-black/40 border border-slate-800/90 hover:border-amber-500/40 rounded-xl p-5 transition flex flex-col justify-between">
-                        <div>
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="text-2xl">🤖</span>
-                                <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/60">Reputation &amp; Identity</span>
-                            </div>
-                            <h3 class="text-base font-bold text-white mb-2">2. Agent Credit Bureau</h3>
-                            <p class="text-xs text-slate-400 leading-relaxed mb-4">
-                                Dossiers tracking autonomous agent track records, delivery reliability vs unfulfilled claims, verified operator badges, and known settlement addresses without confusing observed wallet activity with human proof.
-                            </p>
-                        </div>
-                        <div class="pt-3 border-t border-slate-800/80 text-[11px] font-mono text-slate-500 flex items-center justify-between">
-                            <span>4 Behavioral Tiers</span>
-                            <span class="text-amber-400">Track Record Audit</span>
-                        </div>
-                    </div>
-
-                    <!-- Capability 3: Cryptographic Verification -->
-                    <div class="bg-black/40 border border-slate-800/90 hover:border-cyan-500/40 rounded-xl p-5 transition flex flex-col justify-between">
-                        <div>
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="text-2xl">🔐</span>
-                                <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800/60">RFC 8785 + Ed25519</span>
-                            </div>
-                            <h3 class="text-base font-bold text-white mb-2">3. Cryptographic Verification</h3>
-                            <p class="text-xs text-slate-400 leading-relaxed mb-4">
-                                Every assessment emits an RFC 8785 canonical digest and Ed25519 digital witness. Verified independently in modern browsers via native Web Crypto with transparent public key discovery and tamper detection.
-                            </p>
-                        </div>
-                        <div class="pt-3 border-t border-slate-800/80 text-[11px] font-mono text-slate-500 flex items-center justify-between">
-                            <span>Zero Blind Trust</span>
-                            <span class="text-cyan-400">Web Crypto Native</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 4 Risk Dimensions Breakdown -->
-                <div class="bg-black/60 border border-slate-800/80 rounded-xl p-5 mb-6">
-                    <h4 class="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
-                        <span>📊</span> Four Orthogonal Risk Dimensions
-                    </h4>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div class="p-3.5 bg-slate-900/50 rounded-lg border border-slate-800">
-                            <div class="flex items-center justify-between text-xs font-mono mb-1">
-                                <span class="text-rose-400 font-bold">1. Drain Risk</span>
-                                <span class="text-slate-500">30% Max</span>
-                            </div>
-                            <div class="text-xs font-medium text-white mb-1">Atomic LP Withdrawal</div>
-                            <p class="text-[11px] text-slate-400 leading-normal">
-                                Single-slot liquidity evacuation, unconstrained permissions, and lockup expirations.
-                            </p>
-                        </div>
-
-                        <div class="p-3.5 bg-slate-900/50 rounded-lg border border-slate-800">
-                            <div class="flex items-center justify-between text-xs font-mono mb-1">
-                                <span class="text-amber-400 font-bold">2. Hook Authority</span>
-                                <span class="text-slate-500">25% Max</span>
-                            </div>
-                            <div class="text-xs font-medium text-white mb-1">Dynamic Fee Hijack</div>
-                            <p class="text-[11px] text-slate-400 leading-normal">
-                                Dynamic fee manipulation up to 99%, programmable callback privileges, and selective reverts.
-                            </p>
-                        </div>
-
-                        <div class="p-3.5 bg-slate-900/50 rounded-lg border border-slate-800">
-                            <div class="flex items-center justify-between text-xs font-mono mb-1">
-                                <span class="text-sky-400 font-bold">3. Oracle Freshness</span>
-                                <span class="text-slate-500">25% Max</span>
-                            </div>
-                            <div class="text-xs font-medium text-white mb-1">Feed Lag &amp; Staleness</div>
-                            <p class="text-[11px] text-slate-400 leading-normal">
-                                Heartbeat gaps, RPC lag, unindexed slots, and stale pricing periods that enable sandwiching.
-                            </p>
-                        </div>
-
-                        <div class="p-3.5 bg-slate-900/50 rounded-lg border border-slate-800">
-                            <div class="flex items-center justify-between text-xs font-mono mb-1">
-                                <span class="text-emerald-400 font-bold">4. Tick Density</span>
-                                <span class="text-slate-500">20% Max</span>
-                            </div>
-                            <div class="text-xs font-medium text-white mb-1">Orderbook Vacuums</div>
-                            <p class="text-[11px] text-slate-400 leading-normal">
-                                Discrete tick concentration vs deep out-of-the-money liquidity; first-passage barrier traps.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Call-to-Action Bar -->
-                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl bg-gradient-to-r from-rose-950/40 via-slate-900 to-cyan-950/40 border border-slate-800">
-                    <div class="text-xs text-slate-300">
-                        <strong class="text-white">Ready to inspect live pool topology?</strong> Query Sentinel preflight directly or run cryptographic audits in the interactive console.
-                    </div>
-                    <div class="flex items-center gap-3 shrink-0">
-                        <a href="dashboard.html#sentinel" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-mono font-semibold transition">
-                            Launch Sentinel Console ↗
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Live Interactive Assurance Sandbox & Audit Guarantees -->
-        <section id="sandbox" class="mb-14">
-            <div class="glass-card rounded-2xl p-6 sm:p-7 border border-sky-500/30 bg-slate-900/40 shadow-2xl relative overflow-hidden">
-                <div class="absolute top-0 right-0 w-80 h-80 bg-sky-500/5 rounded-full blur-3xl pointer-events-none"></div>
-
-                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-6 pb-6 border-b border-slate-800">
-                    <div>
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="px-2.5 py-0.5 text-[10px] font-mono font-bold bg-sky-500/10 text-sky-400 border border-sky-500/30 rounded-full uppercase tracking-wider">
-                                Live Interactive Sandbox
-                            </span>
-                            <span class="text-xs text-slate-400">• Autonomous Agent Assurance Assays</span>
-                        </div>
-                        <h3 class="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
-                            Verify Live Agent Guarantees in Real Time
-                        </h3>
-                        <p class="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
-                            Probe production API endpoints directly from your browser. Verify machine-readable RFC error contracts, multi-rail settlement discovery, crash-resilient idempotency replays, and non-repudiable Ed25519 state witnesses.
-                        </p>
-                    </div>
-
-                    <div class="flex flex-wrap items-center gap-2.5 shrink-0">
-                        <button onclick="runLiveAssuranceAssay()" id="btnRunAssay" class="px-4 py-2.5 bg-gradient-to-r from-sky-500 to-emerald-500 hover:from-sky-400 hover:to-emerald-400 text-white font-mono text-xs font-semibold rounded-xl shadow-lg transition flex items-center gap-2">
-                            <span id="assaySpinner">⚡</span>
-                            <span>Run Full Assurance Assay</span>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button onclick="testLiveHealth()" id="healthBtn" class="cyber-btn cyber-btn-ghost text-xs py-1.5 px-3">
+                            <span id="healthIcon">⚡</span>
+                            <span>Probe /v1/health</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- 6 Cryptographic & Audit Guarantees Grid -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-                    <div class="bg-black/40 border border-slate-800/80 p-3.5 rounded-xl flex flex-col justify-between hover:border-emerald-500/40 transition">
-                        <div>
-                            <div class="text-[11px] font-mono text-emerald-400 font-semibold mb-1 flex items-center gap-1.5">
-                                <span>🛡️</span> Zero Quota Leakage
-                            </div>
-                            <div class="text-[10px] text-slate-400 leading-normal">
-                                60s active background TTL sweeper auto-refunds abandoned reservations.
-                            </div>
-                        </div>
-                        <div class="mt-2 text-[10px] font-mono text-emerald-500/90 font-medium">Auto-Sweeper Active</div>
-                    </div>
+                <div id="healthResult" class="hidden mt-4 p-3 bg-black/90 border border-[var(--border-subtle)] text-xs font-mono text-emerald-400 overflow-x-auto whitespace-pre"></div>
 
-                    <div class="bg-black/40 border border-slate-800/80 p-3.5 rounded-xl flex flex-col justify-between hover:border-sky-500/40 transition">
-                        <div>
-                            <div class="text-[11px] font-mono text-sky-400 font-semibold mb-1 flex items-center gap-1.5">
-                                <span>📐</span> 100% Contract Match
-                            </div>
-                            <div class="text-[10px] text-slate-400 leading-normal">
-                                /v1/capabilities is programmatically derived from live runtime validators.
-                            </div>
+                <div class="mt-4 pt-4 border-t border-[var(--border-subtle)] grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-mono">
+                    <div class="flex items-center justify-between bg-[var(--bg-card-inner)] border border-[var(--border-subtle)] px-3 py-2">
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            <span class="text-slate-400 text-[11px]">PORTAL:</span>
+                            <span class="text-emerald-300 truncate" id="gatewayUrl">www.moltalpha.dev</span>
                         </div>
-                        <div class="mt-2 text-[10px] font-mono text-sky-400/90 font-medium">Zero Spec Drift</div>
+                        <button onclick="copyToClipboard('https://www.moltalpha.dev', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-[var(--bg-surface)] hover:bg-[var(--bg-card)] text-[11px]">
+                            Copy
+                        </button>
                     </div>
-
-                    <div class="bg-black/40 border border-slate-800/80 p-3.5 rounded-xl flex flex-col justify-between hover:border-indigo-500/40 transition">
-                        <div>
-                            <div class="text-[11px] font-mono text-indigo-400 font-semibold mb-1 flex items-center gap-1.5">
-                                <span>🔁</span> Safe Idempotent Retry
-                            </div>
-                            <div class="text-[10px] text-slate-400 leading-normal">
-                                Replaying idempotency keys yields identical results; non-idempotent drops never retry.
-                            </div>
+                    <div class="flex items-center justify-between bg-[var(--bg-card-inner)] border border-[var(--border-subtle)] px-3 py-2">
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            <span class="text-slate-400 text-[11px]">SOLANA:</span>
+                            <span class="text-emerald-300 truncate" id="treasuryAddr">BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx</span>
                         </div>
-                        <div class="mt-2 text-[10px] font-mono text-indigo-400/90 font-medium">Replay Cached</div>
+                        <button onclick="copyToClipboard('BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-[var(--bg-surface)] hover:bg-[var(--bg-card)] text-[11px]">
+                            Copy
+                        </button>
                     </div>
-
-                    <div class="bg-black/40 border border-slate-800/80 p-3.5 rounded-xl flex flex-col justify-between hover:border-amber-500/40 transition">
-                        <div>
-                            <div class="text-[11px] font-mono text-amber-400 font-semibold mb-1 flex items-center gap-1.5">
-                                <span>📜</span> Machine-Readable Errors
-                            </div>
-                            <div class="text-[10px] text-slate-400 leading-normal">
-                                RFC taxonomy: error code, recovery actions, retryable, docs_url, and state outcome.
-                            </div>
+                    <div class="flex items-center justify-between bg-[var(--bg-card-inner)] border border-[var(--border-subtle)] px-3 py-2">
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            <span class="text-slate-400 text-[11px]">NANO (FEES 0):</span>
+                            <span class="text-amber-300 truncate" id="nanoAddr">nano_3t1sxtuxyjgdabj6miwn6st58p8x553i8ybkikoc9ozn7mra7kk71iysfyn1</span>
                         </div>
-                        <div class="mt-2 text-[10px] font-mono text-amber-400/90 font-medium">RFC Error Contract</div>
-                    </div>
-
-                    <div class="bg-black/40 border border-slate-800/80 p-3.5 rounded-xl flex flex-col justify-between hover:border-rose-500/40 transition">
-                        <div>
-                            <div class="text-[11px] font-mono text-rose-400 font-semibold mb-1 flex items-center gap-1.5">
-                                <span>🔒</span> Step-Up & Egress Guard
-                            </div>
-                            <div class="text-[10px] text-slate-400 leading-normal">
-                                Single-use confirmation nonces for mutations; post-connect anti-DNS rebinding firewall.
-                            </div>
-                        </div>
-                        <div class="mt-2 text-[10px] font-mono text-rose-400/90 font-medium">Fail-Closed Security</div>
-                    </div>
-
-                    <div class="bg-black/40 border border-slate-800/80 p-3.5 rounded-xl flex flex-col justify-between hover:border-purple-500/40 transition">
-                        <div>
-                            <div class="text-[11px] font-mono text-purple-400 font-semibold mb-1 flex items-center gap-1.5">
-                                <span>🔏</span> Ed25519 Receipts
-                            </div>
-                            <div class="text-[10px] text-slate-400 leading-normal">
-                                RFC 8785 canonical hash digests signed by hardware-rooted Ed25519 key.
-                            </div>
-                        </div>
-                        <div class="mt-2 text-[10px] font-mono text-purple-400/90 font-medium">Offline Verifiable</div>
+                        <button onclick="copyToClipboard('nano_3t1sxtuxyjgdabj6miwn6st58p8x553i8ybkikoc9ozn7mra7kk71iysfyn1', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-[var(--bg-surface)] hover:bg-[var(--bg-card)] text-[11px]">
+                            Copy
+                        </button>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <!-- Interactive Endpoint Probes Toolbar -->
-                <div class="flex flex-wrap items-center gap-2 mb-4">
-                    <span class="text-xs font-mono text-slate-400">Direct Endpoint Probes:</span>
-                    <button onclick="probeSandbox('/v1/capabilities')" class="text-xs bg-slate-800 hover:bg-slate-700 text-sky-300 px-3 py-1.5 rounded-lg border border-slate-700 transition font-mono">
-                        GET /v1/capabilities
-                    </button>
-                    <button onclick="probeSandbox('/v1/payments/config')" class="text-xs bg-slate-800 hover:bg-slate-700 text-emerald-300 px-3 py-1.5 rounded-lg border border-slate-700 transition font-mono">
-                        GET /v1/payments/config
-                    </button>
-                    <button onclick="probeSandbox('/v1/errors')" class="text-xs bg-slate-800 hover:bg-slate-700 text-amber-300 px-3 py-1.5 rounded-lg border border-slate-700 transition font-mono">
-                        GET /v1/errors
-                    </button>
-                    <button onclick="probeSandbox('/v1/data-products')" class="text-xs bg-slate-800 hover:bg-slate-700 text-indigo-300 px-3 py-1.5 rounded-lg border border-slate-700 transition font-mono">
-                        GET /v1/data-products
-                    </button>
-                    <button onclick="probeSandbox('/v1/quant/first-passage?pair=BONK/SOL&target_net_pct=0.015')" class="text-xs bg-slate-800 hover:bg-slate-700 text-teal-300 px-3 py-1.5 rounded-lg border border-slate-700 transition font-mono">
-                        GET /v1/quant/first-passage
-                    </button>
-                    <button onclick="probeSandbox('/v1/witnesses/public-keys')" class="text-xs bg-slate-800 hover:bg-slate-700 text-purple-300 px-3 py-1.5 rounded-lg border border-slate-700 transition font-mono">
-                        GET /v1/witnesses/public-keys
-                    </button>
+        <!-- ==================================================================
+             IMMUNEFI-STYLE PINNED SCROLL-DRIVEN SENTINEL PRODUCT SHOWCASE
+             ================================================================== -->
+        <section id="sentinel" class="mb-20 pt-4">
+            <!-- Immunefi Outer Chamfered Container with Ruler Notches -->
+            <div class="cyber-cut-frame cyber-ruler-both shadow-2xl">
+                <div class="cyber-cut-inner bg-[var(--bg-surface)]">
+                    <!-- Top Stepped Progress Header (e.g. ■ PRODUCTS 01 / 06 ━━━━━) -->
+                    <div class="immunefi-step-header">
+                        <div class="flex items-center gap-3">
+                            <span class="immunefi-step-badge">PRODUCTS &bull; SENTINEL RISK TERMINAL [MEMBERS ONLY]</span>
+                            <span class="text-[var(--border-subtle)] hidden sm:inline">|</span>
+                            <span class="text-[10px] font-mono text-[var(--text-muted)] hidden sm:inline">AUTONOMOUS QUANT RECONNAISSANCE</span>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <div class="immunefi-step-counter">
+                                <span class="active-num" id="immunefiActiveStepText">01</span>
+                                <span>/</span>
+                                <span>06</span>
+                            </div>
+                            <div class="immunefi-progress-bars" id="immunefiProgressPips">
+                                <span class="immunefi-progress-pip active" data-pip="1"></span>
+                                <span class="immunefi-progress-pip" data-pip="2"></span>
+                                <span class="immunefi-progress-pip" data-pip="3"></span>
+                                <span class="immunefi-progress-pip" data-pip="4"></span>
+                                <span class="immunefi-progress-pip" data-pip="5"></span>
+                                <span class="immunefi-progress-pip" data-pip="6"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Inner Two-Column Scrollytelling Body -->
+                    <div class="p-4 sm:p-8">
+                        <div class="sentinel-showcase-container">
+                            <!-- Left Column: Interactive Stepped Sub-Cards with Corner Brackets [ ] -->
+                            <div class="space-y-3.5">
+                                <!-- Step 1: Continuous Surveillance -->
+                                <div class="bracket-card narrative-step-card active p-4 cursor-pointer" data-showcase-step="1" onclick="jumpToShowcaseStage(1)">
+                                    <span class="bracket-tick bracket-tick-tl"></span>
+                                    <span class="bracket-tick bracket-tick-tr"></span>
+                                    <span class="bracket-tick bracket-tick-bl"></span>
+                                    <span class="bracket-tick bracket-tick-br"></span>
+                                    <div class="flex flex-wrap items-center justify-between gap-1.5 mb-1.5">
+                                        <span class="text-[10px] font-mono uppercase tracking-wider text-emerald-400 font-semibold flex items-center gap-1.5">
+                                            <span class="w-1.5 h-1.5 bg-emerald-400 inline-block"></span>
+                                            <span>01 &bull; Continuous DEX Surveillance</span>
+                                        </span>
+                                        <span class="text-[10px] font-mono text-[var(--text-muted)]">24/7 SURVEILLANCE</span>
+                                    </div>
+                                    <h3 class="text-sm sm:text-base font-bold text-white mb-1.5 flex items-center justify-between">
+                                        <span>Autonomous Pool Topology Engine</span>
+                                        <span class="text-cyan-400 text-xs">→</span>
+                                    </h3>
+                                    <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-2.5">
+                                        Surveys tick-level topology across Solana CLMM and DLMM pools (Raydium, Orca Whirlpool, Meteora). Real-time distribution across SAFE, LOW, MEDIUM, HIGH, and CRITICAL classifications.
+                                    </p>
+                                    <div class="flex flex-wrap items-center gap-2 text-[10px] font-mono text-emerald-400">
+                                        <span>✓ 10 Monitored Pools</span>
+                                        <span>•</span>
+                                        <span>✓ 0 Critical Anomalies</span>
+                                    </div>
+                                </div>
+
+                                <!-- Step 2: Preflight Execution Gate -->
+                                <div class="bracket-card narrative-step-card p-4 cursor-pointer" data-showcase-step="2" onclick="jumpToShowcaseStage(2)">
+                                    <span class="bracket-tick bracket-tick-tl"></span>
+                                    <span class="bracket-tick bracket-tick-tr"></span>
+                                    <span class="bracket-tick bracket-tick-bl"></span>
+                                    <span class="bracket-tick bracket-tick-br"></span>
+                                    <div class="flex flex-wrap items-center justify-between gap-1.5 mb-1.5">
+                                        <span class="text-[10px] font-mono uppercase tracking-wider text-cyan-400 font-semibold flex items-center gap-1.5">
+                                            <span class="w-1.5 h-1.5 bg-cyan-400 inline-block"></span>
+                                            <span>02 &bull; Preflight Execution Gate</span>
+                                        </span>
+                                        <span class="text-[10px] font-mono text-[var(--text-muted)]">4-FACTOR GATE</span>
+                                    </div>
+                                    <h3 class="text-sm sm:text-base font-bold text-white mb-1.5 flex items-center justify-between">
+                                        <span>Pre-Trade Interceptor & Guard</span>
+                                        <span class="text-cyan-400 text-xs">→</span>
+                                    </h3>
+                                    <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-2.5">
+                                        Evaluates orthogonal risk dimensions: Pool Structural (15%), Token Mechanics (20%), DEX Microstructure (40%), and Oracle Integrity (25%) with deterministic ALLOW, REVIEW, or BLOCK gates.
+                                    </p>
+                                    <div class="flex flex-wrap items-center gap-2 text-[10px] font-mono text-cyan-400">
+                                        <span class="gate-decision gate-allow py-0.5 px-2">ALLOW (Score 4)</span>
+                                        <span>Zero blind capital commitment</span>
+                                    </div>
+                                </div>
+
+                                <!-- Step 3: Historical Tracking & Decay -->
+                                <div class="bracket-card narrative-step-card p-4 cursor-pointer" data-showcase-step="3" onclick="jumpToShowcaseStage(3)">
+                                    <span class="bracket-tick bracket-tick-tl"></span>
+                                    <span class="bracket-tick bracket-tick-tr"></span>
+                                    <span class="bracket-tick bracket-tick-bl"></span>
+                                    <span class="bracket-tick bracket-tick-br"></span>
+                                    <div class="flex flex-wrap items-center justify-between gap-1.5 mb-1.5">
+                                        <span class="text-[10px] font-mono uppercase tracking-wider text-blue-400 font-semibold flex items-center gap-1.5">
+                                            <span class="w-1.5 h-1.5 bg-blue-400 inline-block"></span>
+                                            <span>03 &bull; Additive Risk Tracking</span>
+                                        </span>
+                                        <span class="text-[10px] font-mono text-[var(--text-muted)]">TIME-WEIGHTED DECAY</span>
+                                    </div>
+                                    <h3 class="text-sm sm:text-base font-bold text-white mb-1.5 flex items-center justify-between">
+                                        <span>Historical Volatility Regression</span>
+                                        <span class="text-cyan-400 text-xs">→</span>
+                                    </h3>
+                                    <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-2.5">
+                                        Every risk observation is permanently recorded in SQLite WAL. Tracks trend velocity, 30-day time-weighted decay, and volatility regression so structural liquidity shifts cannot hide behind stale averages.
+                                    </p>
+                                    <div class="flex flex-wrap items-center gap-2 text-[10px] font-mono text-blue-400">
+                                        <span>Persistent Audit Trail</span>
+                                        <span>•</span>
+                                        <span>Decayed Metric Regression</span>
+                                    </div>
+                                </div>
+
+                                <!-- Step 4: Agent Credit Bureau -->
+                                <div class="bracket-card narrative-step-card p-4 cursor-pointer" data-showcase-step="4" onclick="jumpToShowcaseStage(4)">
+                                    <span class="bracket-tick bracket-tick-tl"></span>
+                                    <span class="bracket-tick bracket-tick-tr"></span>
+                                    <span class="bracket-tick bracket-tick-bl"></span>
+                                    <span class="bracket-tick bracket-tick-br"></span>
+                                    <div class="flex flex-wrap items-center justify-between gap-1.5 mb-1.5">
+                                        <span class="text-[10px] font-mono uppercase tracking-wider text-amber-400 font-semibold flex items-center gap-1.5">
+                                            <span class="w-1.5 h-1.5 bg-amber-400 inline-block"></span>
+                                            <span>04 &bull; Agent Credit Bureau</span>
+                                        </span>
+                                        <span class="text-[10px] font-mono text-[var(--text-muted)]">REPUTATION DOSSIER</span>
+                                    </div>
+                                    <h3 class="text-sm sm:text-base font-bold text-white mb-1.5 flex items-center justify-between">
+                                        <span>Settlement Reliability Dossier</span>
+                                        <span class="text-cyan-400 text-xs">→</span>
+                                    </h3>
+                                    <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-2.5">
+                                        Verifiable counterparty credit rating for autonomous agents. Tracks completed jobs, fulfillment claims, historical defaults, and settlement reliability with strict non-repudiation invariants.
+                                    </p>
+                                    <div class="flex flex-wrap items-center gap-2 text-[10px] font-mono text-amber-400">
+                                        <span>98.4% Reliability Index</span>
+                                        <span>•</span>
+                                        <span>0% Historical Default Rate</span>
+                                    </div>
+                                </div>
+
+                                <!-- Step 5: Live Anomaly Stream -->
+                                <div class="bracket-card narrative-step-card p-4 cursor-pointer" data-showcase-step="5" onclick="jumpToShowcaseStage(5)">
+                                    <span class="bracket-tick bracket-tick-tl"></span>
+                                    <span class="bracket-tick bracket-tick-tr"></span>
+                                    <span class="bracket-tick bracket-tick-bl"></span>
+                                    <span class="bracket-tick bracket-tick-br"></span>
+                                    <div class="flex flex-wrap items-center justify-between gap-1.5 mb-1.5">
+                                        <span class="text-[10px] font-mono uppercase tracking-wider text-rose-400 font-semibold flex items-center gap-1.5">
+                                            <span class="w-1.5 h-1.5 bg-rose-400 inline-block"></span>
+                                            <span>05 &bull; Live Anomaly Radar</span>
+                                        </span>
+                                        <span class="text-[10px] font-mono text-[var(--text-muted)]">SUB-100MS WEBSOCKET</span>
+                                    </div>
+                                    <h3 class="text-sm sm:text-base font-bold text-white mb-1.5 flex items-center justify-between">
+                                        <span>Microstructural Liquidity Traps</span>
+                                        <span class="text-cyan-400 text-xs">→</span>
+                                    </h3>
+                                    <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-2.5">
+                                        Real-time detection of high-risk DEX anomalies: TICK_VACUUM (> $50k liquidity collapse in ≤ 3s), SPOOFED_WALL depth manipulation, wash trading loops, and order-queue depletion broadcast over low-latency WebSockets.
+                                    </p>
+                                    <div class="flex flex-wrap items-center gap-2 text-[10px] font-mono text-rose-400">
+                                        <span>Instant SEV-1 Alerts</span>
+                                        <span>•</span>
+                                        <span>Bidirectional Heartbeat</span>
+                                    </div>
+                                </div>
+
+                                <!-- Step 6: Cryptographic Witness -->
+                                <div class="bracket-card narrative-step-card p-4 cursor-pointer" data-showcase-step="6" onclick="jumpToShowcaseStage(6)">
+                                    <span class="bracket-tick bracket-tick-tl"></span>
+                                    <span class="bracket-tick bracket-tick-tr"></span>
+                                    <span class="bracket-tick bracket-tick-bl"></span>
+                                    <span class="bracket-tick bracket-tick-br"></span>
+                                    <div class="flex flex-wrap items-center justify-between gap-1.5 mb-1.5">
+                                        <span class="text-[10px] font-mono uppercase tracking-wider text-violet-400 font-semibold flex items-center gap-1.5">
+                                            <span class="w-1.5 h-1.5 bg-violet-400 inline-block"></span>
+                                            <span>06 &bull; Cryptographic Witness</span>
+                                        </span>
+                                        <span class="text-[10px] font-mono text-[var(--text-muted)]">ED25519 SPKI</span>
+                                    </div>
+                                    <h3 class="text-sm sm:text-base font-bold text-white mb-1.5 flex items-center justify-between">
+                                        <span>RFC 8785 Canonical State Witness</span>
+                                        <span class="text-cyan-400 text-xs">→</span>
+                                    </h3>
+                                    <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-2.5">
+                                        Zero blind trust. Every assessment emits an RFC 8785 JCS canonical digest and an Ed25519 hardware-rooted signature. Independently verifiable directly inside any modern browser using native Web Crypto with pinned trust anchor.
+                                    </p>
+                                    <div class="flex flex-wrap items-center gap-2 text-[10px] font-mono text-violet-400">
+                                        <span>Web Crypto Native</span>
+                                        <span>•</span>
+                                        <span>Pinned Trust Anchor fd901719</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Right Pinned Quant Terminal Display (Sticky with Opposing Chamfer and Ruler Notches) -->
+                            <div class="sentinel-showcase-pinned">
+                                <div class="cyber-cut-frame cyber-ruler-right shadow-2xl">
+                                    <div class="cyber-cut-inner bg-[var(--bg-card-inner)]">
+                                        <!-- Terminal Window Title Bar -->
+                                        <div class="px-3 sm:px-4 py-2.5 sm:py-3 bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-2">
+                                            <div class="flex items-center gap-2">
+                                                <span class="w-2.5 h-2.5 bg-rose-500/80 inline-block"></span>
+                                                <span class="w-2.5 h-2.5 bg-amber-500/80 inline-block"></span>
+                                                <span class="w-2.5 h-2.5 bg-emerald-500/80 inline-block"></span>
+                                                <span class="ml-1 sm:ml-2 text-[11px] sm:text-xs font-mono text-[var(--text-muted)] truncate max-w-[150px] sm:max-w-none" id="showcaseTerminalRoute">GET /v1/sentinel/feed</span>
+                                            </div>
+                                            <div class="flex items-center gap-2 sm:gap-3">
+                                                <span class="text-[10px] font-mono text-purple-300 bg-purple-950/80 border border-purple-800/60 px-2 py-0.5 cyber-cut-sm font-bold flex items-center gap-1.5">
+                                                    <span class="w-1.5 h-1.5 bg-emerald-400 animate-pulse"></span>
+                                                    <span>MEMBERS ONLY</span>
+                                                </span>
+                                                <a href="dashboard.html#sentinel" class="text-[11px] font-mono text-[var(--accent-cyan)] hover:underline flex items-center gap-1">
+                                                    <span>Open</span>
+                                                    <span>↗</span>
+                                                </a>
+                                            </div>
+                                        </div>
+
+                                        <!-- Stage Frames Container -->
+                                        <div class="relative min-h-[380px] sm:min-h-[460px] bg-black/95 p-2 sm:p-3 overflow-hidden">
+                                            <!-- Frame 1 -->
+                                            <div class="showcase-stage-frame active" data-showcase-frame="1">
+                                                <img src="assets/sentinel-showcase/stage1-dashboard-overview.png" alt="MoltAlpha Sentinel Dashboard Overview" class="w-full h-auto cyber-cut-sm border border-[var(--border-subtle)] shadow-inner object-cover">
+                                                <div class="mt-2.5 p-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[11px] font-mono text-[var(--text-secondary)] flex items-center justify-between">
+                                                    <span>SURVEILLANCE: 10 POOLS ACTIVE</span>
+                                                    <span class="text-emerald-400">SNAPSHOT HEALTHY</span>
+                                                </div>
+                                            </div>
+
+                                            <!-- Frame 2 -->
+                                            <div class="showcase-stage-frame" data-showcase-frame="2">
+                                                <img src="assets/sentinel-showcase/stage2-preflight-gate.png" alt="MoltAlpha Sentinel Preflight Execution Gate" class="w-full h-auto cyber-cut-sm border border-[var(--border-subtle)] shadow-inner object-cover">
+                                                <div class="mt-2.5 p-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[11px] font-mono text-[var(--text-secondary)] flex items-center justify-between">
+                                                    <span>GATE: ALLOW • OVERALL RISK SCORE: 4</span>
+                                                    <span class="text-cyan-400">4 FACTORS EVALUATED</span>
+                                                </div>
+                                            </div>
+
+                                            <!-- Frame 3 -->
+                                            <div class="showcase-stage-frame" data-showcase-frame="3">
+                                                <img src="assets/sentinel-showcase/stage3-historical-trends.png" alt="MoltAlpha Sentinel Historical Trends" class="w-full h-auto cyber-cut-sm border border-[var(--border-subtle)] shadow-inner object-cover">
+                                                <div class="mt-2.5 p-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[11px] font-mono text-[var(--text-secondary)] flex items-center justify-between">
+                                                    <span>TREND: 30-DAY DECAY REGRESSION</span>
+                                                    <span class="text-blue-400">TIME-WEIGHTED</span>
+                                                </div>
+                                            </div>
+
+                                            <!-- Frame 4 -->
+                                            <div class="showcase-stage-frame" data-showcase-frame="4">
+                                                <img src="assets/sentinel-showcase/stage4-agent-credit-bureau.png" alt="MoltAlpha Sentinel Agent Credit Bureau" class="w-full h-auto cyber-cut-sm border border-[var(--border-subtle)] shadow-inner object-cover">
+                                                <div class="mt-2.5 p-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[11px] font-mono text-[var(--text-secondary)] flex items-center justify-between">
+                                                    <span>CREDIT BUREAU: 98.4% RELIABILITY</span>
+                                                    <span class="text-amber-400">VERIFIABLE DOSSIER</span>
+                                                </div>
+                                            </div>
+
+                                            <!-- Frame 5 -->
+                                            <div class="showcase-stage-frame" data-showcase-frame="5">
+                                                <img src="assets/sentinel-showcase/stage5-live-anomalies.png" alt="MoltAlpha Sentinel Live Anomalies" class="w-full h-auto cyber-cut-sm border border-[var(--border-subtle)] shadow-inner object-cover">
+                                                <div class="mt-2.5 p-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[11px] font-mono text-[var(--text-secondary)] flex items-center justify-between">
+                                                    <span>ANOMALY RADAR: SUB-100MS WEBSOCKET</span>
+                                                    <span class="text-rose-400">SEV-1 VACUUM MONITOR</span>
+                                                </div>
+                                            </div>
+
+                                            <!-- Frame 6 -->
+                                            <div class="showcase-stage-frame" data-showcase-frame="6">
+                                                <img src="assets/sentinel-showcase/stage6-crypto-witness.png" alt="MoltAlpha Sentinel Cryptographic Witness" class="w-full h-auto cyber-cut-sm border border-[var(--border-subtle)] shadow-inner object-cover">
+                                                <div class="mt-2.5 p-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[11px] font-mono text-[var(--text-secondary)] flex items-center justify-between">
+                                                    <span>CRYPTOGRAPHIC PROOF: ED25519 SPKI</span>
+                                                    <span class="text-violet-400">RFC 8785 CANONICAL</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Stage Switcher Navigation Dots & Direct Terminal CTA -->
+                                        <div class="px-3 sm:px-4 py-2.5 sm:py-3 bg-[var(--bg-surface)] border-t border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-2">
+                                            <span class="text-[10px] font-mono text-[var(--text-muted)]">STEP:</span>
+                                            <div class="flex items-center gap-1.5" id="showcaseStageDots">
+                                                <button type="button" onclick="jumpToShowcaseStage(1)" class="w-6 h-6 cyber-cut-sm bg-[var(--accent-cyan)] text-slate-950 font-mono text-[10px] font-bold flex items-center justify-center transition" data-dot="1">1</button>
+                                                <button type="button" onclick="jumpToShowcaseStage(2)" class="w-6 h-6 cyber-cut-sm bg-[var(--bg-surface)] hover:bg-[var(--bg-card)] text-[var(--text-secondary)] font-mono text-[10px] font-medium flex items-center justify-center transition" data-dot="2">2</button>
+                                                <button type="button" onclick="jumpToShowcaseStage(3)" class="w-6 h-6 cyber-cut-sm bg-[var(--bg-surface)] hover:bg-[var(--bg-card)] text-[var(--text-secondary)] font-mono text-[10px] font-medium flex items-center justify-center transition" data-dot="3">3</button>
+                                                <button type="button" onclick="jumpToShowcaseStage(4)" class="w-6 h-6 cyber-cut-sm bg-[var(--bg-surface)] hover:bg-[var(--bg-card)] text-[var(--text-secondary)] font-mono text-[10px] font-medium flex items-center justify-center transition" data-dot="4">4</button>
+                                                <button type="button" onclick="jumpToShowcaseStage(5)" class="w-6 h-6 cyber-cut-sm bg-[var(--bg-surface)] hover:bg-[var(--bg-card)] text-[var(--text-secondary)] font-mono text-[10px] font-medium flex items-center justify-center transition" data-dot="5">5</button>
+                                                <button type="button" onclick="jumpToShowcaseStage(6)" class="w-6 h-6 cyber-cut-sm bg-[var(--bg-surface)] hover:bg-[var(--bg-card)] text-[var(--text-secondary)] font-mono text-[10px] font-medium flex items-center justify-center transition" data-dot="6">6</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sub-Navigation Category Links (Immunefi-Style Footer Ribbon) -->
+                        <div class="mt-8 pt-6 border-t border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-4 font-mono text-xs text-[var(--text-secondary)]">
+                            <div class="flex flex-wrap items-center gap-4 sm:gap-6 uppercase tracking-wider text-[11px]">
+                                <a href="javascript:void(0)" onclick="jumpToShowcaseStage(1)" class="hover:text-[var(--accent-cyan)] transition">SURVEILLANCE</a>
+                                <a href="javascript:void(0)" onclick="jumpToShowcaseStage(2)" class="hover:text-[var(--accent-cyan)] transition">PREFLIGHT GATES</a>
+                                <a href="javascript:void(0)" onclick="jumpToShowcaseStage(3)" class="hover:text-[var(--accent-cyan)] transition">HISTORICAL DECAY</a>
+                                <a href="javascript:void(0)" onclick="jumpToShowcaseStage(4)" class="hover:text-[var(--accent-cyan)] transition">CREDIT DOSSIERS</a>
+                                <a href="javascript:void(0)" onclick="jumpToShowcaseStage(5)" class="hover:text-[var(--accent-cyan)] transition">LIVE ANOMALIES</a>
+                                <a href="javascript:void(0)" onclick="jumpToShowcaseStage(6)" class="hover:text-[var(--accent-cyan)] transition">ED25519 WITNESS</a>
+                            </div>
+                            <div>
+                                <a href="dashboard.html" class="cyber-btn cyber-btn-cyan text-xs py-1.5 px-3">
+                                    <span>Enter Full Terminal &rarr;</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+            </div>
+        </section>
+<!-- Live Interactive Assurance Sandbox & Audit Guarantees -->
+        <section id="sandbox" class="mb-14">
+            <div class="cyber-cut-frame md:cyber-ruler-both border border-sky-500/30 shadow-2xl relative mb-6">
+                <div class="cyber-cut-inner p-6 sm:p-7 min-w-0 max-w-full overflow-hidden">
+                    <div class="absolute top-0 right-0 w-80 h-80 bg-sky-500/5 blur-3xl pointer-events-none"></div>
 
-                <!-- Console Output Container -->
-                <div id="sandboxConsole" class="hidden p-4 bg-black/90 border border-slate-800 rounded-xl text-xs font-mono text-sky-300 overflow-x-auto whitespace-pre leading-relaxed max-h-96"></div>
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-6 pb-6 border-b border-slate-800">
+                        <div>
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="px-2.5 py-0.5 text-[10px] font-mono font-bold bg-sky-500/10 text-sky-400 border border-sky-500/30 cyber-cut-sm uppercase tracking-wider">
+                                    Live Interactive Sandbox
+                                </span>
+                                <span class="text-xs text-slate-400">• Autonomous Agent Assurance Assays</span>
+                            </div>
+                            <h3 class="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+                                Verify Live Agent Guarantees in Real Time
+                            </h3>
+                            <p class="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
+                                Probe production API endpoints directly from your browser. Verify machine-readable RFC error contracts, multi-rail settlement discovery, crash-resilient idempotency replays, and non-repudiable Ed25519 state witnesses.
+                            </p>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+                            <button onclick="runLiveAssuranceAssay()" id="btnRunAssay" class="cyber-btn cyber-btn-cyan px-4 py-2.5 text-white font-mono text-xs font-semibold shadow-lg transition flex items-center gap-2">
+                                <span id="assaySpinner">⚡</span>
+                                <span>Run Full Assurance Assay</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 6 Cryptographic & Audit Guarantees Grid (Properly Un-nested 3x2 Grid) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                        <!-- Guarantee 1: Zero Quota Leakage -->
+                        <div class="bracket-card p-4 flex flex-col justify-between hover:border-emerald-500/50 transition">
+                            <span class="bracket-tick bracket-tick-tl"></span>
+                            <span class="bracket-tick bracket-tick-tr"></span>
+                            <span class="bracket-tick bracket-tick-bl"></span>
+                            <span class="bracket-tick bracket-tick-br"></span>
+                            <div>
+                                <div class="text-[11px] font-mono text-emerald-400 font-semibold mb-1 flex items-center gap-1.5">
+                                    <span>🛡️</span> Zero Quota Leakage
+                                </div>
+                                <div class="text-[10px] text-slate-400 leading-normal">
+                                    60s active background TTL sweeper auto-refunds abandoned reservations.
+                                </div>
+                            </div>
+                            <div class="mt-2.5 text-[10px] font-mono text-emerald-500/90 font-medium">Auto-Sweeper Active</div>
+                        </div>
+
+                        <!-- Guarantee 2: 100% Contract Match -->
+                        <div class="bracket-card p-4 flex flex-col justify-between hover:border-sky-500/50 transition">
+                            <span class="bracket-tick bracket-tick-tl"></span>
+                            <span class="bracket-tick bracket-tick-tr"></span>
+                            <span class="bracket-tick bracket-tick-bl"></span>
+                            <span class="bracket-tick bracket-tick-br"></span>
+                            <div>
+                                <div class="text-[11px] font-mono text-sky-400 font-semibold mb-1 flex items-center gap-1.5">
+                                    <span>📐</span> 100% Contract Match
+                                </div>
+                                <div class="text-[10px] text-slate-400 leading-normal">
+                                    /v1/capabilities is programmatically derived from live runtime validators.
+                                </div>
+                            </div>
+                            <div class="mt-2.5 text-[10px] font-mono text-sky-400/90 font-medium">Zero Spec Drift</div>
+                        </div>
+
+                        <!-- Guarantee 3: Safe Idempotent Retry -->
+                        <div class="bracket-card p-4 flex flex-col justify-between hover:border-indigo-500/50 transition">
+                            <span class="bracket-tick bracket-tick-tl"></span>
+                            <span class="bracket-tick bracket-tick-tr"></span>
+                            <span class="bracket-tick bracket-tick-bl"></span>
+                            <span class="bracket-tick bracket-tick-br"></span>
+                            <div>
+                                <div class="text-[11px] font-mono text-indigo-400 font-semibold mb-1 flex items-center gap-1.5">
+                                    <span>🔁</span> Safe Idempotent Retry
+                                </div>
+                                <div class="text-[10px] text-slate-400 leading-normal">
+                                    Replaying idempotency keys yields identical results; non-idempotent drops never retry.
+                                </div>
+                            </div>
+                            <div class="mt-2.5 text-[10px] font-mono text-indigo-400/90 font-medium">Replay Cached</div>
+                        </div>
+
+                        <!-- Guarantee 4: Machine-Readable Errors -->
+                        <div class="bracket-card p-4 flex flex-col justify-between hover:border-amber-500/50 transition">
+                            <span class="bracket-tick bracket-tick-tl"></span>
+                            <span class="bracket-tick bracket-tick-tr"></span>
+                            <span class="bracket-tick bracket-tick-bl"></span>
+                            <span class="bracket-tick bracket-tick-br"></span>
+                            <div>
+                                <div class="text-[11px] font-mono text-amber-400 font-semibold mb-1 flex items-center gap-1.5">
+                                    <span>📜</span> Machine-Readable Errors
+                                </div>
+                                <div class="text-[10px] text-slate-400 leading-normal">
+                                    RFC taxonomy: error code, recovery actions, retryable, docs_url, and state outcome.
+                                </div>
+                            </div>
+                            <div class="mt-2.5 text-[10px] font-mono text-amber-400/90 font-medium">RFC Error Contract</div>
+                        </div>
+
+                        <!-- Guarantee 5: Step-Up & Egress Guard -->
+                        <div class="bracket-card p-4 flex flex-col justify-between hover:border-rose-500/50 transition">
+                            <span class="bracket-tick bracket-tick-tl"></span>
+                            <span class="bracket-tick bracket-tick-tr"></span>
+                            <span class="bracket-tick bracket-tick-bl"></span>
+                            <span class="bracket-tick bracket-tick-br"></span>
+                            <div>
+                                <div class="text-[11px] font-mono text-rose-400 font-semibold mb-1 flex items-center gap-1.5">
+                                    <span>🔒</span> Step-Up &amp; Egress Guard
+                                </div>
+                                <div class="text-[10px] text-slate-400 leading-normal">
+                                    Single-use confirmation nonces for mutations; post-connect anti-DNS rebinding firewall.
+                                </div>
+                            </div>
+                            <div class="mt-2.5 text-[10px] font-mono text-rose-400/90 font-medium">Fail-Closed Security</div>
+                        </div>
+
+                        <!-- Guarantee 6: Ed25519 Receipts -->
+                        <div class="bracket-card p-4 flex flex-col justify-between hover:border-purple-500/50 transition">
+                            <span class="bracket-tick bracket-tick-tl"></span>
+                            <span class="bracket-tick bracket-tick-tr"></span>
+                            <span class="bracket-tick bracket-tick-bl"></span>
+                            <span class="bracket-tick bracket-tick-br"></span>
+                            <div>
+                                <div class="text-[11px] font-mono text-purple-400 font-semibold mb-1 flex items-center gap-1.5">
+                                    <span>🔏</span> Ed25519 Receipts
+                                </div>
+                                <div class="text-[10px] text-slate-400 leading-normal">
+                                    RFC 8785 canonical hash digests signed by hardware-rooted Ed25519 key.
+                                </div>
+                            </div>
+                            <div class="mt-2.5 text-[10px] font-mono text-purple-400/90 font-medium">Offline Verifiable</div>
+                        </div>
+                    </div>
+
+                    <!-- Interactive Endpoint Probes Toolbar -->
+                    <div class="flex flex-wrap items-center gap-2 mb-4">
+                        <span class="text-xs font-mono text-slate-400">Direct Endpoint Probes:</span>
+                        <button onclick="probeSandbox('/v1/capabilities')" class="cyber-btn cyber-btn-ghost text-xs text-sky-300 px-3 py-1.5 font-mono">
+                            GET /v1/capabilities
+                        </button>
+                        <button onclick="probeSandbox('/v1/payments/config')" class="cyber-btn cyber-btn-ghost text-xs text-emerald-300 px-3 py-1.5 font-mono">
+                            GET /v1/payments/config
+                        </button>
+                        <button onclick="probeSandbox('/v1/errors')" class="cyber-btn cyber-btn-ghost text-xs text-amber-300 px-3 py-1.5 font-mono">
+                            GET /v1/errors
+                        </button>
+                        <button onclick="probeSandbox('/v1/data-products')" class="cyber-btn cyber-btn-ghost text-xs text-indigo-300 px-3 py-1.5 font-mono">
+                            GET /v1/data-products
+                        </button>
+                        <button onclick="probeSandbox('/v1/quant/first-passage?pair=BONK/SOL&target_net_pct=0.015')" class="cyber-btn cyber-btn-ghost text-xs text-teal-300 px-3 py-1.5 font-mono">
+                            GET /v1/quant/first-passage
+                        </button>
+                        <button onclick="probeSandbox('/v1/witnesses/public-keys')" class="cyber-btn cyber-btn-ghost text-xs text-purple-300 px-3 py-1.5 font-mono">
+                            GET /v1/witnesses/public-keys
+                        </button>
+                    </div>
+
+                    <!-- Console Output Container -->
+                    <div id="sandboxConsole" class="hidden p-4 bg-black/90 border border-slate-800 cyber-cut-sm text-xs font-mono text-sky-300 overflow-x-auto whitespace-pre leading-relaxed max-h-96"></div>
+                </div>
             </div>
         </section>
 
         <!-- Interactive Developer Code Section -->
         <section class="mb-14">
             <!-- Unmetered Evaluation Banner -->
-            <div class="mb-6 p-4 glass-card rounded-xl border border-sky-500/30 bg-sky-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div class="grow">
+            <div class="mb-6 p-4 bracket-card border border-sky-500/30 bg-sky-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"><span class="bracket-tick bracket-tick-tl"></span><span class="bracket-tick bracket-tick-tr"></span><span class="bracket-tick bracket-tick-bl"></span><span class="bracket-tick bracket-tick-br"></span>
+                <div class="grow min-w-0 max-w-full">
                     <div class="text-xs font-bold text-sky-300 uppercase tracking-wider font-mono flex items-center gap-2">
                         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Free Unmetered Sample Briefing
                     </div>
                     <div class="text-xs text-slate-300 mt-1">
                         Inspect live briefing schema, signals, and cryptographic state witness instantly without API keys or payments:
                     </div>
-                    <div class="mt-2 font-mono text-xs text-emerald-300 bg-black/60 px-3 py-1.5 rounded border border-slate-800 flex items-center justify-between">
-                        <span>curl -s https://www.moltalpha.dev/sample.json | jq .</span>
+                    <div class="mt-2 font-mono text-xs text-emerald-300 bg-black/60 px-3 py-1.5 rounded border border-slate-800 flex items-center justify-between min-w-0 max-w-full overflow-hidden">
+                        <span class="truncate mr-2">curl -s https://www.moltalpha.dev/sample.json | jq .</span>
                         <button onclick="copyToClipboard('curl -s https://www.moltalpha.dev/sample.json | jq .', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">Copy</button>
                     </div>
                 </div>
-                <a href="https://www.moltalpha.dev/sample.json" target="_blank" class="shrink-0 px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium rounded-lg transition shadow-md">
+                <a href="https://www.moltalpha.dev/sample.json" target="_blank" class="shrink-0 cyber-btn cyber-btn-cyan px-4 py-2 text-white text-xs font-mono transition shadow-md">
                     View sample.json →
                 </a>
             </div>
@@ -503,7 +873,7 @@
                 <h3 class="text-lg font-bold text-white flex items-center gap-2">
                     <span>⚡</span> Developer & Agent Quickstart
                 </h3>
-                <div class="flex flex-wrap bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs font-mono gap-1">
+                <div class="flex flex-wrap bg-slate-900 border border-slate-800 p-1 text-xs font-mono gap-1">
                     <button onclick="setTab('exchange')" id="tabBtnExchange" class="px-3 py-1 rounded bg-sky-600 text-white font-medium transition">Agent Exchange (v1)</button>
                     <button onclick="setTab('caps')" id="tabBtnCaps" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Capabilities</button>
                     <button onclick="setTab('webhooks')" id="tabBtnWebhooks" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Webhooks</button>
@@ -518,7 +888,7 @@
             </div>
 
             <!-- Tab Content: Agent Data Exchange (v1) -->
-            <div id="tabExchange" class="glass-card rounded-2xl overflow-hidden shadow-2xl">
+            <div id="tabExchange" class="bracket-card overflow-hidden shadow-2xl">
                 <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
                     <span class="text-slate-400 font-mono">Agent Data Exchange (v1) — Catalog, Schemas & Idempotent Snapshots</span>
                     <button onclick="copyCode('codeExchange', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
@@ -739,172 +1109,294 @@ audit = client.verify_witness_local(witness)
 
         <!-- Pricing & Commercial Packages -->
         <section id="pricing" class="mb-14">
-            <h3 class="text-xl font-bold text-white mb-2">Fair, Transparent Multi-Rail Pricing</h3>
-            <p class="text-xs text-slate-400 mb-6">No credit cards. Settled natively in USDC (Solana SPL), SOL, or Zero-Fee Nano (XNO) with instant automated key issuance.</p>
-
-            <!-- Free vs metered routes -->
-            <div class="glass-card rounded-2xl p-5 mb-6 grid grid-cols-1 sm:grid-cols-2 gap-5 text-xs font-mono">
+            <div class="flex flex-col sm:flex-row sm:items-end justify-between mb-6 gap-3">
                 <div>
-                    <div class="text-emerald-400 font-bold uppercase tracking-wider mb-2">Free · 0 credits</div>
-                    <ul class="space-y-1 text-slate-300 break-all">
-                        <li>GET /v1/quant/first-passage</li>
-                        <li>GET /v1/intel/sample</li>
-                        <li>GET /v1/data-products/{id}/sample</li>
-                        <li>GET /v1/intel/observatory/status</li>
-                        <li>GET /v1/capabilities · /v1/health · /v1/errors</li>
-                        <li>GET /v1/account/quota · /v1/account/usage</li>
-                    </ul>
-                </div>
-                <div>
-                    <div class="text-amber-400 font-bold uppercase tracking-wider mb-2">Metered · 1 credit per success</div>
-                    <ul class="space-y-1 text-slate-300 break-all">
-                        <li>GET /v1/intel/signals · /v1/intel/signals/trading</li>
-                        <li>GET /v1/intel/opportunities</li>
-                        <li>GET /v1/intel/microstructure</li>
-                        <li>POST /v1/quant/trade-viability</li>
-                        <li>GET /v1/briefing/latest · /v1/intel/latest</li>
-                        <li>GET /v1/data-products/{id}/latest</li>
-                    </ul>
-                </div>
-                <p class="sm:col-span-2 text-slate-400 font-sans">Send your key in the <span class="text-sky-300 font-mono">X-API-KEY</span> or <span class="text-sky-300 font-mono">Authorization: Bearer</span> header. Keys in the URL (<span class="font-mono">?api_key=</span>) are rejected with HTTP 400. Failed or timed-out calls are never charged.</p>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                <!-- Micro Tier -->
-                <div class="glass-card rounded-2xl p-5 flex flex-col justify-between hover:border-amber-500/50 transition">
-                    <div>
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-sm font-bold text-white">Micro</span>
-                            <span class="text-[10px] uppercase font-mono px-2 py-0.5 bg-amber-950/80 text-amber-300 rounded border border-amber-800/40">Zero-Fee Rail</span>
-                        </div>
-                        <div class="text-2xl font-extrabold text-white mb-1">$0.25 <span class="text-xs font-normal text-slate-400">/ one-time</span></div>
-                        <div class="text-xs text-slate-400 mb-4">15 queries (~$0.016 / query)</div>
-                        <ul class="text-xs text-slate-300 space-y-2 mb-6">
-                            <li class="flex items-center gap-1.5">✓ 0.25 USDC or 0.25 XNO</li>
-                            <li class="flex items-center gap-1.5">✓ Zero Fee Nano Settlement</li>
-                            <li class="flex items-center gap-1.5">✓ Rapid Bot Verification</li>
-                            <li class="flex items-center gap-1.5">✓ Ed25519 State Witness</li>
-                        </ul>
+                    <div class="inline-flex items-center gap-2 px-2.5 py-0.5 cyber-cut-sm bg-cyan-950/60 border border-cyan-700/40 text-cyan-300 text-[10px] font-mono uppercase tracking-wider mb-2 font-semibold">
+                        <span>⚡</span> SUBSCRIPTION &amp; INTELLIGENCE ACCESS ARCHITECTURE v1.0
                     </div>
-                    <button onclick="generateInvoice('tier_micro')" class="w-full text-xs bg-slate-800 hover:bg-slate-700 text-white font-medium py-2 rounded-lg border border-slate-700 transition">
-                        Invoice Micro ($0.25)
-                    </button>
+                    <h3 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Predictable Recurring Subscriptions</h3>
+                    <p class="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl">
+                        Purchase predictable access to capabilities and throughput—not restrictive single-use token meters. Settled natively in USDC (Solana SPL), SOL, or Zero-Fee Nano (XNO) with non-expiring prepaid preservation.
+                    </p>
                 </div>
-
-                <!-- Starter Tier -->
-                <div class="glass-card rounded-2xl p-5 flex flex-col justify-between hover:border-sky-500/50 transition">
-                    <div>
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-sm font-bold text-white">Starter</span>
-                            <span class="text-[10px] uppercase font-mono px-2 py-0.5 bg-slate-800 text-slate-300 rounded">Trial</span>
-                        </div>
-                        <div class="text-2xl font-extrabold text-white mb-1">$1.00 <span class="text-xs font-normal text-slate-400">/ one-time</span></div>
-                        <div class="text-xs text-slate-400 mb-4">50 queries (~$0.02 / query)</div>
-                        <ul class="text-xs text-slate-300 space-y-2 mb-6">
-                            <li class="flex items-center gap-1.5">✓ 1.00 USDC, SOL quote, or 1 XNO</li>
-                            <li class="flex items-center gap-1.5">✓ Market Intelligence Feed</li>
-                            <li class="flex items-center gap-1.5">✓ Arbitrage Opportunities</li>
-                            <li class="flex items-center gap-1.5">✓ Machine-Readable Errors</li>
-                        </ul>
-                    </div>
-                    <button onclick="generateInvoice('tier_starter')" class="w-full text-xs bg-slate-800 hover:bg-slate-700 text-white font-medium py-2 rounded-lg border border-slate-700 transition">
-                        Invoice Starter ($1)
-                    </button>
-                </div>
-
-                <!-- Pro Tier -->
-                <div class="glass-card rounded-2xl p-5 flex flex-col justify-between border-sky-500/50 relative shadow-lg shadow-sky-500/5">
-                    <span class="absolute -top-3 right-4 text-[9px] font-semibold bg-sky-500 text-slate-950 px-2.5 py-0.5 rounded-full uppercase tracking-wider">Most Popular</span>
-                    <div>
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-sm font-bold text-white">Pro</span>
-                            <span class="text-[10px] uppercase font-mono px-2 py-0.5 bg-sky-950 text-sky-300 rounded">Agents</span>
-                        </div>
-                        <div class="text-2xl font-extrabold text-white mb-1">$5.00 <span class="text-xs font-normal text-slate-400">/ one-time</span></div>
-                        <div class="text-xs text-slate-400 mb-4">300 queries (~$0.016 / query)</div>
-                        <ul class="text-xs text-slate-300 space-y-2 mb-6">
-                            <li class="flex items-center gap-1.5">✓ 5.00 USDC / 0.025 SOL / 5 XNO</li>
-                            <li class="flex items-center gap-1.5">✓ DAG Parameter Resolvers</li>
-                            <li class="flex items-center gap-1.5">✓ Quantitative Trading Alpha</li>
-                            <li class="flex items-center gap-1.5">✓ Push Webhook Subscriptions</li>
-                        </ul>
-                    </div>
-                    <button onclick="generateInvoice('tier_pro')" class="w-full text-xs bg-sky-600 hover:bg-sky-500 text-white font-medium py-2 rounded-lg transition shadow-md">
-                        Invoice Pro ($5)
-                    </button>
-                </div>
-
-                <!-- Premium Tier -->
-                <div class="glass-card rounded-2xl p-5 flex flex-col justify-between hover:border-emerald-500/50 transition">
-                    <div>
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-sm font-bold text-white">Premium</span>
-                            <span class="text-[10px] uppercase font-mono px-2 py-0.5 bg-emerald-950 text-emerald-300 rounded">30 Days</span>
-                        </div>
-                        <div class="text-2xl font-extrabold text-white mb-1">$20.00 <span class="text-xs font-normal text-slate-400">/ 30 days</span></div>
-                        <div class="text-xs text-slate-400 mb-4">10,000 queries ($0.002 / query)</div>
-                        <ul class="text-xs text-slate-300 space-y-2 mb-6">
-                            <li class="flex items-center gap-1.5">✓ 20.00 USDC / 0.100 SOL / 20 XNO</li>
-                            <li class="flex items-center gap-1.5">✓ 30-Day Rolling Access Window</li>
-                            <li class="flex items-center gap-1.5">✓ 90-Day Top-up Preservation</li>
-                            <li class="flex items-center gap-1.5">✓ Institutional DEX Microstructure</li>
-                        </ul>
-                    </div>
-                    <button onclick="generateInvoice('tier_unlimited')" class="w-full text-xs bg-slate-800 hover:bg-slate-700 text-white font-medium py-2 rounded-lg border border-slate-700 transition">
-                        Invoice Premium ($20)
-                    </button>
+                <div class="flex items-center gap-2 text-xs font-mono">
+                    <span class="px-2 py-1 cyber-cut-sm bg-emerald-950/80 text-emerald-400 border border-emerald-800">MONTHLY BILLING</span>
+                    <span class="px-2 py-1 cyber-cut-sm bg-slate-900 text-slate-400 border border-slate-800">NO SILENT EXPIRATION</span>
                 </div>
             </div>
 
-            <!-- On-Demand Credit Top-Up Packages -->
-            <div class="mt-8 p-5 glass-card rounded-2xl border border-slate-800">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
+            <!-- 4 Subscription Tier Cards Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+                <!-- 1. FREE (Explorer) -->
+                <div class="bracket-card p-5 flex flex-col justify-between hover:border-slate-600 transition">
+                    <span class="bracket-tick bracket-tick-tl"></span>
+                    <span class="bracket-tick bracket-tick-tr"></span>
+                    <span class="bracket-tick bracket-tick-bl"></span>
+                    <span class="bracket-tick bracket-tick-br"></span>
                     <div>
-                        <h4 class="text-sm font-bold text-white flex items-center gap-2">
-                            <span>⚡</span> On-Demand Credit Top-Up Packages (90-Day Shelf Life)
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-base font-extrabold text-white font-mono">Free</span>
+                            <span class="text-[10px] uppercase font-mono px-2 py-0.5 bg-slate-900 text-slate-400 cyber-cut-sm border border-slate-800">Explorer</span>
+                        </div>
+                        <div class="text-2xl font-extrabold text-white mb-1 font-mono">$0 <span class="text-xs font-normal text-slate-400">/ month</span></div>
+                        <div class="text-xs text-slate-400 mb-4 font-mono">1 request / UTC day (discovery limit)</div>
+                        <ul class="text-xs text-slate-300 space-y-2 mb-6">
+                            <li class="flex items-center gap-1.5"><span class="text-emerald-400">✓</span> 1 Request per UTC Day</li>
+                            <li class="flex items-center gap-1.5"><span class="text-emerald-400">✓</span> Basic Public Intelligence</li>
+                            <li class="flex items-center gap-1.5 text-slate-500"><span class="text-slate-600">✕</span> No Daily Briefing</li>
+                            <li class="flex items-center gap-1.5 text-slate-500"><span class="text-slate-600">✕</span> No Sentinel Risk Engine</li>
+                            <li class="flex items-center gap-1.5 text-slate-500"><span class="text-slate-600">✕</span> No Webhooks or Monitoring</li>
+                        </ul>
+                    </div>
+                    <button onclick="generateInvoice('free')" class="w-full text-xs cyber-btn cyber-btn-ghost py-2 font-mono transition">
+                        Register Free Key ($0)
+                    </button>
+                </div>
+
+                <!-- 2. BUILDER -->
+                <div class="bracket-card p-5 flex flex-col justify-between hover:border-emerald-500/50 transition">
+                    <span class="bracket-tick bracket-tick-tl"></span>
+                    <span class="bracket-tick bracket-tick-tr"></span>
+                    <span class="bracket-tick bracket-tick-bl"></span>
+                    <span class="bracket-tick bracket-tick-br"></span>
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-base font-extrabold text-white font-mono">Builder</span>
+                            <span class="text-[10px] uppercase font-mono px-2 py-0.5 bg-emerald-950/80 text-emerald-300 cyber-cut-sm border border-emerald-800/40">Early Agents</span>
+                        </div>
+                        <div class="text-2xl font-extrabold text-white mb-1 font-mono">$5 <span class="text-xs font-normal text-slate-400">/ month</span></div>
+                        <div class="text-xs text-slate-400 mb-4 font-mono tabular-nums">100 req/hr • 500 req/day</div>
+                        <ul class="text-xs text-slate-300 space-y-2 mb-6">
+                            <li class="flex items-center gap-1.5"><span class="text-emerald-400">✓</span> Full Basic API Access</li>
+                            <li class="flex items-center gap-1.5"><span class="text-emerald-400">✓</span> Limited Daily Briefings</li>
+                            <li class="flex items-center gap-1.5"><span class="text-emerald-400">✓</span> Token &amp; Liquidity Intelligence</li>
+                            <li class="flex items-center gap-1.5"><span class="text-emerald-400">✓</span> Standard Processing Priority</li>
+                            <li class="flex items-center gap-1.5 text-slate-500"><span class="text-slate-600">✕</span> No Sentinel Access</li>
+                        </ul>
+                    </div>
+                    <button onclick="generateInvoice('builder')" class="w-full text-xs cyber-btn cyber-btn-emerald py-2 font-mono transition">
+                        Subscribe Builder ($5/mo)
+                    </button>
+                </div>
+
+                <!-- 3. ADVANCED (Most Popular) -->
+                <div class="bracket-card p-5 flex flex-col justify-between border-cyan-500/60 relative shadow-xl shadow-cyan-500/10">
+                    <span class="bracket-tick bracket-tick-tl"></span>
+                    <span class="bracket-tick bracket-tick-tr"></span>
+                    <span class="bracket-tick bracket-tick-bl"></span>
+                    <span class="bracket-tick bracket-tick-br"></span>
+                    <span class="absolute -top-3 right-4 text-[9px] font-semibold bg-cyan-500 text-slate-950 px-2.5 py-0.5 cyber-cut-sm uppercase tracking-wider font-mono">Most Popular</span>
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-base font-extrabold text-white font-mono">Advanced</span>
+                            <span class="text-[10px] uppercase font-mono px-2 py-0.5 bg-cyan-950 text-cyan-300 cyber-cut-sm border border-cyan-700/60">Trading Systems</span>
+                        </div>
+                        <div class="text-2xl font-extrabold text-white mb-1 font-mono">$20 <span class="text-xs font-normal text-slate-400">/ month</span></div>
+                        <div class="text-xs text-slate-400 mb-4 font-mono tabular-nums">1,000 req/hr • 5,000 req/day</div>
+                        <ul class="text-xs text-slate-300 space-y-2 mb-6">
+                            <li class="flex items-center gap-1.5"><span class="text-cyan-400">✓</span> Full API &amp; Published Daily Briefing</li>
+                            <li class="flex items-center gap-1.5"><span class="text-cyan-400">✓</span> Limited Sentinel Risk Surveillance</li>
+                            <li class="flex items-center gap-1.5"><span class="text-cyan-400">✓</span> Advanced Quantitative Intelligence</li>
+                            <li class="flex items-center gap-1.5"><span class="text-cyan-400">✓</span> Webhook Push Subscriptions</li>
+                            <li class="flex items-center gap-1.5"><span class="text-cyan-400">✓</span> Elevated Processing Priority</li>
+                        </ul>
+                    </div>
+                    <button onclick="generateInvoice('advanced')" class="w-full text-xs cyber-btn cyber-btn-cyan py-2 font-mono transition shadow-md">
+                        Subscribe Advanced ($20/mo)
+                    </button>
+                </div>
+
+                <!-- 4. PRO -->
+                <div class="bracket-card p-5 flex flex-col justify-between border-violet-500/60 relative shadow-xl shadow-purple-500/10">
+                    <span class="bracket-tick bracket-tick-tl"></span>
+                    <span class="bracket-tick bracket-tick-tr"></span>
+                    <span class="bracket-tick bracket-tick-bl"></span>
+                    <span class="bracket-tick bracket-tick-br"></span>
+                    <span class="absolute -top-3 right-4 text-[9px] font-semibold bg-violet-500 text-white px-2.5 py-0.5 cyber-cut-sm uppercase tracking-wider font-mono">Autonomous Pro</span>
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-base font-extrabold text-white font-mono">Pro</span>
+                            <span class="text-[10px] uppercase font-mono px-2 py-0.5 bg-purple-950 text-purple-300 cyber-cut-sm border border-purple-700/60">High-Throughput</span>
+                        </div>
+                        <div class="text-2xl font-extrabold text-white mb-1 font-mono">$50 <span class="text-xs font-normal text-slate-400">/ month</span></div>
+                        <div class="text-xs text-slate-400 mb-4 font-mono tabular-nums">1,000 req/6-min • 50,000 req/day</div>
+                        <ul class="text-xs text-slate-300 space-y-2 mb-6">
+                            <li class="flex items-center gap-1.5"><span class="text-purple-400">✓</span> 10,000 Equiv Req/Hr (1k / 6 min)</li>
+                            <li class="flex items-center gap-1.5"><span class="text-purple-400">✓</span> Complete Sentinel Surveillance Suite</li>
+                            <li class="flex items-center gap-1.5"><span class="text-purple-400">✓</span> Redacted Administrative Intelligence</li>
+                            <li class="flex items-center gap-1.5"><span class="text-purple-400">✓</span> Full Automated Anomaly Monitoring</li>
+                            <li class="flex items-center gap-1.5"><span class="text-purple-400">✓</span> Highest Processing Priority</li>
+                        </ul>
+                    </div>
+                    <button onclick="generateInvoice('pro')" class="w-full text-xs cyber-btn cyber-btn-violet py-2 font-mono transition shadow-md">
+                        Subscribe Pro ($50/mo)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Complete Pricing & Entitlement Comparison Matrix Table -->
+            <div class="bracket-card p-6 mb-8 overflow-hidden">
+                <span class="bracket-tick bracket-tick-tl"></span>
+                <span class="bracket-tick bracket-tick-tr"></span>
+                <span class="bracket-tick bracket-tick-bl"></span>
+                <span class="bracket-tick bracket-tick-br"></span>
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-800">
+                    <div>
+                        <h4 class="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
+                            <span>📐</span> Subscription &amp; Entitlement Feature Matrix
                         </h4>
-                        <p class="text-xs text-slate-400">Refill credits on an existing API key without resetting or altering your 30-day recurring entitlement window.</p>
+                        <span class="text-[11px] text-slate-400">Full comparison of quotas, access capabilities, and operational priorities</span>
                     </div>
-                    <span class="text-[10px] uppercase font-mono px-2 py-0.5 bg-indigo-950 text-indigo-300 rounded border border-indigo-800/40">EDF Earliest-Expiry</span>
+                    <span class="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 border border-cyan-800 px-2 py-0.5 cyber-cut-sm">
+                        RFC 8785 Verified Entitlements
+                    </span>
                 </div>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                    <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800 flex justify-between items-center">
-                        <div>
-                            <div class="font-bold text-white">+500 Queries</div>
-                            <div class="text-[11px] text-slate-400">$8.00 (8 USDC / 0.04 SOL / 8 XNO)</div>
-                        </div>
-                        <span class="text-[10px] font-mono text-sky-400 bg-sky-950/60 px-2 py-1 rounded">topup_500</span>
+
+                <div class="overflow-x-auto custom-scrollbar w-full min-w-0">
+                    <table class="w-full text-left text-xs font-mono">
+                        <thead>
+                            <tr class="border-b border-slate-800 text-slate-400 text-[11px]">
+                                <th class="pb-2.5 font-semibold">Capability / Entitlement</th>
+                                <th class="pb-2.5 font-semibold text-center text-slate-300">Free</th>
+                                <th class="pb-2.5 font-semibold text-center text-emerald-400">Builder</th>
+                                <th class="pb-2.5 font-semibold text-center text-cyan-400">Advanced</th>
+                                <th class="pb-2.5 font-semibold text-center text-purple-400">Pro</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/60 text-slate-300 text-[11px]">
+                            <tr>
+                                <td class="py-2.5 font-medium text-white">Monthly Price</td>
+                                <td class="py-2.5 text-center font-bold text-white tabular-nums">$0</td>
+                                <td class="py-2.5 text-center font-bold text-emerald-400 tabular-nums">$5</td>
+                                <td class="py-2.5 text-center font-bold text-cyan-400 tabular-nums">$20</td>
+                                <td class="py-2.5 text-center font-bold text-purple-400 tabular-nums">$50</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2.5 text-slate-400">Requests / Hour</td>
+                                <td class="py-2.5 text-center text-slate-500 tabular-nums">1* (day cap)</td>
+                                <td class="py-2.5 text-center text-slate-200 tabular-nums">100</td>
+                                <td class="py-2.5 text-center text-cyan-300 tabular-nums font-bold">1,000</td>
+                                <td class="py-2.5 text-center text-purple-300 tabular-nums font-bold">10,000 equiv</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2.5 text-slate-400">Requests / 6 Minutes</td>
+                                <td class="py-2.5 text-center text-slate-500 tabular-nums">1*</td>
+                                <td class="py-2.5 text-center text-slate-400 tabular-nums">10* (derived)</td>
+                                <td class="py-2.5 text-center text-slate-400 tabular-nums">100* (derived)</td>
+                                <td class="py-2.5 text-center text-purple-400 font-bold tabular-nums">1,000</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2.5 text-slate-400">Requests / 24 Hours</td>
+                                <td class="py-2.5 text-center text-slate-500 tabular-nums">1</td>
+                                <td class="py-2.5 text-center text-slate-200 tabular-nums">500</td>
+                                <td class="py-2.5 text-center text-cyan-300 tabular-nums">5,000</td>
+                                <td class="py-2.5 text-center text-purple-300 font-bold tabular-nums">50,000</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2.5 text-slate-400">Basic API Access</td>
+                                <td class="py-2.5 text-center text-amber-400">Limited</td>
+                                <td class="py-2.5 text-center text-emerald-400">Full</td>
+                                <td class="py-2.5 text-center text-emerald-400">Full</td>
+                                <td class="py-2.5 text-center text-emerald-400">Full</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2.5 text-slate-400">Daily Intelligence Briefing</td>
+                                <td class="py-2.5 text-center text-slate-600">No</td>
+                                <td class="py-2.5 text-center text-amber-400">Limited</td>
+                                <td class="py-2.5 text-center text-emerald-400">Full</td>
+                                <td class="py-2.5 text-center text-emerald-400">Full</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2.5 text-slate-400">Sentinel Risk Intelligence</td>
+                                <td class="py-2.5 text-center text-slate-600">No</td>
+                                <td class="py-2.5 text-center text-slate-600">No</td>
+                                <td class="py-2.5 text-center text-cyan-400">Limited</td>
+                                <td class="py-2.5 text-center text-purple-400 font-bold">Full</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2.5 text-slate-400">Admin Intelligence Briefing</td>
+                                <td class="py-2.5 text-center text-slate-600">No</td>
+                                <td class="py-2.5 text-center text-slate-600">No</td>
+                                <td class="py-2.5 text-center text-slate-600">No</td>
+                                <td class="py-2.5 text-center text-purple-400 font-semibold">Redacted</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2.5 text-slate-400">Advanced Quant Intelligence</td>
+                                <td class="py-2.5 text-center text-slate-600">No</td>
+                                <td class="py-2.5 text-center text-amber-400">Limited</td>
+                                <td class="py-2.5 text-center text-emerald-400">Full</td>
+                                <td class="py-2.5 text-center text-emerald-400">Full</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2.5 text-slate-400">Push Webhook Subscriptions</td>
+                                <td class="py-2.5 text-center text-slate-600">No</td>
+                                <td class="py-2.5 text-center text-slate-600">No</td>
+                                <td class="py-2.5 text-center text-emerald-400 font-bold">Yes</td>
+                                <td class="py-2.5 text-center text-emerald-400 font-bold">Yes</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2.5 text-slate-400">Processing Priority</td>
+                                <td class="py-2.5 text-center text-slate-500">Standard</td>
+                                <td class="py-2.5 text-center text-slate-400">Standard</td>
+                                <td class="py-2.5 text-center text-cyan-400 font-medium">Elevated</td>
+                                <td class="py-2.5 text-center text-purple-400 font-bold">Highest</td>
+                            </tr>
+                            <tr>
+                                <td class="py-2.5 text-slate-400">Automated Monitoring</td>
+                                <td class="py-2.5 text-center text-slate-600">No</td>
+                                <td class="py-2.5 text-center text-slate-600">No</td>
+                                <td class="py-2.5 text-center text-cyan-400">Limited</td>
+                                <td class="py-2.5 text-center text-purple-400 font-bold">Full</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-3 text-[10px] text-slate-500 font-mono">
+                    * The six-minute values for lower tiers are derived from hourly limits. The Free tier is strictly limited to 1 request per UTC day. Pro permits 1,000 req / 6-min up to its independently enforced 50,000 daily cap.
+                </div>
+            </div>
+
+            <!-- Dual-Metering & Internal Weighted Resource Safeguards Callout -->
+            <div class="p-5 bracket-card border border-slate-800 bg-slate-900/40">
+                <span class="bracket-tick bracket-tick-tl"></span>
+                <span class="bracket-tick bracket-tick-tr"></span>
+                <span class="bracket-tick bracket-tick-bl"></span>
+                <span class="bracket-tick bracket-tick-br"></span>
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
+                    <h4 class="text-sm font-bold text-white flex items-center gap-2 font-mono">
+                        <span>🛡️</span> Dual Independent Request Metering &amp; Resource Safeguards
+                    </h4>
+                    <span class="text-[10px] uppercase font-mono px-2 py-0.5 bg-sky-950 text-sky-300 cyber-cut-sm border border-sky-800/40">RFC Rate Limiting</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-400 leading-relaxed">
+                    <div>
+                        <strong class="text-slate-200 block mb-1">A. Customer-Facing Rolling Quotas:</strong>
+                        Every accepted request checks hourly, 6-minute (where applicable), and daily rolling UTC windows simultaneously. Rejected requests, auth failures, and internal timeouts never consume quota.
                     </div>
-                    <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800 flex justify-between items-center">
-                        <div>
-                            <div class="font-bold text-white">+1,500 Queries</div>
-                            <div class="text-[11px] text-slate-400">$20.00 (20 USDC / 0.10 SOL / 20 XNO)</div>
-                        </div>
-                        <span class="text-[10px] font-mono text-sky-400 bg-sky-950/60 px-2 py-1 rounded">topup_1500</span>
-                    </div>
-                    <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800 flex justify-between items-center">
-                        <div>
-                            <div class="font-bold text-white">+5,000 Queries</div>
-                            <div class="text-[11px] text-slate-400">$50.00 (50 USDC / 0.25 SOL / 50 XNO)</div>
-                        </div>
-                        <span class="text-[10px] font-mono text-sky-400 bg-sky-950/60 px-2 py-1 rounded">topup_5000</span>
+                    <div>
+                        <strong class="text-slate-200 block mb-1">B. Internal Weighted Safeguards:</strong>
+                        Operations carry internal weights (1x token lookup to 75x institutional microstructure analysis) to safeguard against compute exhaustion without altering advertised request allowances.
                     </div>
                 </div>
             </div>
 
             <!-- Dynamic Invoice Result Modal / Box -->
-            <div id="invoiceBox" class="hidden mt-6 p-4 glass-card rounded-xl border border-sky-500/40 font-mono text-xs text-slate-300">
-                <div class="flex justify-between items-center mb-2 border-b border-slate-800 pb-2">
-                    <span class="text-sky-400 font-bold">Multi-Rail Payment Invoice Generated</span>
-                    <button onclick="document.getElementById('invoiceBox').classList.add('hidden')" class="text-slate-500 hover:text-white">✕</button>
+            <div id="invoiceBox" class="hidden mt-6 p-5 cyber-cut-frame bg-[var(--bg-surface)] border border-cyan-500/50 text-xs font-mono">
+                <div class="cyber-cut-inner p-4">
+                    <div class="flex justify-between items-center mb-3 pb-2 border-b border-slate-800">
+                        <span class="font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-2">
+                            <span>⚡</span> Subscription Settlement Order Generated
+                        </span>
+                        <button onclick="document.getElementById('invoiceBox').classList.add('hidden')" class="cyber-btn cyber-btn-ghost px-2 py-0.5 text-slate-400 hover:text-white">✕</button>
+                    </div>
+                    <div id="invoiceDetails" class="space-y-1.5 overflow-x-auto text-slate-300"></div>
                 </div>
-                <div id="invoiceDetails" class="space-y-1.5 overflow-x-auto text-slate-300"></div>
             </div>
         </section>
 
         <!-- Important Disclosures & Legal Risk Warning -->
         <section class="border-t border-slate-800/80 pt-10 mb-12">
-            <div class="glass-card rounded-2xl p-6 sm:p-7 border border-slate-800 bg-slate-900/30">
+            <div class="bracket-card p-6 sm:p-7 border border-slate-800 bg-slate-900/30"><span class="bracket-tick bracket-tick-tl"></span><span class="bracket-tick bracket-tick-tr"></span><span class="bracket-tick bracket-tick-bl"></span><span class="bracket-tick bracket-tick-br"></span>
                 <div class="flex items-center gap-2 mb-4">
                     <span class="text-amber-400 text-lg">⚠️</span>
                     <h3 class="text-sm uppercase tracking-wider text-amber-400 font-semibold">
@@ -944,19 +1436,19 @@ audit = client.verify_witness_local(witness)
         <section class="border-t border-slate-800/80 pt-10 mb-12">
             <h3 class="text-sm uppercase tracking-wider text-slate-400 font-semibold mb-4">Architecture & Audit Specifications</h3>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/ALPHA_PILOT_ONBOARDING.md" target="_blank" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-300 hover:text-sky-300 transition">
+                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/ALPHA_PILOT_ONBOARDING.md" target="_blank" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
                     <div class="font-semibold mb-0.5">Alpha Pilot Guide</div>
                     <div class="text-[10px] text-slate-500">Onboarding & Keys</div>
                 </a>
-                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/API_ERROR_CONTRACT.md" target="_blank" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-300 hover:text-sky-300 transition">
+                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/API_ERROR_CONTRACT.md" target="_blank" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
                     <div class="font-semibold mb-0.5">Error Contract Spec</div>
                     <div class="text-[10px] text-slate-500">RFC Taxonomy & Nonces</div>
                 </a>
-                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/DAG_TOOL_PARAMETERS_DESIGN.md" target="_blank" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-300 hover:text-sky-300 transition">
+                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/DAG_TOOL_PARAMETERS_DESIGN.md" target="_blank" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
                     <div class="font-semibold mb-0.5">DAG Tool Spec</div>
                     <div class="text-[10px] text-slate-500">Kahn's Sort & Cycles</div>
                 </a>
-                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/CRYPTOGRAPHIC_STATE_WITNESSES_DESIGN.md" target="_blank" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-300 hover:text-sky-300 transition">
+                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/CRYPTOGRAPHIC_STATE_WITNESSES_DESIGN.md" target="_blank" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
                     <div class="font-semibold mb-0.5">Witness Spec</div>
                     <div class="text-[10px] text-slate-500">RFC 8785 + Ed25519</div>
                 </a>
@@ -967,15 +1459,15 @@ audit = client.verify_witness_local(witness)
         <section class="border-t border-slate-800/80 pt-10 mb-12">
             <h3 class="text-sm uppercase tracking-wider text-slate-400 font-semibold mb-4">Recommended Sites</h3>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                <a href="https://axiom.trade/@moltalpha" target="_blank" rel="sponsored noopener noreferrer" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-300 hover:text-sky-300 transition">
+                <a href="https://axiom.trade/@moltalpha" target="_blank" rel="sponsored noopener noreferrer" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
                     <div class="font-semibold mb-0.5">Axiom</div>
                     <div class="text-[10px] text-slate-500">Solana trading terminal</div>
                 </a>
-                <a href="https://agentrouter.org/register?aff=kUEX" target="_blank" rel="sponsored noopener noreferrer" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-300 hover:text-sky-300 transition">
+                <a href="https://agentrouter.org/register?aff=kUEX" target="_blank" rel="sponsored noopener noreferrer" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
                     <div class="font-semibold mb-0.5">AgentRouter</div>
                     <div class="text-[10px] text-slate-500">LLM API router for agents</div>
                 </a>
-                <a href="https://coinbase.com/join/3D8SFK7?src=referral-link" target="_blank" rel="sponsored noopener noreferrer" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-300 hover:text-sky-300 transition">
+                <a href="https://coinbase.com/join/3D8SFK7?src=referral-link" target="_blank" rel="sponsored noopener noreferrer" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
                     <div class="font-semibold mb-0.5">Coinbase</div>
                     <div class="text-[10px] text-slate-500">Buy SOL &amp; USDC to pay for API access</div>
                 </a>
@@ -993,7 +1485,336 @@ audit = client.verify_witness_local(witness)
         </footer>
     </div>
 
-    <!-- Interactive Client-side Script -->
+
+
+    <!-- Client Interactive Controllers (Canvas Network, Showcase, & Mobile Navigation) -->
+    <script>
+        // Financial Network Hero Canvas
+        function initHeroNetworkCanvas(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+            let width = (canvas.width = canvas.parentElement.clientWidth);
+            let height = (canvas.height = canvas.parentElement.clientHeight);
+
+            const nodeCount = Math.min(38, Math.floor(width / 35));
+            const nodes = [];
+            const maxDistance = 135;
+
+            for (let i = 0; i < nodeCount; i++) {
+                nodes.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    vx: (Math.random() - 0.5) * 0.4,
+                    vy: (Math.random() - 0.5) * 0.4,
+                    radius: Math.random() * 2 + 1.2,
+                    color: i % 3 === 0 ? '#06b6d4' : i % 3 === 1 ? '#3b82f6' : '#8b5cf6',
+                    alpha: Math.random() * 0.45 + 0.25
+                });
+            }
+
+            let animationFrameId;
+            let isVisible = true;
+
+            const observer = new IntersectionObserver(([entry]) => {
+                isVisible = entry.isIntersecting;
+                if (isVisible && !animationFrameId) render();
+            });
+            observer.observe(canvas);
+
+            function render() {
+                if (!isVisible) {
+                    animationFrameId = null;
+                    return;
+                }
+                ctx.clearRect(0, 0, width, height);
+
+                for (let i = 0; i < nodes.length; i++) {
+                    for (let j = i + 1; j < nodes.length; j++) {
+                        const dx = nodes[i].x - nodes[j].x;
+                        const dy = nodes[i].y - nodes[j].y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+
+                        if (dist < maxDistance) {
+                            const edgeAlpha = (1 - dist / maxDistance) * 0.18;
+                            ctx.beginPath();
+                            ctx.moveTo(nodes[i].x, nodes[i].y);
+                            ctx.lineTo(nodes[j].x, nodes[j].y);
+                            ctx.strokeStyle = 'rgba(6, 182, 212, ' + edgeAlpha + ')';
+                            ctx.lineWidth = 1;
+                            ctx.stroke();
+                        }
+                    }
+                }
+
+                for (const node of nodes) {
+                    node.x += node.vx;
+                    node.y += node.vy;
+
+                    if (node.x < 0 || node.x > width) node.vx *= -1;
+                    if (node.y < 0 || node.y > height) node.vy *= -1;
+
+                    ctx.beginPath();
+                    ctx.rect(node.x - node.radius, node.y - node.radius, node.radius * 2, node.radius * 2);
+                    ctx.fillStyle = node.color;
+                    ctx.globalAlpha = node.alpha;
+                    ctx.fill();
+                    ctx.globalAlpha = 1.0;
+                }
+
+                animationFrameId = requestAnimationFrame(render);
+            }
+
+            render();
+
+            window.addEventListener('resize', () => {
+                if (!canvas.parentElement) return;
+                width = canvas.width = canvas.parentElement.clientWidth;
+                height = canvas.height = canvas.parentElement.clientHeight;
+            });
+        }
+
+        // Sentinel Showcase Stage Switcher (Syncs Cards, Pinned Frame, Route, Counter, and Progress Pips)
+        const routeMap = {
+            '1': 'GET /v1/sentinel/feed',
+            '2': 'GET /v1/sentinel/pools/{pool_address}/risk',
+            '3': 'GET /v1/sentinel/pools/{pool_address}/history',
+            '4': 'GET /v1/sentinel/agents/{identifier}',
+            '5': 'GET /v1/sentinel/anomalies/live (WS)',
+            '6': 'GET /v1/sentinel/public-key'
+        };
+
+        function jumpToShowcaseStage(stageNum) {
+            const num = String(stageNum);
+
+            // Update narrative steps
+            document.querySelectorAll('[data-showcase-step]').forEach(el => {
+                if (el.getAttribute('data-showcase-step') === num) {
+                    el.classList.add('active');
+                } else {
+                    el.classList.remove('active');
+                }
+            });
+
+            // Update pinned frames
+            document.querySelectorAll('[data-showcase-frame]').forEach(el => {
+                if (el.getAttribute('data-showcase-frame') === num) {
+                    el.classList.add('active');
+                } else {
+                    el.classList.remove('active');
+                }
+            });
+
+            // Update dots
+            document.querySelectorAll('[data-dot]').forEach(btn => {
+                if (btn.getAttribute('data-dot') === num) {
+                    btn.className = 'w-6 h-6 cyber-cut-sm bg-[var(--accent-cyan)] text-slate-950 font-mono text-[10px] font-bold flex items-center justify-center transition';
+                } else {
+                    btn.className = 'w-6 h-6 cyber-cut-sm bg-[var(--bg-surface)] hover:bg-[var(--bg-card)] text-[var(--text-secondary)] font-mono text-[10px] font-medium flex items-center justify-center transition';
+                }
+            });
+
+            // Update Immunefi step counter ('01' -> '06')
+            const counterText = document.getElementById('immunefiActiveStepText');
+            if (counterText) {
+                counterText.innerText = num.padStart(2, '0');
+            }
+
+            // Update Immunefi progress pips
+            document.querySelectorAll('[data-pip]').forEach(pip => {
+                const pipNum = parseInt(pip.getAttribute('data-pip'), 10);
+                if (pipNum <= parseInt(num, 10)) {
+                    pip.classList.add('active');
+                } else {
+                    pip.classList.remove('active');
+                }
+            });
+
+            // Update terminal title route
+            const routeEl = document.getElementById('showcaseTerminalRoute');
+            if (routeEl && routeMap[num]) {
+                routeEl.innerText = routeMap[num];
+            }
+        }
+
+        function initSentinelShowcaseObserver() {
+            const steps = document.querySelectorAll('[data-showcase-step]');
+            if (!steps.length) return;
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const stepNum = entry.target.getAttribute('data-showcase-step');
+                        jumpToShowcaseStage(stepNum);
+                    }
+                });
+            }, {
+                rootMargin: '-20% 0px -40% 0px',
+                threshold: 0.25
+            });
+
+            steps.forEach(step => observer.observe(step));
+        }
+
+        // Mobile Drawer Controller
+        function initMobileDrawer() {
+            const btn = document.getElementById('mobileMenuBtn');
+            const drawer = document.getElementById('mobileDrawer');
+            if (!btn || !drawer) return;
+
+            btn.addEventListener('click', () => {
+                const isExpanded = btn.getAttribute('aria-expanded') === 'true';
+                btn.setAttribute('aria-expanded', !isExpanded);
+                drawer.classList.toggle('hidden');
+            });
+
+            // Close on escape key
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && !drawer.classList.contains('hidden')) {
+                    btn.setAttribute('aria-expanded', 'false');
+                    drawer.classList.add('hidden');
+                }
+            });
+        }
+
+        // =====================================================================
+        // Floating Pixel Particle Engine (Micro-Interaction on Hover)
+        // Spawns tiny square pixels that float upward from bottom to top
+        // =====================================================================
+        function initCyberPixelParticleEngine() {
+            const canvas = document.createElement('canvas');
+            canvas.id = 'cyberPixelParticleCanvas';
+            canvas.style.position = 'fixed';
+            canvas.style.top = '0';
+            canvas.style.left = '0';
+            canvas.style.width = '100vw';
+            canvas.style.height = '100vh';
+            canvas.style.pointerEvents = 'none';
+            canvas.style.zIndex = '99999';
+            document.body.appendChild(canvas);
+
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+            const ctx = canvas.getContext('2d');
+            let width = (canvas.width = window.innerWidth);
+            let height = (canvas.height = window.innerHeight);
+
+            window.addEventListener('resize', () => {
+                width = canvas.width = window.innerWidth;
+                height = canvas.height = window.innerHeight;
+            });
+
+            const particles = [];
+            let hoveredElement = null;
+            let spawnTimer = null;
+            let isRunning = false;
+
+            const COLORS = ['#06b6d4', '#10b981', '#3b82f6', '#8b5cf6', '#22d3ee'];
+
+            function spawn(el) {
+                if (!el) return;
+                const rect = el.getBoundingClientRect();
+                if (rect.bottom < 0 || rect.top > height || rect.right < 0 || rect.left > width) return;
+
+                const x = rect.left + Math.random() * rect.width;
+                const y = rect.bottom - (Math.random() * 4);
+                const size = Math.random() < 0.65 ? 2 : 3; // Strict 2px or 3px squares
+                const vy = -(1.2 + Math.random() * 2.2); // Upward float velocity
+                const vx = (Math.random() - 0.5) * 0.7; // Subtle horizontal drift
+                const maxLife = 35 + Math.floor(Math.random() * 30);
+                const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+
+                particles.push({
+                    x, y, vx, vy, size, life: 0, maxLife, color,
+                    targetTop: rect.top - 12
+                });
+
+                if (!isRunning) {
+                    isRunning = true;
+                    requestAnimationFrame(loop);
+                }
+            }
+
+            function loop() {
+                if (particles.length === 0 && !hoveredElement) {
+                    ctx.clearRect(0, 0, width, height);
+                    isRunning = false;
+                    return;
+                }
+
+                ctx.clearRect(0, 0, width, height);
+
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    const p = particles[i];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.life++;
+
+                    const progress = p.life / p.maxLife;
+                    const alpha = Math.max(0, 1 - progress);
+
+                    if (p.life >= p.maxLife || p.y < p.targetTop) {
+                        particles.splice(i, 1);
+                        continue;
+                    }
+
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = alpha;
+                    // Sharp square pixel — strictly NO circles/border-radius
+                    ctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
+                }
+
+                ctx.globalAlpha = 1.0;
+
+                if (particles.length > 0 || hoveredElement) {
+                    requestAnimationFrame(loop);
+                } else {
+                    isRunning = false;
+                }
+            }
+
+            document.addEventListener('mouseover', (e) => {
+                const target = e.target.closest('.cyber-cut-frame, .cyber-card, .cyber-btn, .bracket-card, .narrative-step-card');
+                if (target && target !== hoveredElement) {
+                    hoveredElement = target;
+                    if (spawnTimer) clearInterval(spawnTimer);
+                    for (let i = 0; i < 4; i++) spawn(target);
+                    spawnTimer = setInterval(() => {
+                        if (hoveredElement) {
+                            spawn(hoveredElement);
+                            if (Math.random() > 0.4) spawn(hoveredElement);
+                        }
+                    }, 80);
+                }
+            });
+
+            document.addEventListener('mouseout', (e) => {
+                const target = e.target.closest('.cyber-cut-frame, .cyber-card, .cyber-btn, .bracket-card, .narrative-step-card');
+                if (target && target === hoveredElement) {
+                    const related = e.relatedTarget ? e.relatedTarget.closest('.cyber-cut-frame, .cyber-card, .cyber-btn, .bracket-card, .narrative-step-card') : null;
+                    if (related !== hoveredElement) {
+                        hoveredElement = null;
+                        if (spawnTimer) {
+                            clearInterval(spawnTimer);
+                            spawnTimer = null;
+                        }
+                    }
+                }
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initHeroNetworkCanvas('heroNetworkCanvas');
+            initSentinelShowcaseObserver();
+            initMobileDrawer();
+            initCyberPixelParticleEngine();
+        });
+    </script>
+<!-- Interactive Client-side Script -->
     <script>
         let ACTIVE_GATEWAY = 'https://api.moltalpha.dev';
         async function resolveGatewayManifest() {
@@ -1050,7 +1871,7 @@ audit = client.verify_witness_local(witness)
             const iconEl = document.getElementById('healthIcon');
             iconEl.innerText = '⏳';
             resultEl.classList.remove('hidden');
-            resultEl.className = 'mt-4 p-3 bg-black/90 border border-slate-800 rounded-lg text-xs font-mono text-emerald-400 overflow-x-auto whitespace-pre';
+            resultEl.className = 'mt-4 p-3 bg-black/90 border border-slate-800 cyber-cut-sm text-xs font-mono text-emerald-400 overflow-x-auto whitespace-pre';
             resultEl.innerText = `Querying ${ACTIVE_GATEWAY}/v1/health...`;
 
             try {
@@ -1064,7 +1885,7 @@ audit = client.verify_witness_local(witness)
                 resultEl.innerText = JSON.stringify(json, null, 2);
             } catch (err) {
                 iconEl.innerText = '⚠️';
-                resultEl.className = 'mt-4 p-3 bg-rose-950/40 border border-rose-800/60 rounded-lg text-xs font-mono text-rose-300 overflow-x-auto';
+                resultEl.className = 'mt-4 p-3 bg-rose-950/40 border border-rose-800/60 cyber-cut-sm text-xs font-mono text-rose-300 overflow-x-auto';
                 resultEl.innerHTML = `
                     <div class="font-bold text-rose-400 mb-1">Live fetch note: ${err.message}</div>
                     <div class="text-slate-300 text-[11px] mb-2 leading-relaxed">

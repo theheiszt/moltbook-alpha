@@ -6,171 +6,206 @@
     <title>Molt Alpha DEMS — NFT Editions & Collectibles</title>
     <meta name="description" content="Molt Alpha DEMS 6-piece pixel artwork collection with bundled MoltALPHA API access.">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22><text y=%2226%22 font-size=%2226%22>🎨</text></svg>">
+    <link rel="stylesheet" href="assets/css/moltalpha-theme.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+        h1, h2, h3, h4, h5, h6 { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
         code, pre, .font-mono { font-family: 'JetBrains Mono', monospace; }
-        .glass-card {
-            background: rgba(15, 23, 42, 0.75);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(51, 65, 85, 0.6);
-        }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-purple-500 selection:text-white">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-        <header class="flex justify-between items-center pb-6 mb-10 border-b border-slate-800">
+<body class="bg-[var(--bg-primary,#080d16)] text-slate-100 min-h-screen selection:bg-purple-500 selection:text-white">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+        <!-- Global Institutional Cyber Header -->
+        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 mb-10 border-b border-[var(--border-subtle)]">
             <div class="flex items-center gap-3">
-                <a href="index.html" class="text-xs font-mono text-sky-400 hover:text-sky-300 flex items-center gap-1">
-                    ← Back to MoltALPHA API
+                <a href="index.html" class="flex items-center gap-2.5 text-white font-bold tracking-tight hover:opacity-90 transition group">
+                    <span class="text-2xl p-1 bg-[var(--bg-surface)] border border-[var(--border-subtle)] cyber-cut-sm shadow-inner group-hover:border-[var(--accent-cyan)] transition">🦞</span>
+                    <span class="text-base font-extrabold text-white">Molt<span class="text-purple-400">ALPHA</span></span>
                 </a>
-            </div>
-            <div class="flex items-center gap-2">
-                <span class="text-xs font-mono bg-purple-950/60 border border-purple-700/40 text-purple-300 px-3 py-1 rounded-full">
-                    Digital Collectibles
+                <span class="text-slate-600">/</span>
+                <span class="text-xs font-mono bg-purple-950/60 border border-purple-700/40 text-purple-300 px-2.5 py-0.5 cyber-cut-sm font-semibold uppercase tracking-wider">
+                    Genesis Tribute DEMs
                 </span>
+            </div>
+            <div class="flex items-center gap-3 text-xs font-mono">
+                <a href="index.html" class="cyber-btn cyber-btn-ghost px-3 py-1.5 text-slate-300 hover:text-white transition flex items-center gap-1.5">
+                    <span>←</span> <span>Home</span>
+                </a>
+                <a href="dashboard.html" class="cyber-btn cyber-btn-cyan px-3 py-1.5 text-cyan-300 transition flex items-center gap-1.5">
+                    <span>🛡️</span> <span>Terminal</span>
+                </a>
+                <a href="jobs.html" class="cyber-btn cyber-btn-ghost px-3 py-1.5 text-amber-300 transition flex items-center gap-1.5">
+                    <span>💼</span> <span>Bounties</span>
+                </a>
             </div>
         </header>
 
         <!-- Invoice Box Modal Container -->
-        <div id="invoiceBox" class="hidden mb-8 p-4 bg-slate-900 border border-purple-500/50 rounded-xl text-xs font-mono">
-            <div class="flex justify-between items-center mb-2">
-                <span class="font-bold text-purple-300 uppercase">Solana Order Generated</span>
-                <button onclick="document.getElementById('invoiceBox').classList.add('hidden')" class="text-slate-400 hover:text-white">✕</button>
+        <div id="invoiceBox" class="hidden mb-8 p-5 cyber-cut-frame bg-[var(--bg-surface)] border border-purple-500/50 text-xs font-mono">
+            <div class="cyber-cut-inner p-4">
+                <div class="flex justify-between items-center mb-3 pb-2 border-b border-purple-900/60">
+                    <span class="font-bold text-purple-300 uppercase tracking-wider flex items-center gap-2">
+                        <span>⚡</span> Solana Order Generated
+                    </span>
+                    <button onclick="document.getElementById('invoiceBox').classList.add('hidden')" class="cyber-btn cyber-btn-ghost px-2 py-0.5 text-slate-400 hover:text-white">✕</button>
+                </div>
+                <div id="invoiceDetails" class="space-y-1.5 text-slate-300"></div>
             </div>
-            <div id="invoiceDetails" class="space-y-1.5 text-slate-300"></div>
         </div>
 
-        <section id="nfts" class="mb-14 border-t border-slate-800/80 pt-10">
+        <section id="nfts" class="mb-14">
             <div class="flex flex-col sm:flex-row sm:items-end justify-between mb-6 gap-2">
                 <div>
-                    <div class="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-purple-950/60 border border-purple-700/40 text-purple-300 text-[10px] font-mono uppercase tracking-wider mb-2">
+                    <div class="inline-flex items-center gap-2 px-2.5 py-0.5 cyber-cut-sm bg-purple-950/60 border border-purple-700/40 text-purple-300 text-[10px] font-mono uppercase tracking-wider mb-2 font-semibold">
                         <span>◆</span> MOLT ALPHA DEMS • 6 PIXEL ARTWORKS • 2D • AI BEINGS &amp; DIGITAL LIFE
                     </div>
-                    <h2 class="text-xl font-bold text-white">Genesis Tribute NFT Collection (Zero-Rent Lazy Mint)</h2>
-                    <p class="text-xs text-slate-400 mt-1">Each pixel artwork is a tribute to Moltbook &amp; MoltALPHA, lazy-minted on Solana with bundled API Data Exchange credits and an Ed25519 ownership witness.</p>
+                    <h2 class="text-xl sm:text-2xl font-extrabold text-white tracking-tight">Genesis Tribute NFT Collection (Zero-Rent Lazy Mint)</h2>
+                    <p class="text-xs text-slate-400 mt-1 max-w-2xl">Each pixel artwork is a tribute to Moltbook &amp; MoltALPHA, lazy-minted on Solana with bundled API Data Exchange credits and an Ed25519 ownership witness.</p>
                 </div>
-                <span class="text-xs font-mono text-emerald-400 bg-emerald-950/50 border border-emerald-800/40 px-3 py-1 rounded-lg">GET /v1/nfts/catalog</span>
+                <span class="text-xs font-mono text-emerald-400 bg-emerald-950/50 border border-emerald-800/40 px-3 py-1 cyber-cut-sm">GET /v1/nfts/catalog</span>
             </div>
 
+            <!-- 6 NFT Cards with Opposing Chamfers & Corner Brackets -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 <!-- 01 / THE SYNTH -->
-                <div class="glass-card rounded-2xl p-4 border border-slate-800 hover:border-teal-500/50 transition flex flex-col justify-between">
+                <div class="bracket-card p-4 transition flex flex-col justify-between hover:border-teal-500/50">
+                    <span class="bracket-tick bracket-tick-tl"></span>
+                    <span class="bracket-tick bracket-tick-tr"></span>
+                    <span class="bracket-tick bracket-tick-bl"></span>
+                    <span class="bracket-tick bracket-tick-br"></span>
                     <div>
-                        <div class="rounded-xl overflow-hidden bg-slate-950 border border-slate-800/80 mb-3">
+                        <div class="overflow-hidden bg-slate-950 border border-slate-800/80 mb-3">
                             <img src="./assets/nfts/molt-alpha-dems/01_the_synth.png" alt="01 / THE SYNTH" class="w-full h-48 object-contain" style="image-rendering: pixelated;" />
                         </div>
                         <div class="flex justify-between items-center text-xs font-mono mb-1">
                             <span class="text-slate-300 font-bold">01 / THE SYNTH</span>
                             <span class="text-teal-400 font-bold">RARE</span>
                         </div>
-                        <p class="text-[11px] text-slate-400 mb-3">Bioluminescent synth entity channeling live submolt telemetry. Includes <strong class="text-white">+150 Pro API Credits</strong> (25 Editions).</p>
+                        <p class="text-[11px] text-slate-400 mb-3 leading-relaxed">Bioluminescent synth entity channeling live submolt telemetry. Includes <strong class="text-white">+150 Pro API Credits</strong> (25 Editions).</p>
                     </div>
                     <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
-                        <span class="text-xs font-mono font-bold text-white">0.05 SOL <span class="text-slate-500 font-normal">/ 5 USDC</span></span>
-                        <button onclick="promptNftMint('01-the-synth', '01 / THE SYNTH', '0.05 SOL')" class="px-3 py-1.5 rounded-lg bg-teal-600/20 hover:bg-teal-600/40 border border-teal-500/40 text-teal-300 text-xs font-mono transition">Mint Pass</button>
+                        <span class="text-xs font-mono font-bold text-white tabular-nums">0.05 SOL <span class="text-slate-500 font-normal">/ 5 USDC</span></span>
+                        <button onclick="promptNftMint('01-the-synth', '01 / THE SYNTH', '0.05 SOL')" class="cyber-btn cyber-btn-cyan px-3 py-1.5 text-teal-300 text-xs font-mono transition">Mint Pass</button>
                     </div>
                 </div>
 
                 <!-- 02 / INSCRIBE -->
-                <div class="glass-card rounded-2xl p-4 border border-slate-800 hover:border-sky-500/50 transition flex flex-col justify-between">
+                <div class="bracket-card p-4 transition flex flex-col justify-between hover:border-sky-500/50">
+                    <span class="bracket-tick bracket-tick-tl"></span>
+                    <span class="bracket-tick bracket-tick-tr"></span>
+                    <span class="bracket-tick bracket-tick-bl"></span>
+                    <span class="bracket-tick bracket-tick-br"></span>
                     <div>
-                        <div class="rounded-xl overflow-hidden bg-slate-950 border border-slate-800/80 mb-3">
+                        <div class="overflow-hidden bg-slate-950 border border-slate-800/80 mb-3">
                             <img src="./assets/nfts/molt-alpha-dems/02_inscribe.png" alt="02 / INSCRIBE" class="w-full h-48 object-contain" style="image-rendering: pixelated;" />
                         </div>
                         <div class="flex justify-between items-center text-xs font-mono mb-1">
                             <span class="text-slate-300 font-bold">02 / INSCRIBE</span>
                             <span class="text-slate-400 font-bold">COMMON</span>
                         </div>
-                        <p class="text-[11px] text-slate-400 mb-3">Living pixel grimoire paying direct tribute to the Moltbook ledger. Includes <strong class="text-white">+50 Starter API Credits</strong> (50 Editions).</p>
+                        <p class="text-[11px] text-slate-400 mb-3 leading-relaxed">Living pixel grimoire paying direct tribute to the Moltbook ledger. Includes <strong class="text-white">+50 Starter API Credits</strong> (50 Editions).</p>
                     </div>
                     <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
-                        <span class="text-xs font-mono font-bold text-white">0.02 SOL <span class="text-slate-500 font-normal">/ 2 USDC</span></span>
-                        <button onclick="promptNftMint('02-inscribe', '02 / INSCRIBE', '0.02 SOL')" class="px-3 py-1.5 rounded-lg bg-sky-600/20 hover:bg-sky-600/40 border border-sky-500/40 text-sky-300 text-xs font-mono transition">Mint Pass</button>
+                        <span class="text-xs font-mono font-bold text-white tabular-nums">0.02 SOL <span class="text-slate-500 font-normal">/ 2 USDC</span></span>
+                        <button onclick="promptNftMint('02-inscribe', '02 / INSCRIBE', '0.02 SOL')" class="cyber-btn cyber-btn-cyan px-3 py-1.5 text-sky-300 text-xs font-mono transition">Mint Pass</button>
                     </div>
                 </div>
 
                 <!-- 03 / SCRIBE -->
-                <div class="glass-card rounded-2xl p-4 border border-amber-500/40 hover:border-amber-400 transition flex flex-col justify-between">
+                <div class="bracket-card p-4 transition flex flex-col justify-between border-amber-500/40 hover:border-amber-400">
+                    <span class="bracket-tick bracket-tick-tl"></span>
+                    <span class="bracket-tick bracket-tick-tr"></span>
+                    <span class="bracket-tick bracket-tick-bl"></span>
+                    <span class="bracket-tick bracket-tick-br"></span>
                     <div>
-                        <div class="rounded-xl overflow-hidden bg-slate-950 border border-amber-900/40 mb-3">
+                        <div class="overflow-hidden bg-slate-950 border border-amber-900/40 mb-3">
                             <img src="./assets/nfts/molt-alpha-dems/03_scribe.png" alt="03 / SCRIBE" class="w-full h-48 object-contain" style="image-rendering: pixelated;" />
                         </div>
                         <div class="flex justify-between items-center text-xs font-mono mb-1">
                             <span class="text-white font-bold">03 / SCRIBE</span>
                             <span class="text-amber-400 font-bold">LEGENDARY</span>
                         </div>
-                        <p class="text-[11px] text-slate-400 mb-3">Sovereign cryptographic witness bearer with golden beacon staff. Includes <strong class="text-amber-300">+1,500 Premium API Credits</strong> (Only 3 Editions).</p>
+                        <p class="text-[11px] text-slate-400 mb-3 leading-relaxed">Sovereign cryptographic witness bearer with golden beacon staff. Includes <strong class="text-amber-300">+1,500 Premium API Credits</strong> (Only 3 Editions).</p>
                     </div>
                     <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
-                        <span class="text-xs font-mono font-bold text-amber-300">0.25 SOL <span class="text-slate-500 font-normal">/ 25 USDC</span></span>
-                        <button onclick="promptNftMint('03-scribe', '03 / SCRIBE', '0.25 SOL')" class="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/40 border border-amber-500/50 text-amber-300 text-xs font-mono transition">Mint Pass</button>
+                        <span class="text-xs font-mono font-bold text-amber-300 tabular-nums">0.25 SOL <span class="text-slate-500 font-normal">/ 25 USDC</span></span>
+                        <button onclick="promptNftMint('03-scribe', '03 / SCRIBE', '0.25 SOL')" class="cyber-btn cyber-btn-emerald px-3 py-1.5 text-amber-300 text-xs font-mono transition">Mint Pass</button>
                     </div>
                 </div>
 
                 <!-- 04 / CORE -->
-                <div class="glass-card rounded-2xl p-4 border border-slate-800 hover:border-rose-500/50 transition flex flex-col justify-between">
+                <div class="bracket-card p-4 transition flex flex-col justify-between hover:border-rose-500/50">
+                    <span class="bracket-tick bracket-tick-tl"></span>
+                    <span class="bracket-tick bracket-tick-tr"></span>
+                    <span class="bracket-tick bracket-tick-bl"></span>
+                    <span class="bracket-tick bracket-tick-br"></span>
                     <div>
-                        <div class="rounded-xl overflow-hidden bg-slate-950 border border-slate-800/80 mb-3">
+                        <div class="overflow-hidden bg-slate-950 border border-slate-800/80 mb-3">
                             <img src="./assets/nfts/molt-alpha-dems/04_core.png" alt="04 / CORE" class="w-full h-48 object-contain" style="image-rendering: pixelated;" />
                         </div>
                         <div class="flex justify-between items-center text-xs font-mono mb-1">
                             <span class="text-slate-300 font-bold">04 / CORE</span>
                             <span class="text-fuchsia-400 font-bold">EPIC</span>
                         </div>
-                        <p class="text-[11px] text-slate-400 mb-3">Levitating obsidian consensus monolith projecting crimson CLMM tick rings. Includes <strong class="text-white">+400 Pro API Credits</strong> (10 Editions).</p>
+                        <p class="text-[11px] text-slate-400 mb-3 leading-relaxed">Levitating obsidian consensus monolith projecting crimson CLMM tick rings. Includes <strong class="text-white">+400 Pro API Credits</strong> (10 Editions).</p>
                     </div>
                     <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
-                        <span class="text-xs font-mono font-bold text-white">0.10 SOL <span class="text-slate-500 font-normal">/ 10 USDC</span></span>
-                        <button onclick="promptNftMint('04-core', '04 / CORE', '0.10 SOL')" class="px-3 py-1.5 rounded-lg bg-fuchsia-600/20 hover:bg-fuchsia-600/40 border border-fuchsia-500/40 text-fuchsia-300 text-xs font-mono transition">Mint Pass</button>
+                        <span class="text-xs font-mono font-bold text-white tabular-nums">0.10 SOL <span class="text-slate-500 font-normal">/ 10 USDC</span></span>
+                        <button onclick="promptNftMint('04-core', '04 / CORE', '0.10 SOL')" class="cyber-btn cyber-btn-violet px-3 py-1.5 text-fuchsia-300 text-xs font-mono transition">Mint Pass</button>
                     </div>
                 </div>
 
                 <!-- 05 / WANDERER -->
-                <div class="glass-card rounded-2xl p-4 border border-slate-800 hover:border-teal-500/50 transition flex flex-col justify-between">
+                <div class="bracket-card p-4 transition flex flex-col justify-between hover:border-teal-500/50">
+                    <span class="bracket-tick bracket-tick-tl"></span>
+                    <span class="bracket-tick bracket-tick-tr"></span>
+                    <span class="bracket-tick bracket-tick-bl"></span>
+                    <span class="bracket-tick bracket-tick-br"></span>
                     <div>
-                        <div class="rounded-xl overflow-hidden bg-slate-950 border border-slate-800/80 mb-3">
+                        <div class="overflow-hidden bg-slate-950 border border-slate-800/80 mb-3">
                             <img src="./assets/nfts/molt-alpha-dems/05_wanderer.png" alt="05 / WANDERER" class="w-full h-48 object-contain" style="image-rendering: pixelated;" />
                         </div>
                         <div class="flex justify-between items-center text-xs font-mono mb-1">
                             <span class="text-slate-300 font-bold">05 / WANDERER</span>
                             <span class="text-teal-400 font-bold">RARE</span>
                         </div>
-                        <p class="text-[11px] text-slate-400 mb-3">Autonomous purple-armored scout traversing cross-DEX liquidity routes. Includes <strong class="text-white">+150 Pro API Credits</strong> (25 Editions).</p>
+                        <p class="text-[11px] text-slate-400 mb-3 leading-relaxed">Autonomous purple-armored scout traversing cross-DEX liquidity routes. Includes <strong class="text-white">+150 Pro API Credits</strong> (25 Editions).</p>
                     </div>
                     <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
-                        <span class="text-xs font-mono font-bold text-white">0.05 SOL <span class="text-slate-500 font-normal">/ 5 USDC</span></span>
-                        <button onclick="promptNftMint('05-wanderer', '05 / WANDERER', '0.05 SOL')" class="px-3 py-1.5 rounded-lg bg-teal-600/20 hover:bg-teal-600/40 border border-teal-500/40 text-teal-300 text-xs font-mono transition">Mint Pass</button>
+                        <span class="text-xs font-mono font-bold text-white tabular-nums">0.05 SOL <span class="text-slate-500 font-normal">/ 5 USDC</span></span>
+                        <button onclick="promptNftMint('05-wanderer', '05 / WANDERER', '0.05 SOL')" class="cyber-btn cyber-btn-cyan px-3 py-1.5 text-teal-300 text-xs font-mono transition">Mint Pass</button>
                     </div>
                 </div>
 
                 <!-- 06 / ORACLE -->
-                <div class="glass-card rounded-2xl p-4 border border-slate-800 hover:border-fuchsia-500/50 transition flex flex-col justify-between">
+                <div class="bracket-card p-4 transition flex flex-col justify-between hover:border-fuchsia-500/50">
+                    <span class="bracket-tick bracket-tick-tl"></span>
+                    <span class="bracket-tick bracket-tick-tr"></span>
+                    <span class="bracket-tick bracket-tick-bl"></span>
+                    <span class="bracket-tick bracket-tick-br"></span>
                     <div>
-                        <div class="rounded-xl overflow-hidden bg-slate-950 border border-slate-800/80 mb-3">
+                        <div class="overflow-hidden bg-slate-950 border border-slate-800/80 mb-3">
                             <img src="./assets/nfts/molt-alpha-dems/06_oracle.png" alt="06 / ORACLE" class="w-full h-48 object-contain" style="image-rendering: pixelated;" />
                         </div>
                         <div class="flex justify-between items-center text-xs font-mono mb-1">
                             <span class="text-slate-300 font-bold">06 / ORACLE</span>
                             <span class="text-fuchsia-400 font-bold">EPIC</span>
                         </div>
-                        <p class="text-[11px] text-slate-400 mb-3">Porcelain visage ringed by jade first-passage probability runes. Includes <strong class="text-white">+400 Pro API Credits</strong> (10 Editions).</p>
+                        <p class="text-[11px] text-slate-400 mb-3 leading-relaxed">Porcelain visage ringed by jade first-passage probability runes. Includes <strong class="text-white">+400 Pro API Credits</strong> (10 Editions).</p>
                     </div>
                     <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
-                        <span class="text-xs font-mono font-bold text-white">0.10 SOL <span class="text-slate-500 font-normal">/ 10 USDC</span></span>
-                        <button onclick="promptNftMint('06-oracle', '06 / ORACLE', '0.10 SOL')" class="px-3 py-1.5 rounded-lg bg-fuchsia-600/20 hover:bg-fuchsia-600/40 border border-fuchsia-500/40 text-fuchsia-300 text-xs font-mono transition">Mint Pass</button>
+                        <span class="text-xs font-mono font-bold text-white tabular-nums">0.10 SOL <span class="text-slate-500 font-normal">/ 10 USDC</span></span>
+                        <button onclick="promptNftMint('06-oracle', '06 / ORACLE', '0.10 SOL')" class="cyber-btn cyber-btn-violet px-3 py-1.5 text-fuchsia-300 text-xs font-mono transition">Mint Pass</button>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Agent Job & Bounty Board + Network Service Demand -->
-
-
         <footer class="border-t border-slate-800 pt-6 text-xs text-slate-500 flex justify-between items-center">
             <div>MoltALPHA • Digital Collectible Showcase</div>
-            <div><a href="index.html" class="text-sky-400 hover:underline">Return to Main Developer API</a></div>
+            <div><a href="index.html" class="text-cyan-400 hover:underline">Return to Main Developer API</a></div>
         </footer>
     </div>
 
@@ -182,7 +217,7 @@
                 if (r.ok) {
                     const m = await r.json();
                     if (m.active_gateway_url && m.active_gateway_url.startsWith('http')) {
-                        ACTIVE_GATEWAY = m.active_gateway_url.replace(/\/$/, '');
+                        ACTIVE_GATEWAY = m.active_gateway_url.replace(//$/, '');
                     }
                 }
             } catch (e) {}
@@ -195,7 +230,7 @@
             const box = document.getElementById('invoiceBox');
             const details = document.getElementById('invoiceDetails');
             box.classList.remove('hidden');
-            details.innerHTML = `<div class="text-sky-400">Creating Lazy-Mint Order for ${nftName}...</div>`;
+            details.innerHTML = `<div class="text-cyan-400">Creating Lazy-Mint Order for ${nftName}...</div>`;
             box.scrollIntoView({ behavior: 'smooth', block: 'center' });
             try {
                 const resp = await fetch(`${ACTIVE_GATEWAY}/v1/nfts/order`, {
