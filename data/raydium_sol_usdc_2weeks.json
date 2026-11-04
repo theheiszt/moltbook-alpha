@@ -1,7 +1,15 @@
 {
-  "version": "1.0.0",
-  "generated_at": "2026-11-04T15:23:17Z",
+  "version": "2.0.0",
+  "model_version": "sentinel-risk-v2.0",
+  "provenance": "SNAPSHOT",
+  "chronological_order": "DESC",
+  "generated_at": "2026-11-04T16:55:03Z",
   "source": "https://docs.raydium.io/sdk-api (Raydium API v3)",
+  "source_hashes": {
+    "pools_info_sha256": "22f98eeb13fcb34aedaa6aa5476c030f636ab3e77d32f447ec58c86073e26010",
+    "liquidity_line_sha256": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c",
+    "position_line_sha256": "04dc92f45068f6cb279120caaaa938ffd090cf3dfbade31565394d03b76fe0c9"
+  },
   "target_pool": {
     "id": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
     "symbol": "SOL-USDC",
@@ -9,534 +17,1075 @@
     "program_id": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
     "mint_sol": "So11111111111111111111111111111111111111112",
     "mint_usdc": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    "spot_price": 96.9597820982358,
-    "tvl_usd": 7253643.27,
-    "volume_24h_usd": 65879818.40844335,
-    "fee_24h_usd": 26351.953004593102,
-    "apr_24h": 132.6,
-    "concentrated_ticks_count": 8948
+    "spot_price": 96.87521714845956,
+    "tvl_usd": 7278295.35,
+    "volume_24h_usd": 70700916.43,
+    "fee_24h_usd": 28280.39,
+    "fee_rate_bps": 4.0,
+    "apr_24h": 141.82,
+    "concentrated_ticks_count": 8947,
+    "active_band_2pct_ticks": 400,
+    "active_band_2pct_ratio": 0.118629,
+    "active_band_5pct_ratio": 0.260821,
+    "top_tick_share_in_band": 0.003062
   },
   "secondary_pool": {
     "id": "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2",
     "symbol": "SOL-USDC",
     "type": "Standard (AMM v4)",
     "program_id": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
-    "tvl_usd": 18484579.47,
-    "volume_24h_usd": 3171515.0575125637,
-    "overall_risk_score": 6
+    "tvl_usd": 18408699.3,
+    "volume_24h_usd": 3329208.85,
+    "overall_risk_score": 6,
+    "risk_level": "SAFE"
   },
   "two_weeks_summary": {
     "start_date": "2026-10-22T00:00:00Z",
     "end_date": "2026-11-04T00:00:00Z",
     "observation_count": 14,
-    "min_risk_score": 4,
-    "max_risk_score": 14,
-    "avg_risk_score": 5,
+    "min_risk_score": 10,
+    "max_risk_score": 20,
+    "avg_risk_score": 10.7,
+    "median_liquidity_usd": 7754134.5,
     "average_liquidity": 7610512.21
+  },
+  "dataset_witness": {
+    "witness_id": "wit_dataset_export_eb6e390225",
+    "key_id": "wit_dataset_0053a28d1206",
+    "algorithm": "Ed25519",
+    "canonicalization": "RFC8785",
+    "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+    "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+    "fingerprint_sha256": "0053a28d120619ed9a38f419b6469277a57f38763699569ad11ffde3bfd69e30",
+    "canonical_payload": {
+      "action": "sentinel_dataset_export",
+      "actor": "moltalpha_sentinel_harvester",
+      "nonce": 15,
+      "prev_witness_hash": "b65add64dd7437d53f19a13405cf42316e52b3969e1116ef08be8dc8ef641974",
+      "timestamp": "2026-11-04T16:55:03Z",
+      "environmental_anchor": {
+        "pool_id": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+        "observation_count": 14,
+        "start_date": "2026-10-22T00:00:00Z",
+        "end_date": "2026-11-04T00:00:00Z",
+        "info_response_hash": "22f98eeb13fcb34aedaa6aa5476c030f636ab3e77d32f447ec58c86073e26010",
+        "liquidity_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c",
+        "position_response_hash": "04dc92f45068f6cb279120caaaa938ffd090cf3dfbade31565394d03b76fe0c9",
+        "head_witness_hash": "b65add64dd7437d53f19a13405cf42316e52b3969e1116ef08be8dc8ef641974",
+        "generated_at": "2026-11-04T16:55:03Z"
+      }
+    },
+    "canonical_hash": "eb6e390225edd6f01f38d9f27ff6c56f07d80eb9546e6542de9daa9633b963e1",
+    "signature": "f8d5c41149a3051d61810afd2ec1a8a0c00b4a64032c4900878e6d2448acfeaa906bf4a403804aa07dbc6aa79cc9e5b048c4ea7b51d86ea3919bca5cfae55a0c",
+    "verified": true
   },
   "history_14d": [
     {
       "day_index": 14,
       "timestamp": "2026-11-04T00:00:00Z",
-      "assessed_at": "2026-11-04T00:00:00Z",
+      "observed_at": "2026-11-04T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7019065,
+      "liquidity_usd": 7019065.0,
+      "day_return_pct": -0.42,
       "drawdown_pct": 0.42,
-      "overall_risk_score": 6,
-      "risk_level": "SAFE",
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": -0.42
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 4,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_014_3ucNos",
+      "witness_id": "wit_raydium_014_b65add64",
+      "witness": {
+        "witness_id": "wit_raydium_014_b65add64",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 14,
+          "prev_witness_hash": "2c81b0d2897aed4e4d7d19118148274a15a99d1a1fde8f0709fc6dd2d967b8da",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-11-04T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7019065.0,
+            "day_return_pct": -0.42,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "b65add64dd7437d53f19a13405cf42316e52b3969e1116ef08be8dc8ef641974",
+        "signature": "0d71c3f47891ed0647a8a667fc1b3a50a1d452ae9a0dad101a849fd5029113b84b2877d9cfc8761ab62214d6e2d6c7dada030f02f49cfee6b6c61f404f5a1f07",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 13,
       "timestamp": "2026-11-03T00:00:00Z",
-      "assessed_at": "2026-11-03T00:00:00Z",
+      "observed_at": "2026-11-03T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7048423,
+      "liquidity_usd": 7048423.0,
+      "day_return_pct": -2.75,
       "drawdown_pct": 2.75,
-      "overall_risk_score": 6,
-      "risk_level": "SAFE",
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": -2.75
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 4,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_013_3ucNos",
+      "witness_id": "wit_raydium_013_2c81b0d2",
+      "witness": {
+        "witness_id": "wit_raydium_013_2c81b0d2",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 13,
+          "prev_witness_hash": "050bc131cbc4ad39301b7d4fa436f459c08f08da9ad707bcd34043c48273e693",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-11-03T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7048423.0,
+            "day_return_pct": -2.75,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "2c81b0d2897aed4e4d7d19118148274a15a99d1a1fde8f0709fc6dd2d967b8da",
+        "signature": "9b598304a5c4f3a240b4b3a71c1717d7e8fe7ea1208f67a91dd3b8410b0959f95423e0e901fb2508720354f9a161395682129c34da862952acd92aea1cab9e0b",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 12,
       "timestamp": "2026-11-02T00:00:00Z",
-      "assessed_at": "2026-11-02T00:00:00Z",
+      "observed_at": "2026-11-02T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7247457,
+      "liquidity_usd": 7247457.0,
+      "day_return_pct": -0.86,
       "drawdown_pct": 0.86,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": -0.86
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_012_3ucNos",
+      "witness_id": "wit_raydium_012_050bc131",
+      "witness": {
+        "witness_id": "wit_raydium_012_050bc131",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 12,
+          "prev_witness_hash": "caf1a63c3e164a16f333acb3f336b654858b7ed8d16877f0225b6accf07e1c72",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-11-02T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7247457.0,
+            "day_return_pct": -0.86,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "050bc131cbc4ad39301b7d4fa436f459c08f08da9ad707bcd34043c48273e693",
+        "signature": "f7f8856b3cfb6995d7eb0c2de76f83acec83407f021029ebf92a76691655294e195eee9e7c6785b66eb64d5d56fa3292b23cc7f90a6c8c4bdb9bae482aa2580a",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 11,
       "timestamp": "2026-11-01T00:00:00Z",
-      "assessed_at": "2026-11-01T00:00:00Z",
+      "observed_at": "2026-11-01T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7310380,
+      "liquidity_usd": 7310380.0,
+      "day_return_pct": -0.43,
       "drawdown_pct": 0.43,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": -0.43
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_011_3ucNos",
+      "witness_id": "wit_raydium_011_caf1a63c",
+      "witness": {
+        "witness_id": "wit_raydium_011_caf1a63c",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 11,
+          "prev_witness_hash": "3f2df78e055170c93c6da3eb72abef901bd4cf46b3595a72bed9bab1dba99fc2",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-11-01T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7310380.0,
+            "day_return_pct": -0.43,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "caf1a63c3e164a16f333acb3f336b654858b7ed8d16877f0225b6accf07e1c72",
+        "signature": "338c78451b605cae1ec8bae556fa99f7166a2b4e7bc67c53da0d4baab1bdefb38e7938d6de76edca4f1e15de61e1b50cd558e308aa84e3e70c66bb79a674f703",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 10,
       "timestamp": "2026-10-31T00:00:00Z",
-      "assessed_at": "2026-10-31T00:00:00Z",
+      "observed_at": "2026-10-31T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7342158,
-      "drawdown_pct": -0.34,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "liquidity_usd": 7342158.0,
+      "day_return_pct": 0.34,
+      "drawdown_pct": 0.0,
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": 0.34
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_010_3ucNos",
+      "witness_id": "wit_raydium_010_3f2df78e",
+      "witness": {
+        "witness_id": "wit_raydium_010_3f2df78e",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 10,
+          "prev_witness_hash": "a16c964df4a8e03afee86b54e110ebb821db9203f83f26f2194e1b73ebadd97e",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-31T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7342158.0,
+            "day_return_pct": 0.34,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "3f2df78e055170c93c6da3eb72abef901bd4cf46b3595a72bed9bab1dba99fc2",
+        "signature": "31ff9a5304c57f457f0247eeafefe9afef3df0b9c798270e7b422b26bc9e4887c431fe91a5dc41e07bd445da507621c9d7a43b8f460ad05b7bf7f3971b6cbb07",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 9,
       "timestamp": "2026-10-30T00:00:00Z",
-      "assessed_at": "2026-10-30T00:00:00Z",
+      "observed_at": "2026-10-30T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7317164,
+      "liquidity_usd": 7317164.0,
+      "day_return_pct": -8.21,
       "drawdown_pct": 8.21,
-      "overall_risk_score": 14,
-      "risk_level": "SAFE",
+      "overall_risk_score": 20,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 10,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "LOW",
+          "day_return_pct": -8.21
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_009_3ucNos",
+      "witness_id": "wit_raydium_009_a16c964d",
+      "witness": {
+        "witness_id": "wit_raydium_009_a16c964d",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 9,
+          "prev_witness_hash": "56b8a3d3cb79d3c0bfab19fda3e3b146d621e550f458571338163dfc4e146306",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-30T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7317164.0,
+            "day_return_pct": -8.21,
+            "overall_risk_score": 20,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "a16c964df4a8e03afee86b54e110ebb821db9203f83f26f2194e1b73ebadd97e",
+        "signature": "da2ba440bbd0652cd135ae99725f48d71c23602e87542a1ad6b4e3cfaffc60b65553b4f33ca44f0c0a179f324cfcff415a7404154b8845cd612738f6e314280c",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 8,
       "timestamp": "2026-10-29T00:00:00Z",
-      "assessed_at": "2026-10-29T00:00:00Z",
+      "observed_at": "2026-10-29T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7971246,
-      "drawdown_pct": -0.56,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "liquidity_usd": 7971246.0,
+      "day_return_pct": 0.56,
+      "drawdown_pct": 0.0,
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": 0.56
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_008_3ucNos",
+      "witness_id": "wit_raydium_008_56b8a3d3",
+      "witness": {
+        "witness_id": "wit_raydium_008_56b8a3d3",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 8,
+          "prev_witness_hash": "7c3efc9032ef3c342714216a82f9676857d47e069dbf18b034246cdf37ed7ba6",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-29T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7971246.0,
+            "day_return_pct": 0.56,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "56b8a3d3cb79d3c0bfab19fda3e3b146d621e550f458571338163dfc4e146306",
+        "signature": "bafd8f2db9d938e8ef9226c85350fdd6b823a2c9002dec623e0c70e5ab416cf29987f106ea853e9ea811037a714912cf9f8f12a880854ad2efe3d5a66969bb0f",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 7,
       "timestamp": "2026-10-28T00:00:00Z",
-      "assessed_at": "2026-10-28T00:00:00Z",
+      "observed_at": "2026-10-28T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7927113,
-      "drawdown_pct": -0.96,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "liquidity_usd": 7927113.0,
+      "day_return_pct": 0.96,
+      "drawdown_pct": 0.0,
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": 0.96
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_007_3ucNos",
+      "witness_id": "wit_raydium_007_7c3efc90",
+      "witness": {
+        "witness_id": "wit_raydium_007_7c3efc90",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 7,
+          "prev_witness_hash": "d0192af05403063a569cafb4dbfad111f209c8af94b560dcff1586a48c39d495",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-28T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7927113.0,
+            "day_return_pct": 0.96,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "7c3efc9032ef3c342714216a82f9676857d47e069dbf18b034246cdf37ed7ba6",
+        "signature": "8795e1f89119daece0c77a27e4e524894a334a0bbdd7af9a5b6d5f810a1e9fee18186287f5e1a281b861628568f25d06fa1ca76c0d3b3039e676a789c6341102",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 6,
       "timestamp": "2026-10-27T00:00:00Z",
-      "assessed_at": "2026-10-27T00:00:00Z",
+      "observed_at": "2026-10-27T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7851693,
-      "drawdown_pct": -1.38,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "liquidity_usd": 7851693.0,
+      "day_return_pct": 1.38,
+      "drawdown_pct": 0.0,
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": 1.38
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_006_3ucNos",
+      "witness_id": "wit_raydium_006_d0192af0",
+      "witness": {
+        "witness_id": "wit_raydium_006_d0192af0",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 6,
+          "prev_witness_hash": "532a1dc34c5d7c659174b5014679e9a6c04983da413a731b25ccaab1e1660bb0",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-27T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7851693.0,
+            "day_return_pct": 1.38,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "d0192af05403063a569cafb4dbfad111f209c8af94b560dcff1586a48c39d495",
+        "signature": "860278c2d1c874a6c239ae018d6fd81c2657141ebea427261d35daf8bc448fc9b4c43d0dea1df4a5440f12c39bb4077ee0ecc87f280515179489c03e483b3207",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 5,
       "timestamp": "2026-10-26T00:00:00Z",
-      "assessed_at": "2026-10-26T00:00:00Z",
+      "observed_at": "2026-10-26T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7745190,
+      "liquidity_usd": 7745190.0,
+      "day_return_pct": -0.23,
       "drawdown_pct": 0.23,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": -0.23
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_005_3ucNos",
+      "witness_id": "wit_raydium_005_532a1dc3",
+      "witness": {
+        "witness_id": "wit_raydium_005_532a1dc3",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 5,
+          "prev_witness_hash": "23cb931a390c49b55e92a4e108c3981b71d6b3c039b9b6842f61473178a424c8",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-26T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7745190.0,
+            "day_return_pct": -0.23,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "532a1dc34c5d7c659174b5014679e9a6c04983da413a731b25ccaab1e1660bb0",
+        "signature": "fe4a5d0c5dfb23af363103ec98d27b0c7760000afe78c8ef80b8dbd1c2136dd41c4cce974a3b88ecca22141a3263d6a823e85586f11164c9be8e51e1d0577403",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 4,
       "timestamp": "2026-10-25T00:00:00Z",
-      "assessed_at": "2026-10-25T00:00:00Z",
+      "observed_at": "2026-10-25T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7763079,
+      "liquidity_usd": 7763079.0,
+      "day_return_pct": -2.82,
       "drawdown_pct": 2.82,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": -2.82
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_004_3ucNos",
+      "witness_id": "wit_raydium_004_23cb931a",
+      "witness": {
+        "witness_id": "wit_raydium_004_23cb931a",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 4,
+          "prev_witness_hash": "f0f3756f0c6dcd96102c59889668b76d19b9272f0e5e0e99404594bbbe4d5c8a",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-25T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7763079.0,
+            "day_return_pct": -2.82,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "23cb931a390c49b55e92a4e108c3981b71d6b3c039b9b6842f61473178a424c8",
+        "signature": "c7ebe2e37aa8ee45a5aefdcd808e1ed18ccf8442b29b2c68c1c78ba1ff929c7ab361ead0eb17ce470b615d0ea16341685d0ce20b2a50275dfe3e6bbb9c74d606",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 3,
       "timestamp": "2026-10-24T00:00:00Z",
-      "assessed_at": "2026-10-24T00:00:00Z",
+      "observed_at": "2026-10-24T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7988041,
-      "drawdown_pct": -0.43,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "liquidity_usd": 7988041.0,
+      "day_return_pct": 0.43,
+      "drawdown_pct": 0.0,
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": 0.43
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_003_3ucNos",
+      "witness_id": "wit_raydium_003_f0f3756f",
+      "witness": {
+        "witness_id": "wit_raydium_003_f0f3756f",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 3,
+          "prev_witness_hash": "b6a17713f26666e209872db6b2e30d030c9e6b5e6d3bfbf2e5db21b99a1840e8",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-24T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7988041.0,
+            "day_return_pct": 0.43,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "f0f3756f0c6dcd96102c59889668b76d19b9272f0e5e0e99404594bbbe4d5c8a",
+        "signature": "c760bc9cd00d565e392f6adc1871a6aa84ee88322d8a224dbcbff619495b82e4dc0744ac60c5a226e098090965c8c42d650e3e7fb713cf13334fd8e7df72c007",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 2,
       "timestamp": "2026-10-23T00:00:00Z",
-      "assessed_at": "2026-10-23T00:00:00Z",
+      "observed_at": "2026-10-23T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7953564,
+      "liquidity_usd": 7953564.0,
+      "day_return_pct": -1.35,
       "drawdown_pct": 1.35,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": -1.35
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_002_3ucNos",
+      "witness_id": "wit_raydium_002_b6a17713",
+      "witness": {
+        "witness_id": "wit_raydium_002_b6a17713",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 2,
+          "prev_witness_hash": "5de85e2eaf5f574104e4a11bf6e0feb2e92b4677de2d80e3a62a1ac6f98acdc2",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-23T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7953564.0,
+            "day_return_pct": -1.35,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "b6a17713f26666e209872db6b2e30d030c9e6b5e6d3bfbf2e5db21b99a1840e8",
+        "signature": "3d4d860cecd56669eb7b2db30093ce891005d4116dc2a7e2aedcee82fcc3f748ad79838abfe7c2a61595a81732e5fdfbd58611176661251aeebb81837838800c",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 1,
       "timestamp": "2026-10-22T00:00:00Z",
-      "assessed_at": "2026-10-22T00:00:00Z",
+      "observed_at": "2026-10-22T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 8062598,
-      "drawdown_pct": 0,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "liquidity_usd": 8062598.0,
+      "day_return_pct": 0.88,
+      "drawdown_pct": 0.0,
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": 0.88
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_001_3ucNos",
+      "witness_id": "wit_raydium_001_5de85e2e",
+      "witness": {
+        "witness_id": "wit_raydium_001_5de85e2e",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 1,
+          "prev_witness_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-22T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 8062598.0,
+            "day_return_pct": 0.88,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "5de85e2eaf5f574104e4a11bf6e0feb2e92b4677de2d80e3a62a1ac6f98acdc2",
+        "signature": "734f3fe097d5c3ac2bb67cb912f12287a08608fdbf72d34e26482830528d11f5a10be2a8998aee166dda31f991afa034834bfdd7e4e27c372a92dea4f9df5004",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     }
   ]

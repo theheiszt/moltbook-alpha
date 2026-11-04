@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>MoltALPHA — Live Traffic & Operations Console</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com" referrerpolicy="no-referrer"></script>
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -18,9 +19,22 @@
     };
   </script>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script
+    src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"
+    integrity="sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC"
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"></script>
   <link rel="stylesheet" href="assets/css/moltalpha-theme.css">
   <style>
+    dialog:modal {
+      overscroll-behavior: contain;
+    }
+    dialog::backdrop {
+      background-color: rgba(8, 13, 22, 0.82);
+      backdrop-filter: blur(4px);
+      overflow: hidden;
+      overscroll-behavior: contain;
+    }
     :root {
       /* Semantic Risk Level Tokens (Strict Specification) */
       --risk-safe: #22c58b;
@@ -279,12 +293,18 @@
               </p>
             </div>
           </div>
-          <div class="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+          <div class="flex flex-wrap items-center gap-2 shrink-0 self-end sm:self-auto">
+            <span id="subscriberAuthStatusBadge" class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900 text-slate-400 border border-slate-700">
+              Snapshot Mode (Unauthenticated)
+            </span>
             <a href="index.html#pricing" class="cyber-btn cyber-btn-ghost text-purple-300 px-2.5 py-1 text-[11px]">
               <span>Subscription Plans ↗</span>
             </a>
-            <button onclick="promptSubscriberLogin()" id="btnSubscriberKey" class="cyber-btn cyber-btn-cyan text-white px-2.5 py-1 text-[11px]">
+            <button type="button" onclick="promptSubscriberLogin()" id="btnSubscriberKey" class="cyber-btn cyber-btn-cyan text-white px-2.5 py-1 text-[11px]">
               <span>🔑 Enter Access Key</span>
+            </button>
+            <button type="button" onclick="clearSubscriberAuth()" id="btnClearSubscriberKey" class="hidden px-2 py-1 rounded bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-800 text-[11px] font-mono">
+              Sign Out
             </button>
           </div>
         </div>
@@ -514,13 +534,14 @@
 
           <!-- Witness Receipt & Historical Trigger -->
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-800 text-[11px] text-slate-400">
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
               <span>Witness ID:</span>
               <span id="pfWitnessId" class="text-cyan-400 font-bold truncate">wit_sentinel_...</span>
-              <span class="text-emerald-400">✓ Signed</span>
+              <span id="pfWitnessBadge" class="text-emerald-400">✓ Signed</span>
+              <span id="pfProvenanceBadge" class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] text-slate-300 font-mono">SNAPSHOT</span>
             </div>
             <div class="flex items-center gap-2">
-              <button onclick="inspectWitnessInVerifier()" class="text-rose-400 hover:underline">Verify in Cryptographic Center ↘</button>
+              <button type="button" onclick="inspectWitnessInVerifier(window.lastPreflightWitness)" class="text-rose-400 hover:underline">Verify in Cryptographic Center ↘</button>
             </div>
           </div>
         </div>
@@ -762,7 +783,7 @@
             </div>
             <div>
               <span class="text-slate-500 block">Pinned Trust Anchor Check:</span>
-              <span class="text-emerald-400 font-bold">✓ Matches MoltAlpha Distributed Trust Anchor</span>
+              <span id="pinnedAnchorStatus" class="text-emerald-400 font-bold">✓ Matches MoltAlpha Distributed Trust Anchor</span>
             </div>
           </div>
         </div>
@@ -1288,13 +1309,75 @@
 
   </div>
 
+  <!-- Native Subscriber Authentication Modal (closedby="any" light-dismiss + showModal() top-layer) -->
+  <dialog id="subscriberAuthDialog" closedby="any" aria-labelledby="subscriberAuthTitle"
+    class="bg-[#0d1424] border border-cyan-500/40 text-slate-200 rounded-2xl p-0 w-[92vw] max-w-md shadow-2xl">
+    <div class="p-6 space-y-4 font-mono text-xs">
+      <div class="flex items-start justify-between gap-3 pb-3 border-b border-slate-800">
+        <div>
+          <span class="px-2 py-0.5 text-[10px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded uppercase">Subscriber Gate</span>
+          <h2 id="subscriberAuthTitle" class="text-base font-bold text-white mt-1.5 font-sans">Authenticate Sentinel Access</h2>
+          <p class="text-[11px] text-slate-400 font-sans mt-0.5">
+            Sign in with your Advanced/Pro member credentials or paste a <code class="text-cyan-300">usr_sess_...</code> / <code class="text-cyan-300">molt_...</code> key. Stored only in <code class="text-slate-300">sessionStorage</code>.
+          </p>
+        </div>
+        <form method="dialog">
+          <button type="submit" value="cancel" aria-label="Close authentication dialog"
+            class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">✕</button>
+        </form>
+      </div>
+
+      <form id="subscriberKeyForm" onsubmit="event.preventDefault(); submitSubscriberAuth();" class="space-y-3">
+        <div>
+          <label for="subscriberKeyInput" class="block text-[11px] text-slate-300 mb-1">API Key or Member Session Token</label>
+          <input id="subscriberKeyInput" type="password" autofocus autocomplete="off"
+            placeholder="molt_... or usr_sess_..."
+            class="w-full bg-[#080d16] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500">
+        </div>
+
+        <details class="bg-slate-900/60 border border-slate-800 rounded-xl p-3">
+          <summary class="cursor-pointer text-[11px] text-cyan-400 font-semibold">Or sign in with Member Email &amp; Password</summary>
+          <div class="space-y-2.5 mt-3">
+            <div>
+              <label for="subscriberEmailInput" class="block text-[10px] text-slate-400 mb-1">Member Email</label>
+              <input id="subscriberEmailInput" type="email" autocomplete="username" placeholder="operator@fund.io"
+                class="w-full bg-[#080d16] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500">
+            </div>
+            <div>
+              <label for="subscriberPasswordInput" class="block text-[10px] text-slate-400 mb-1">Password</label>
+              <input id="subscriberPasswordInput" type="password" maxlength="128" autocomplete="current-password" placeholder="••••••••••••"
+                class="w-full bg-[#080d16] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500">
+            </div>
+          </div>
+        </details>
+
+        <div id="subscriberAuthError" class="hidden p-2.5 rounded-lg bg-rose-950/80 border border-rose-800 text-rose-300 text-[11px]"></div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+          <button type="button" onclick="document.getElementById('subscriberAuthDialog').close('cancel')"
+            class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Cancel</button>
+          <button type="submit" id="btnSubmitSubscriberAuth"
+            class="cyber-btn cyber-btn-cyan px-4 py-1.5 text-white font-bold text-xs">Unlock Live Telemetry</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
   <script>
     let pollTimer = null;
-    // Real 2-Week Raydium SOL-USDC Dataset pulled from https://docs.raydium.io/sdk-api
+    // Real 2-Week Raydium SOL-USDC v2.0 Provenance-Tagged Signed Dataset (https://docs.raydium.io/sdk-api)
     const REAL_RAYDIUM_SOL_USDC_DATA = {
-  "version": "1.0.0",
-  "generated_at": "2026-11-04T15:23:17Z",
+  "version": "2.0.0",
+  "model_version": "sentinel-risk-v2.0",
+  "provenance": "SNAPSHOT",
+  "chronological_order": "DESC",
+  "generated_at": "2026-11-04T16:55:03Z",
   "source": "https://docs.raydium.io/sdk-api (Raydium API v3)",
+  "source_hashes": {
+    "pools_info_sha256": "22f98eeb13fcb34aedaa6aa5476c030f636ab3e77d32f447ec58c86073e26010",
+    "liquidity_line_sha256": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c",
+    "position_line_sha256": "04dc92f45068f6cb279120caaaa938ffd090cf3dfbade31565394d03b76fe0c9"
+  },
   "target_pool": {
     "id": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
     "symbol": "SOL-USDC",
@@ -1302,541 +1385,1219 @@
     "program_id": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
     "mint_sol": "So11111111111111111111111111111111111111112",
     "mint_usdc": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    "spot_price": 96.9597820982358,
-    "tvl_usd": 7253643.27,
-    "volume_24h_usd": 65879818.40844335,
-    "fee_24h_usd": 26351.953004593102,
-    "apr_24h": 132.6,
-    "concentrated_ticks_count": 8948
+    "spot_price": 96.87521714845956,
+    "tvl_usd": 7278295.35,
+    "volume_24h_usd": 70700916.43,
+    "fee_24h_usd": 28280.39,
+    "fee_rate_bps": 4.0,
+    "apr_24h": 141.82,
+    "concentrated_ticks_count": 8947,
+    "active_band_2pct_ticks": 400,
+    "active_band_2pct_ratio": 0.118629,
+    "active_band_5pct_ratio": 0.260821,
+    "top_tick_share_in_band": 0.003062
   },
   "secondary_pool": {
     "id": "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2",
     "symbol": "SOL-USDC",
     "type": "Standard (AMM v4)",
     "program_id": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
-    "tvl_usd": 18484579.47,
-    "volume_24h_usd": 3171515.0575125637,
-    "overall_risk_score": 6
+    "tvl_usd": 18408699.3,
+    "volume_24h_usd": 3329208.85,
+    "overall_risk_score": 6,
+    "risk_level": "SAFE"
   },
   "two_weeks_summary": {
     "start_date": "2026-10-22T00:00:00Z",
     "end_date": "2026-11-04T00:00:00Z",
     "observation_count": 14,
-    "min_risk_score": 4,
-    "max_risk_score": 14,
-    "avg_risk_score": 5,
+    "min_risk_score": 10,
+    "max_risk_score": 20,
+    "avg_risk_score": 10.7,
+    "median_liquidity_usd": 7754134.5,
     "average_liquidity": 7610512.21
+  },
+  "dataset_witness": {
+    "witness_id": "wit_dataset_export_eb6e390225",
+    "key_id": "wit_dataset_0053a28d1206",
+    "algorithm": "Ed25519",
+    "canonicalization": "RFC8785",
+    "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+    "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+    "fingerprint_sha256": "0053a28d120619ed9a38f419b6469277a57f38763699569ad11ffde3bfd69e30",
+    "canonical_payload": {
+      "action": "sentinel_dataset_export",
+      "actor": "moltalpha_sentinel_harvester",
+      "nonce": 15,
+      "prev_witness_hash": "b65add64dd7437d53f19a13405cf42316e52b3969e1116ef08be8dc8ef641974",
+      "timestamp": "2026-11-04T16:55:03Z",
+      "environmental_anchor": {
+        "pool_id": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+        "observation_count": 14,
+        "start_date": "2026-10-22T00:00:00Z",
+        "end_date": "2026-11-04T00:00:00Z",
+        "info_response_hash": "22f98eeb13fcb34aedaa6aa5476c030f636ab3e77d32f447ec58c86073e26010",
+        "liquidity_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c",
+        "position_response_hash": "04dc92f45068f6cb279120caaaa938ffd090cf3dfbade31565394d03b76fe0c9",
+        "head_witness_hash": "b65add64dd7437d53f19a13405cf42316e52b3969e1116ef08be8dc8ef641974",
+        "generated_at": "2026-11-04T16:55:03Z"
+      }
+    },
+    "canonical_hash": "eb6e390225edd6f01f38d9f27ff6c56f07d80eb9546e6542de9daa9633b963e1",
+    "signature": "f8d5c41149a3051d61810afd2ec1a8a0c00b4a64032c4900878e6d2448acfeaa906bf4a403804aa07dbc6aa79cc9e5b048c4ea7b51d86ea3919bca5cfae55a0c",
+    "verified": true
   },
   "history_14d": [
     {
       "day_index": 14,
       "timestamp": "2026-11-04T00:00:00Z",
-      "assessed_at": "2026-11-04T00:00:00Z",
+      "observed_at": "2026-11-04T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7019065,
+      "liquidity_usd": 7019065.0,
+      "day_return_pct": -0.42,
       "drawdown_pct": 0.42,
-      "overall_risk_score": 6,
-      "risk_level": "SAFE",
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": -0.42
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 4,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_014_3ucNos",
+      "witness_id": "wit_raydium_014_b65add64",
+      "witness": {
+        "witness_id": "wit_raydium_014_b65add64",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 14,
+          "prev_witness_hash": "2c81b0d2897aed4e4d7d19118148274a15a99d1a1fde8f0709fc6dd2d967b8da",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-11-04T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7019065.0,
+            "day_return_pct": -0.42,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "b65add64dd7437d53f19a13405cf42316e52b3969e1116ef08be8dc8ef641974",
+        "signature": "0d71c3f47891ed0647a8a667fc1b3a50a1d452ae9a0dad101a849fd5029113b84b2877d9cfc8761ab62214d6e2d6c7dada030f02f49cfee6b6c61f404f5a1f07",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 13,
       "timestamp": "2026-11-03T00:00:00Z",
-      "assessed_at": "2026-11-03T00:00:00Z",
+      "observed_at": "2026-11-03T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7048423,
+      "liquidity_usd": 7048423.0,
+      "day_return_pct": -2.75,
       "drawdown_pct": 2.75,
-      "overall_risk_score": 6,
-      "risk_level": "SAFE",
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": -2.75
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 4,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_013_3ucNos",
+      "witness_id": "wit_raydium_013_2c81b0d2",
+      "witness": {
+        "witness_id": "wit_raydium_013_2c81b0d2",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 13,
+          "prev_witness_hash": "050bc131cbc4ad39301b7d4fa436f459c08f08da9ad707bcd34043c48273e693",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-11-03T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7048423.0,
+            "day_return_pct": -2.75,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "2c81b0d2897aed4e4d7d19118148274a15a99d1a1fde8f0709fc6dd2d967b8da",
+        "signature": "9b598304a5c4f3a240b4b3a71c1717d7e8fe7ea1208f67a91dd3b8410b0959f95423e0e901fb2508720354f9a161395682129c34da862952acd92aea1cab9e0b",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 12,
       "timestamp": "2026-11-02T00:00:00Z",
-      "assessed_at": "2026-11-02T00:00:00Z",
+      "observed_at": "2026-11-02T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7247457,
+      "liquidity_usd": 7247457.0,
+      "day_return_pct": -0.86,
       "drawdown_pct": 0.86,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": -0.86
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_012_3ucNos",
+      "witness_id": "wit_raydium_012_050bc131",
+      "witness": {
+        "witness_id": "wit_raydium_012_050bc131",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 12,
+          "prev_witness_hash": "caf1a63c3e164a16f333acb3f336b654858b7ed8d16877f0225b6accf07e1c72",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-11-02T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7247457.0,
+            "day_return_pct": -0.86,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "050bc131cbc4ad39301b7d4fa436f459c08f08da9ad707bcd34043c48273e693",
+        "signature": "f7f8856b3cfb6995d7eb0c2de76f83acec83407f021029ebf92a76691655294e195eee9e7c6785b66eb64d5d56fa3292b23cc7f90a6c8c4bdb9bae482aa2580a",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 11,
       "timestamp": "2026-11-01T00:00:00Z",
-      "assessed_at": "2026-11-01T00:00:00Z",
+      "observed_at": "2026-11-01T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7310380,
+      "liquidity_usd": 7310380.0,
+      "day_return_pct": -0.43,
       "drawdown_pct": 0.43,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": -0.43
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_011_3ucNos",
+      "witness_id": "wit_raydium_011_caf1a63c",
+      "witness": {
+        "witness_id": "wit_raydium_011_caf1a63c",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 11,
+          "prev_witness_hash": "3f2df78e055170c93c6da3eb72abef901bd4cf46b3595a72bed9bab1dba99fc2",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-11-01T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7310380.0,
+            "day_return_pct": -0.43,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "caf1a63c3e164a16f333acb3f336b654858b7ed8d16877f0225b6accf07e1c72",
+        "signature": "338c78451b605cae1ec8bae556fa99f7166a2b4e7bc67c53da0d4baab1bdefb38e7938d6de76edca4f1e15de61e1b50cd558e308aa84e3e70c66bb79a674f703",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 10,
       "timestamp": "2026-10-31T00:00:00Z",
-      "assessed_at": "2026-10-31T00:00:00Z",
+      "observed_at": "2026-10-31T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7342158,
-      "drawdown_pct": -0.34,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "liquidity_usd": 7342158.0,
+      "day_return_pct": 0.34,
+      "drawdown_pct": 0.0,
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": 0.34
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_010_3ucNos",
+      "witness_id": "wit_raydium_010_3f2df78e",
+      "witness": {
+        "witness_id": "wit_raydium_010_3f2df78e",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 10,
+          "prev_witness_hash": "a16c964df4a8e03afee86b54e110ebb821db9203f83f26f2194e1b73ebadd97e",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-31T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7342158.0,
+            "day_return_pct": 0.34,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "3f2df78e055170c93c6da3eb72abef901bd4cf46b3595a72bed9bab1dba99fc2",
+        "signature": "31ff9a5304c57f457f0247eeafefe9afef3df0b9c798270e7b422b26bc9e4887c431fe91a5dc41e07bd445da507621c9d7a43b8f460ad05b7bf7f3971b6cbb07",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 9,
       "timestamp": "2026-10-30T00:00:00Z",
-      "assessed_at": "2026-10-30T00:00:00Z",
+      "observed_at": "2026-10-30T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7317164,
+      "liquidity_usd": 7317164.0,
+      "day_return_pct": -8.21,
       "drawdown_pct": 8.21,
-      "overall_risk_score": 14,
-      "risk_level": "SAFE",
+      "overall_risk_score": 20,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 10,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "LOW",
+          "day_return_pct": -8.21
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_009_3ucNos",
+      "witness_id": "wit_raydium_009_a16c964d",
+      "witness": {
+        "witness_id": "wit_raydium_009_a16c964d",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 9,
+          "prev_witness_hash": "56b8a3d3cb79d3c0bfab19fda3e3b146d621e550f458571338163dfc4e146306",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-30T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7317164.0,
+            "day_return_pct": -8.21,
+            "overall_risk_score": 20,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "a16c964df4a8e03afee86b54e110ebb821db9203f83f26f2194e1b73ebadd97e",
+        "signature": "da2ba440bbd0652cd135ae99725f48d71c23602e87542a1ad6b4e3cfaffc60b65553b4f33ca44f0c0a179f324cfcff415a7404154b8845cd612738f6e314280c",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 8,
       "timestamp": "2026-10-29T00:00:00Z",
-      "assessed_at": "2026-10-29T00:00:00Z",
+      "observed_at": "2026-10-29T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7971246,
-      "drawdown_pct": -0.56,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "liquidity_usd": 7971246.0,
+      "day_return_pct": 0.56,
+      "drawdown_pct": 0.0,
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": 0.56
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_008_3ucNos",
+      "witness_id": "wit_raydium_008_56b8a3d3",
+      "witness": {
+        "witness_id": "wit_raydium_008_56b8a3d3",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 8,
+          "prev_witness_hash": "7c3efc9032ef3c342714216a82f9676857d47e069dbf18b034246cdf37ed7ba6",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-29T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7971246.0,
+            "day_return_pct": 0.56,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "56b8a3d3cb79d3c0bfab19fda3e3b146d621e550f458571338163dfc4e146306",
+        "signature": "bafd8f2db9d938e8ef9226c85350fdd6b823a2c9002dec623e0c70e5ab416cf29987f106ea853e9ea811037a714912cf9f8f12a880854ad2efe3d5a66969bb0f",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 7,
       "timestamp": "2026-10-28T00:00:00Z",
-      "assessed_at": "2026-10-28T00:00:00Z",
+      "observed_at": "2026-10-28T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7927113,
-      "drawdown_pct": -0.96,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "liquidity_usd": 7927113.0,
+      "day_return_pct": 0.96,
+      "drawdown_pct": 0.0,
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": 0.96
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_007_3ucNos",
+      "witness_id": "wit_raydium_007_7c3efc90",
+      "witness": {
+        "witness_id": "wit_raydium_007_7c3efc90",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 7,
+          "prev_witness_hash": "d0192af05403063a569cafb4dbfad111f209c8af94b560dcff1586a48c39d495",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-28T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7927113.0,
+            "day_return_pct": 0.96,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "7c3efc9032ef3c342714216a82f9676857d47e069dbf18b034246cdf37ed7ba6",
+        "signature": "8795e1f89119daece0c77a27e4e524894a334a0bbdd7af9a5b6d5f810a1e9fee18186287f5e1a281b861628568f25d06fa1ca76c0d3b3039e676a789c6341102",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 6,
       "timestamp": "2026-10-27T00:00:00Z",
-      "assessed_at": "2026-10-27T00:00:00Z",
+      "observed_at": "2026-10-27T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7851693,
-      "drawdown_pct": -1.38,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "liquidity_usd": 7851693.0,
+      "day_return_pct": 1.38,
+      "drawdown_pct": 0.0,
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": 1.38
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_006_3ucNos",
+      "witness_id": "wit_raydium_006_d0192af0",
+      "witness": {
+        "witness_id": "wit_raydium_006_d0192af0",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 6,
+          "prev_witness_hash": "532a1dc34c5d7c659174b5014679e9a6c04983da413a731b25ccaab1e1660bb0",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-27T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7851693.0,
+            "day_return_pct": 1.38,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "d0192af05403063a569cafb4dbfad111f209c8af94b560dcff1586a48c39d495",
+        "signature": "860278c2d1c874a6c239ae018d6fd81c2657141ebea427261d35daf8bc448fc9b4c43d0dea1df4a5440f12c39bb4077ee0ecc87f280515179489c03e483b3207",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 5,
       "timestamp": "2026-10-26T00:00:00Z",
-      "assessed_at": "2026-10-26T00:00:00Z",
+      "observed_at": "2026-10-26T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7745190,
+      "liquidity_usd": 7745190.0,
+      "day_return_pct": -0.23,
       "drawdown_pct": 0.23,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": -0.23
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_005_3ucNos",
+      "witness_id": "wit_raydium_005_532a1dc3",
+      "witness": {
+        "witness_id": "wit_raydium_005_532a1dc3",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 5,
+          "prev_witness_hash": "23cb931a390c49b55e92a4e108c3981b71d6b3c039b9b6842f61473178a424c8",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-26T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7745190.0,
+            "day_return_pct": -0.23,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "532a1dc34c5d7c659174b5014679e9a6c04983da413a731b25ccaab1e1660bb0",
+        "signature": "fe4a5d0c5dfb23af363103ec98d27b0c7760000afe78c8ef80b8dbd1c2136dd41c4cce974a3b88ecca22141a3263d6a823e85586f11164c9be8e51e1d0577403",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 4,
       "timestamp": "2026-10-25T00:00:00Z",
-      "assessed_at": "2026-10-25T00:00:00Z",
+      "observed_at": "2026-10-25T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7763079,
+      "liquidity_usd": 7763079.0,
+      "day_return_pct": -2.82,
       "drawdown_pct": 2.82,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": -2.82
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_004_3ucNos",
+      "witness_id": "wit_raydium_004_23cb931a",
+      "witness": {
+        "witness_id": "wit_raydium_004_23cb931a",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 4,
+          "prev_witness_hash": "f0f3756f0c6dcd96102c59889668b76d19b9272f0e5e0e99404594bbbe4d5c8a",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-25T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7763079.0,
+            "day_return_pct": -2.82,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "23cb931a390c49b55e92a4e108c3981b71d6b3c039b9b6842f61473178a424c8",
+        "signature": "c7ebe2e37aa8ee45a5aefdcd808e1ed18ccf8442b29b2c68c1c78ba1ff929c7ab361ead0eb17ce470b615d0ea16341685d0ce20b2a50275dfe3e6bbb9c74d606",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 3,
       "timestamp": "2026-10-24T00:00:00Z",
-      "assessed_at": "2026-10-24T00:00:00Z",
+      "observed_at": "2026-10-24T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7988041,
-      "drawdown_pct": -0.43,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "liquidity_usd": 7988041.0,
+      "day_return_pct": 0.43,
+      "drawdown_pct": 0.0,
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": 0.43
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_003_3ucNos",
+      "witness_id": "wit_raydium_003_f0f3756f",
+      "witness": {
+        "witness_id": "wit_raydium_003_f0f3756f",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 3,
+          "prev_witness_hash": "b6a17713f26666e209872db6b2e30d030c9e6b5e6d3bfbf2e5db21b99a1840e8",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-24T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7988041.0,
+            "day_return_pct": 0.43,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "f0f3756f0c6dcd96102c59889668b76d19b9272f0e5e0e99404594bbbe4d5c8a",
+        "signature": "c760bc9cd00d565e392f6adc1871a6aa84ee88322d8a224dbcbff619495b82e4dc0744ac60c5a226e098090965c8c42d650e3e7fb713cf13334fd8e7df72c007",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 2,
       "timestamp": "2026-10-23T00:00:00Z",
-      "assessed_at": "2026-10-23T00:00:00Z",
+      "observed_at": "2026-10-23T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 7953564,
+      "liquidity_usd": 7953564.0,
+      "day_return_pct": -1.35,
       "drawdown_pct": 1.35,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": -1.35
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_002_3ucNos",
+      "witness_id": "wit_raydium_002_b6a17713",
+      "witness": {
+        "witness_id": "wit_raydium_002_b6a17713",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 2,
+          "prev_witness_hash": "5de85e2eaf5f574104e4a11bf6e0feb2e92b4677de2d80e3a62a1ac6f98acdc2",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-23T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 7953564.0,
+            "day_return_pct": -1.35,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "b6a17713f26666e209872db6b2e30d030c9e6b5e6d3bfbf2e5db21b99a1840e8",
+        "signature": "3d4d860cecd56669eb7b2db30093ce891005d4116dc2a7e2aedcee82fcc3f748ad79838abfe7c2a61595a81732e5fdfbd58611176661251aeebb81837838800c",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     },
     {
       "day_index": 1,
       "timestamp": "2026-10-22T00:00:00Z",
-      "assessed_at": "2026-10-22T00:00:00Z",
+      "observed_at": "2026-10-22T00:00:00Z",
+      "assessed_at": "2026-11-04T16:55:03Z",
+      "provenance": "HISTORICAL",
+      "derived_risk_provenance": "DERIVED",
+      "model_version": "sentinel-risk-v2.0",
       "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
       "pool_symbol": "Raydium SOL/USDC (CLMM)",
       "chain": "solana",
-      "liquidity_usd": 8062598,
-      "drawdown_pct": 0,
-      "overall_risk_score": 4,
-      "risk_level": "SAFE",
+      "liquidity_usd": 8062598.0,
+      "day_return_pct": 0.88,
+      "drawdown_pct": 0.0,
+      "overall_risk_score": 10,
+      "risk_level": "LOW",
       "risk_breakdown": {
         "drain_vulnerability": {
           "score_weight": 0,
           "max_weight": 45,
-          "status": "SAFE"
+          "status": "SAFE",
+          "day_return_pct": 0.88
         },
         "hook_authority": {
           "score_weight": 0,
           "max_weight": 35,
-          "status": "SAFE"
+          "status": "SAFE",
+          "fee_rate_bps": 4.0
         },
         "oracle_freshness": {
-          "score_weight": 2,
+          "score_weight": 0,
           "max_weight": 10,
-          "status": "LOW"
+          "status": "UNOBSERVED_HISTORICAL"
         },
         "active_tick_density": {
-          "score_weight": 2,
+          "score_weight": 10,
           "max_weight": 10,
           "status": "LOW"
         }
       },
-      "witness_id": "wit_raydium_clmm_001_3ucNos",
+      "witness_id": "wit_raydium_001_5de85e2e",
+      "witness": {
+        "witness_id": "wit_raydium_001_5de85e2e",
+        "key_id": "wit_dataset_0053a28d1206",
+        "public_key_base58": "mbKYFEPe5a74H49CvkPyrnkZnyAfLW3SzuuXL6zFZpF",
+        "public_key_spki_hex": "302a300506032b65700321000b6c5c660aa446542e196d951e9a487719cb07a3a63dc66f845e3a6962a6abd4",
+        "canonical_payload": {
+          "action": "sentinel_historical_pool_observation",
+          "actor": "moltalpha_sentinel_harvester",
+          "nonce": 1,
+          "prev_witness_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "timestamp": "2026-11-04T16:55:03Z",
+          "environmental_anchor": {
+            "chain": "solana",
+            "model_version": "sentinel-risk-v2.0",
+            "observed_at": "2026-10-22T00:00:00Z",
+            "assessed_at": "2026-11-04T16:55:03Z",
+            "pool_address": "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+            "provenance": "HISTORICAL",
+            "liquidity_usd": 8062598.0,
+            "day_return_pct": 0.88,
+            "overall_risk_score": 10,
+            "risk_level": "LOW",
+            "source_response_hash": "75c76534e411d6ca6d10e4f9ef9a81585eea1d73c82e888a899145dadbbfcf3c"
+          }
+        },
+        "canonical_hash": "5de85e2eaf5f574104e4a11bf6e0feb2e92b4677de2d80e3a62a1ac6f98acdc2",
+        "signature": "734f3fe097d5c3ac2bb67cb912f12287a08608fdbf72d34e26482830528d11f5a10be2a8998aee166dda31f991afa034834bfdd7e4e27c372a92dea4f9df5004",
+        "verified": true
+      },
       "execution_gate": "ALLOW"
     }
   ]
 };
 
-    let currentBaseUrl = "https://api.moltalpha.dev";
+    let currentBaseUrl = "https://moltbook-alpha.duckdns.org";
     let adminToken = sessionStorage.getItem("moltbook_admin_token") || "";
+    let sentinelMemberToken = sessionStorage.getItem("sentinel_member_token") || "";
+    let sentinelApiKey = sessionStorage.getItem("sentinel_api_key") || "";
+    window.lastPreflightWitness = null;
+
+    function getSentinelAuthHeaders(extra = {}) {
+      const headers = Object.assign({ "Accept": "application/json" }, extra);
+      if (sentinelMemberToken) {
+        headers["Authorization"] = "Bearer " + sentinelMemberToken;
+      } else if (sentinelApiKey) {
+        headers["X-API-KEY"] = sentinelApiKey;
+      }
+      return headers;
+    }
+
+    function hasSentinelCredentials() {
+      return Boolean(sentinelMemberToken || sentinelApiKey);
+    }
+
+    function updateSubscriberBannerUI(modeLabel) {
+      const badge = document.getElementById("subscriberAuthStatusBadge");
+      const btnLogin = document.getElementById("btnSubscriberKey");
+      const btnClear = document.getElementById("btnClearSubscriberKey");
+      if (hasSentinelCredentials()) {
+        const kind = sentinelMemberToken ? "Member Session" : "API Key";
+        if (badge) {
+          badge.className = "px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-950/80 text-emerald-300 border border-emerald-700";
+          badge.textContent = modeLabel || `Authenticated (${kind})`;
+        }
+        if (btnLogin) btnLogin.innerHTML = "<span>🔑 Update Key</span>";
+        if (btnClear) btnClear.classList.remove("hidden");
+      } else {
+        if (badge) {
+          badge.className = "px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900 text-slate-400 border border-slate-700";
+          badge.textContent = modeLabel || "Snapshot Mode (Unauthenticated)";
+        }
+        if (btnLogin) btnLogin.innerHTML = "<span>🔑 Enter Access Key</span>";
+        if (btnClear) btnClear.classList.add("hidden");
+      }
+    }
+
+    function promptSubscriberLogin() {
+      const dlg = document.getElementById("subscriberAuthDialog");
+      const errEl = document.getElementById("subscriberAuthError");
+      if (errEl) {
+        errEl.classList.add("hidden");
+        errEl.textContent = "";
+      }
+      if (dlg && typeof dlg.showModal === "function") {
+        if (!dlg.open) dlg.showModal();
+      }
+    }
+    window.promptSubscriberLogin = promptSubscriberLogin;
+
+    async function submitSubscriberAuth() {
+      const keyInput = document.getElementById("subscriberKeyInput");
+      const emailInput = document.getElementById("subscriberEmailInput");
+      const passInput = document.getElementById("subscriberPasswordInput");
+      const errEl = document.getElementById("subscriberAuthError");
+      const btn = document.getElementById("btnSubmitSubscriberAuth");
+      const dlg = document.getElementById("subscriberAuthDialog");
+
+      const directCredential = (keyInput?.value || "").trim();
+      const email = (emailInput?.value || "").trim();
+      const password = passInput?.value || "";
+
+      if (errEl) {
+        errEl.classList.add("hidden");
+        errEl.textContent = "";
+      }
+
+      if (!directCredential && !(email && password)) {
+        if (errEl) {
+          errEl.textContent = "Provide an API key / session token or enter member email and password.";
+          errEl.classList.remove("hidden");
+        }
+        return;
+      }
+
+      if (btn) btn.disabled = true;
+      try {
+        if (directCredential) {
+          if (directCredential.startsWith("usr_sess_")) {
+            sentinelMemberToken = directCredential;
+            sentinelApiKey = "";
+            sessionStorage.setItem("sentinel_member_token", sentinelMemberToken);
+            sessionStorage.removeItem("sentinel_api_key");
+          } else {
+            sentinelApiKey = directCredential;
+            sentinelMemberToken = "";
+            sessionStorage.setItem("sentinel_api_key", sentinelApiKey);
+            sessionStorage.removeItem("sentinel_member_token");
+          }
+        } else {
+          const resp = await fetch(`${currentBaseUrl}/v1/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify({ email, password })
+          });
+          const body = await resp.json().catch(() => ({}));
+          if (!resp.ok || !body.session_token) {
+            const msg = body?.detail?.message || body?.detail || `Authentication failed (HTTP ${resp.status})`;
+            throw new Error(typeof msg === "string" ? msg : "Invalid member credentials.");
+          }
+          sentinelMemberToken = body.session_token;
+          sentinelApiKey = "";
+          sessionStorage.setItem("sentinel_member_token", sentinelMemberToken);
+          sessionStorage.removeItem("sentinel_api_key");
+        }
+
+        if (keyInput) keyInput.value = "";
+        if (passInput) passInput.value = "";
+        updateSubscriberBannerUI();
+        if (dlg && dlg.open) dlg.close("authenticated");
+        await loadSentinelOverview();
+        await runPoolPreflight();
+        await loadLiveAnomalies();
+      } catch (err) {
+        if (errEl) {
+          errEl.textContent = err.message || "Unable to authenticate against Sentinel gateway.";
+          errEl.classList.remove("hidden");
+        }
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+    window.submitSubscriberAuth = submitSubscriberAuth;
+
+    function clearSubscriberAuth() {
+      sentinelMemberToken = "";
+      sentinelApiKey = "";
+      sessionStorage.removeItem("sentinel_member_token");
+      sessionStorage.removeItem("sentinel_api_key");
+      updateSubscriberBannerUI("Snapshot Mode (Signed Out)");
+      loadSentinelOverview();
+      loadLiveAnomalies();
+    }
+    window.clearSubscriberAuth = clearSubscriberAuth;
 
     function togglePasswordVisibility(inputId) {
       const el = document.getElementById(inputId);
@@ -2401,17 +3162,51 @@
     }
 
     function escapeHtml(str) {
-      return String(str || "")
+      if (str === null || str === undefined) return "";
+      return String(str)
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function sanitizeHttpUrl(rawUrl) {
+      try {
+        const decoded = String(rawUrl || "").replace(/&amp;/g, "&").trim();
+        if (!decoded || /[\s"'<>`]/.test(decoded)) return null;
+        const parsed = new URL(decoded);
+        if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+        return parsed.href;
+      } catch (_e) {
+        return null;
+      }
     }
 
     function formatInlineMd(line) {
       return escapeHtml(line)
         .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>')
         .replace(/`([^`]+)`/g, '<code class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-cyan-300 font-mono text-[11px]">$1</code>')
-        .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank" class="text-sky-400 hover:underline">$1 ↗</a>');
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^\)\s]+)\)/g, (_m, label, rawHref) => {
+          const safeHref = sanitizeHttpUrl(rawHref);
+          if (!safeHref) return `${label} (${rawHref})`;
+          return `<a href="${escapeHtml(safeHref)}" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:underline">${label} ↗</a>`;
+        });
+    }
+
+    function setSanitizedBriefingHtml(el, escapedMarkup) {
+      if (!el) return;
+      const elements = ["div", "table", "thead", "tbody", "tr", "th", "td", "hr", "h2", "h3", "h4", "span", "p", "strong", "code", "a"];
+      const attributes = ["class", "href", "target", "rel"];
+      if (typeof Element !== "undefined" && "setHTML" in Element.prototype) {
+        try {
+          el.setHTML(escapedMarkup, { sanitizer: { elements, attributes } });
+          return;
+        } catch (_err) {
+          // Fall through to pre-escaped markup assignment if Sanitizer config signature differs
+        }
+      }
+      el.innerHTML = escapedMarkup;
     }
 
     function markdownToSimpleHtml(md) {
@@ -2489,7 +3284,7 @@
       } else {
         rawEl.classList.add("hidden");
         formattedEl.classList.remove("hidden");
-        formattedEl.innerHTML = markdownToSimpleHtml(md);
+        setSanitizedBriefingHtml(formattedEl, markdownToSimpleHtml(md));
       }
     }
 
@@ -2547,14 +3342,15 @@
         return;
       }
 
-      const maxCount = Math.max(...entries.map(([, cnt]) => cnt), 1);
+      const maxCount = Math.max(...entries.map(([, cnt]) => Number(cnt) || 0), 1);
       container.innerHTML = entries.map(([tier, count]) => {
-        const pct = Math.round((count / maxCount) * 100);
+        const safeCount = Number(count) || 0;
+        const pct = Math.min(100, Math.max(0, Math.round((safeCount / maxCount) * 100)));
         return `
           <div>
             <div class="flex justify-between text-xs mb-1">
-              <span class="font-medium text-[var(--foreground,#f8fafc)]">${tier}</span>
-              <span class="text-[var(--muted-foreground,#94a3b8)] font-mono">${count} sold</span>
+              <span class="font-medium text-[var(--foreground,#f8fafc)]">${escapeHtml(tier)}</span>
+              <span class="text-[var(--muted-foreground,#94a3b8)] font-mono">${safeCount.toLocaleString()} sold</span>
             </div>
             <div class="w-full bg-[var(--background,#0b0f17)] rounded-full h-2 overflow-hidden border border-[var(--border,#222f3e)]">
               <div class="bg-indigo-500 h-2 rounded-full transition-all duration-500" style="width: ${pct}%"></div>
@@ -2617,8 +3413,8 @@
 
       container.innerHTML = routes.map(([ep, count]) => `
         <div class="flex items-center justify-between text-xs py-1 border-b border-[var(--border,#222f3e)]/40 font-mono">
-          <span class="text-[var(--foreground,#f8fafc)] truncate max-w-[240px]">${ep}</span>
-          <span class="text-cyan-400 font-semibold">${count.toLocaleString()} hits</span>
+          <span class="text-[var(--foreground,#f8fafc)] truncate max-w-[240px]">${escapeHtml(ep)}</span>
+          <span class="text-cyan-400 font-semibold">${(Number(count) || 0).toLocaleString()} hits</span>
         </div>
       `).join("");
     }
@@ -2631,15 +3427,15 @@
       }
 
       tbody.innerHTML = salesList.map(s => {
-        const sig = s.tx_signature || "N/A";
+        const sig = String(s.tx_signature || "N/A");
         const shortSig = sig.length > 16 ? `${sig.slice(0, 8)}...${sig.slice(-6)}` : sig;
         return `
           <tr class="hover:bg-[var(--background,#0b0f17)]/50 font-mono">
-            <td class="py-2.5 text-cyan-400 font-semibold" title="${sig}">${shortSig}</td>
-            <td class="py-2.5 text-[var(--foreground,#f8fafc)]">${s.tier || "N/A"}</td>
-            <td class="py-2.5 text-indigo-400 font-bold">${s.asset || "USDC"}</td>
-            <td class="py-2.5 text-emerald-400 font-semibold">${(s.credits_granted || 0).toLocaleString()}</td>
-            <td class="py-2.5 text-right text-[var(--muted-foreground,#94a3b8)]">${formatTimeAgo(s.redeemed_at)}</td>
+            <td class="py-2.5 text-cyan-400 font-semibold" title="${escapeHtml(sig)}">${escapeHtml(shortSig)}</td>
+            <td class="py-2.5 text-[var(--foreground,#f8fafc)]">${escapeHtml(s.tier || "N/A")}</td>
+            <td class="py-2.5 text-indigo-400 font-bold">${escapeHtml(s.asset || "USDC")}</td>
+            <td class="py-2.5 text-emerald-400 font-semibold">${(Number(s.credits_granted) || 0).toLocaleString()}</td>
+            <td class="py-2.5 text-right text-[var(--muted-foreground,#94a3b8)]">${escapeHtml(formatTimeAgo(s.redeemed_at))}</td>
           </tr>
         `;
       }).join("");
@@ -2652,7 +3448,8 @@
         return;
       }
 
-      const getBadgeClass = (type) => {
+      const getBadgeClass = (rawType) => {
+        const type = String(rawType || "").toLowerCase();
         if (type.includes("success") || type.includes("connected")) return "bg-emerald-950 text-emerald-400 border-emerald-800";
         if (type.includes("failed") || type.includes("error") || type.includes("replay")) return "bg-rose-950 text-rose-400 border-rose-800";
         if (type.includes("invoice") || type.includes("key") || type.includes("admin")) return "bg-blue-950 text-blue-400 border-blue-800";
@@ -2664,11 +3461,11 @@
         <div class="p-2.5 rounded-xl bg-[var(--background,#0b0f17)] border border-[var(--border,#222f3e)] flex flex-col gap-1">
           <div class="flex items-center justify-between gap-2">
             <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${getBadgeClass(item.event_type)}">
-              ${item.event_type}
+              ${escapeHtml(item.event_type || "event")}
             </span>
-            <span class="text-[10px] text-[var(--muted-foreground,#94a3b8)]">${formatTimeAgo(item.created_at)}</span>
+            <span class="text-[10px] text-[var(--muted-foreground,#94a3b8)]">${escapeHtml(formatTimeAgo(item.created_at))}</span>
           </div>
-          <p class="text-[11px] text-[var(--foreground,#f8fafc)] break-words mt-0.5">${item.detail || "No details"}</p>
+          <p class="text-[11px] text-[var(--foreground,#f8fafc)] break-words mt-0.5">${escapeHtml(item.detail || "No details")}</p>
         </div>
       `).join("");
     }
@@ -2929,12 +3726,13 @@
           if (typeof r === "number") return "Obs";
           if (!r || typeof r !== "object") return "Obs";
           if (r.time && typeof r.time === "string") return escapeHtml(r.time);
-          if (typeof r.assessed_at === "string") {
-            const d = new Date(r.assessed_at);
+          const obsTs = r.observed_at || r.timestamp || r.assessed_at;
+          if (typeof obsTs === "string") {
+            const d = new Date(obsTs);
             if (!isNaN(d.getTime())) {
               return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
             }
-            return escapeHtml(r.assessed_at.slice(5, 10));
+            return escapeHtml(obsTs.slice(5, 10));
           }
           return "Obs";
         });
@@ -3246,33 +4044,52 @@
       return await runPoolPreflight();
     };
 
-    // Anomaly State Management & Filtering
-    let rawLiveAnomalies = [
-      {
-        anomaly_id: "anom_001",
-        severity: "SEV-1",
-        overall_risk_score: 95,
-        target_pool: "0xDangerRugPoolMock",
-        pool_address: "0xDangerRugPoolMock",
-        chain: "solana",
-        headline: "Atomic Unbonded LP Drain Risk Detected",
-        factors: ["Timelock: 0s", "Atomic removal unconstrained"],
-        assessed_at: new Date().toISOString(),
-        witness_id: "wit_sentinel_sev1_01"
-      },
-      {
-        anomaly_id: "anom_002",
-        severity: "SEV-2",
-        overall_risk_score: 52,
-        target_pool: "0x422df9aa896e883c9cdcbad309c0785b7364a1cf",
-        pool_address: "0x422df9aa896e883c9cdcbad309c0785b7364a1cf",
-        chain: "base",
-        headline: "Dynamic Fee Ceiling Alert (2500 bps)",
-        factors: ["Fee ceiling 2500 bps", "Oracle feed age 14000s"],
-        assessed_at: new Date(Date.now() - 3600000).toISOString(),
-        witness_id: "wit_sentinel_sev2_02"
+    // RFC 8785 JCS Canonical JSON serializer (matches Python cryptographic_witness._jcs_normalize)
+    function rfc8785CanonicalJson(val) {
+      if (val === null || typeof val === "boolean" || typeof val === "string") {
+        return JSON.stringify(val);
       }
-    ];
+      if (typeof val === "number") {
+        if (!Number.isFinite(val)) throw new Error("Non-finite number rejected by RFC 8785 JCS");
+        if (Object.is(val, -0)) return "0";
+        return JSON.stringify(val);
+      }
+      if (Array.isArray(val)) {
+        return "[" + val.map(v => rfc8785CanonicalJson(v === undefined ? null : v)).join(",") + "]";
+      }
+      if (typeof val === "object") {
+        const keys = Object.keys(val).filter(k => val[k] !== undefined).sort();
+        return "{" + keys.map(k => JSON.stringify(k) + ":" + rfc8785CanonicalJson(val[k])).join(",") + "}";
+      }
+      return "null";
+    }
+
+    let activeVerifierSpkiHex = PINNED_SENTINEL_SPKI_HEX;
+    let fetchedServerSpkiHex = null;
+
+    function buildOfflineSnapshotAnomalies() {
+      const snapTs = (typeof REAL_RAYDIUM_SOL_USDC_DATA !== "undefined" && REAL_RAYDIUM_SOL_USDC_DATA.generated_at)
+        ? REAL_RAYDIUM_SOL_USDC_DATA.generated_at
+        : "2026-11-04T00:00:00Z";
+      return [
+        {
+          anomaly_id: "anom_snapshot_base_hook",
+          severity: "SEV-2",
+          provenance: "SNAPSHOT",
+          overall_risk_score: 52,
+          target_pool: "0x422df9aa896e883c9cdcbad309c0785b7364a1cf",
+          pool_address: "0x422df9aa896e883c9cdcbad309c0785b7364a1cf",
+          chain: "base",
+          headline: "Dynamic Hook Fee Ceiling Alert (2500 bps) — Offline Reference Snapshot",
+          factors: ["Fee ceiling 2500 bps", "Hook can alter swap fees"],
+          assessed_at: snapTs,
+          witness_id: "snapshot_reference_unsigned"
+        }
+      ];
+    }
+
+    // Anomaly State Management & Filtering (synchronized with Section 1 active_anomalies_count)
+    let rawLiveAnomalies = buildOfflineSnapshotAnomalies();
 
     let currentAnomalyFilter = "ALL";
     window.filterAnomalies = function(filter) {
@@ -3298,100 +4115,164 @@
       renderLiveAnomalies(rawLiveAnomalies);
     };
 
+    function formatElapsedAge(isoTs) {
+      const parsed = Date.parse(isoTs || "");
+      if (Number.isNaN(parsed)) return "--";
+      const ageSec = Math.max(0, Math.floor((Date.now() - parsed) / 1000));
+      if (ageSec < 60) return `${ageSec}s ago`;
+      const mins = Math.floor(ageSec / 60);
+      if (mins < 60) return `${mins}m ago`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 48) return `${hrs}h ${mins % 60}m ago`;
+      return `${Math.floor(hrs / 24)}d ago`;
+    }
+
     // 1. Load Sentinel Overview Feed
     async function loadSentinelOverview() {
+      let fallbackReason = "OFFLINE_SNAPSHOT";
       try {
-        const resp = await fetch(`${currentBaseUrl}/v1/sentinel/feed`);
+        const resp = await fetch(`${currentBaseUrl}/v1/sentinel/feed`, {
+          headers: getSentinelAuthHeaders()
+        });
         if (resp.ok) {
           const data = await resp.json();
+          data.provenance = data.provenance || "LIVE";
           currentSentinelFeed = data;
+          updateSubscriberBannerUI("Live Feed Connected");
           renderSentinelOverview(data);
           return;
         }
-      } catch (e) {
-        // Network unavailable or offline - use Real Raydium SOL-USDC dataset
+        if (resp.status === 401 || resp.status === 403) {
+          fallbackReason = resp.status === 403 ? "TIER_UPGRADE_REQUIRED" : "AUTH_REQUIRED_SNAPSHOT";
+          updateSubscriberBannerUI(
+            resp.status === 403
+              ? "Insufficient Tier — Showing Signed Snapshot"
+              : "Auth Required — Showing Signed Snapshot"
+          );
+        }
+      } catch (_e) {
+        fallbackReason = "OFFLINE_SNAPSHOT";
       }
 
-      // Real Raydium SOL-USDC 2-Week Production Feed Fallback
-      const clmm7d = (typeof REAL_RAYDIUM_SOL_USDC_DATA !== 'undefined' && REAL_RAYDIUM_SOL_USDC_DATA.history_14d)
-        ? REAL_RAYDIUM_SOL_USDC_DATA.history_14d.slice(-7).map(h => h.overall_risk_score)
-        : [4, 4, 4, 14, 8, 6, 6];
+      const ds = (typeof REAL_RAYDIUM_SOL_USDC_DATA !== "undefined") ? REAL_RAYDIUM_SOL_USDC_DATA : {};
+      const histDesc = Array.isArray(ds.history_14d) ? ds.history_14d : [];
+      const latestClmm = histDesc[0] || {};
+      const clmmChrono7 = histDesc.slice(0, 7).reverse().map(h => Number(h.overall_risk_score) || 10);
+      const snapshotTimestamp = ds.generated_at || "2026-11-04T00:00:00Z";
+      const clmmScore = latestClmm.overall_risk_score !== undefined ? Number(latestClmm.overall_risk_score) : 10;
+      const clmmLevel = latestClmm.risk_level || getRiskClassification(clmmScore).level;
+      const ammScore = ds.secondary_pool?.overall_risk_score ?? 6;
 
-      const realFeed = {
-        version: "1.0.0",
-        service: "MoltAlpha Sentinel Risk Engine (Raydium Live Telemetry)",
-        exported_at: new Date().toISOString(),
-        active_anomalies_count: 1,
-        assessed_pools: [
-          {
-            pool_address: "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
-            pair: "Raydium SOL/USDC (CLMM)",
-            chain: "solana",
-            status: "SAFE",
-            overall_risk_score: 4,
-            tvl: (typeof REAL_RAYDIUM_SOL_USDC_DATA !== 'undefined' && REAL_RAYDIUM_SOL_USDC_DATA.target_pool) ? REAL_RAYDIUM_SOL_USDC_DATA.target_pool.tvl_usd : 7253643,
-            volume: (typeof REAL_RAYDIUM_SOL_USDC_DATA !== 'undefined' && REAL_RAYDIUM_SOL_USDC_DATA.target_pool) ? REAL_RAYDIUM_SOL_USDC_DATA.target_pool.volume_24h_usd : 65687812,
-            history: clmm7d.length >= 7 ? clmm7d : [4, 4, 4, 14, 8, 6, 6],
-            assessed_at: new Date().toISOString()
-          },
-          {
-            pool_address: "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2",
-            pair: "Raydium SOL/USDC (AMM v4)",
-            chain: "solana",
-            status: "SAFE",
-            overall_risk_score: 6,
-            tvl: (typeof REAL_RAYDIUM_SOL_USDC_DATA !== 'undefined' && REAL_RAYDIUM_SOL_USDC_DATA.secondary_pool) ? REAL_RAYDIUM_SOL_USDC_DATA.secondary_pool.tvl_usd : 18484579,
-            volume: (typeof REAL_RAYDIUM_SOL_USDC_DATA !== 'undefined' && REAL_RAYDIUM_SOL_USDC_DATA.secondary_pool) ? REAL_RAYDIUM_SOL_USDC_DATA.secondary_pool.volume_24h_usd : 3128274,
-            history: [6, 6, 5, 8, 6, 6, 6],
-            assessed_at: new Date().toISOString()
-          },
-          {
-            pool_address: "0x422df9aa896e883c9cdcbad309c0785b7364a1cf",
-            pair: "Base AMM (Hook Alert)",
-            chain: "base",
-            status: "HIGH",
-            overall_risk_score: 52,
-            history: [30, 35, 42, 45, 48, 50, 52],
-            assessed_at: new Date().toISOString()
-          }
-        ],
-        provenance_witness: {
-          witness_id: "wit_raydium_clmm_014_3ucNos",
-          canonical_hash: "2757e108a816ce483a552fb8e734992cf2df6a9158ae3182211611748a143f27"
+      const snapshotPools = [
+        {
+          pool_address: "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv",
+          pair: "Raydium SOL/USDC (CLMM)",
+          chain: "solana",
+          provenance: "SNAPSHOT",
+          status: clmmLevel,
+          overall_risk_score: clmmScore,
+          tvl: ds.target_pool?.tvl_usd ?? 7278295,
+          volume: ds.target_pool?.volume_24h_usd ?? 70700916,
+          history: clmmChrono7.length > 0 ? clmmChrono7 : [10, 10, 10, 20, 10, 10, 10],
+          assessed_at: snapshotTimestamp
+        },
+        {
+          pool_address: "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2",
+          pair: "Raydium SOL/USDC (AMM v4)",
+          chain: "solana",
+          provenance: "SNAPSHOT",
+          status: getRiskClassification(ammScore).level,
+          overall_risk_score: ammScore,
+          tvl: ds.secondary_pool?.tvl_usd ?? 18408699,
+          volume: ds.secondary_pool?.volume_24h_usd ?? 3329208,
+          history: [6, 6, 6, 8, 6, 6, ammScore],
+          assessed_at: snapshotTimestamp
+        },
+        {
+          pool_address: "0x422df9aa896e883c9cdcbad309c0785b7364a1cf",
+          pair: "Base AMM (Hook Alert)",
+          chain: "base",
+          provenance: "SNAPSHOT",
+          status: "HIGH",
+          overall_risk_score: 52,
+          history: [30, 35, 42, 45, 48, 50, 52],
+          assessed_at: snapshotTimestamp
         }
+      ];
+
+      const anomalyCount = snapshotPools.filter(p => Number(p.overall_risk_score) >= 45).length;
+      const snapshotFeed = {
+        version: ds.version || "2.0.0",
+        model_version: ds.model_version || "sentinel-risk-v2.0",
+        provenance: "SNAPSHOT",
+        fallback_reason: fallbackReason,
+        service: "MoltAlpha Sentinel Risk Engine (Signed Raydium Snapshot)",
+        exported_at: snapshotTimestamp,
+        active_anomalies_count: anomalyCount,
+        assessed_pools: snapshotPools,
+        provenance_witness: ds.dataset_witness || latestClmm.witness || null
       };
-      currentSentinelFeed = realFeed;
-      renderSentinelOverview(realFeed);
+      currentSentinelFeed = snapshotFeed;
+      renderSentinelOverview(snapshotFeed);
     }
 
     function renderSentinelOverview(feed) {
       const assessed = feed.assessed_pools || [];
-      const anomalies = feed.active_anomalies_count || 0;
-      const exportedAt = feed.exported_at ? new Date(feed.exported_at) : new Date();
+      const anomalies = feed.active_anomalies_count !== undefined
+        ? Number(feed.active_anomalies_count)
+        : assessed.filter(p => Number(p?.overall_risk_score || 0) >= 45).length;
+      const exportedIso = feed.exported_at || null;
+      const isLive = feed.provenance === "LIVE";
 
       const snapshotBadge = document.getElementById("sentinelSnapshotBadge");
       if (snapshotBadge) {
-        snapshotBadge.textContent = `Snapshot: ${feed.exported_at ? feed.exported_at.slice(0, 19).replace('T', ' ') + ' UTC' : 'Live'}`;
+        const tsFormatted = exportedIso ? exportedIso.slice(0, 19).replace("T", " ") + " UTC" : "Unavailable";
+        if (isLive) {
+          snapshotBadge.textContent = `Live Feed: ${tsFormatted}`;
+          snapshotBadge.className = "text-xs text-emerald-400 font-mono";
+        } else if (feed.fallback_reason === "AUTH_REQUIRED_SNAPSHOT" || feed.fallback_reason === "TIER_UPGRADE_REQUIRED") {
+          snapshotBadge.textContent = `Snapshot (Subscriber Auth Required): ${tsFormatted}`;
+          snapshotBadge.className = "text-xs text-amber-400 font-mono";
+        } else {
+          snapshotBadge.textContent = `Snapshot (Offline Reference): ${tsFormatted}`;
+          snapshotBadge.className = "text-xs text-slate-400 font-mono";
+        }
       }
+
       const kpiPools = document.getElementById("kpiAssessedPools");
       if (kpiPools) kpiPools.textContent = assessed.length;
 
       const kpiAnom = document.getElementById("kpiActiveAnomalies");
       if (kpiAnom) kpiAnom.textContent = anomalies;
 
-      const ageSec = Math.max(0, Math.floor((Date.now() - exportedAt.getTime()) / 1000));
-      const ageStr = ageSec < 60 ? `${ageSec}s ago` : `${Math.floor(ageSec / 60)}m ago`;
       const kpiAge = document.getElementById("kpiSnapshotAge");
-      if (kpiAge) kpiAge.textContent = ageStr;
+      if (kpiAge) kpiAge.textContent = exportedIso ? formatElapsedAge(exportedIso) : "--";
 
       const kpiTime = document.getElementById("kpiSnapshotTimestamp");
-      if (kpiTime) kpiTime.textContent = `Exported: ${exportedAt.toLocaleTimeString()}`;
+      if (kpiTime) {
+        kpiTime.textContent = exportedIso
+          ? `${isLive ? "Live" : "Dataset"}: ${exportedIso.slice(0, 19).replace("T", " ")} UTC`
+          : "Timestamp: --";
+      }
 
       const wit = feed.provenance_witness || {};
+      const kpiWitStatus = document.getElementById("kpiWitnessStatus");
       const kpiWit = document.getElementById("kpiWitnessId");
-      if (kpiWit) kpiWit.textContent = wit.witness_id || "wit_sentinel_active";
+      const hasSignedWitness = Boolean(wit && wit.witness_id && wit.signature);
+      if (kpiWitStatus) {
+        if (hasSignedWitness && isLive) {
+          kpiWitStatus.textContent = "VERIFIED";
+          kpiWitStatus.className = "text-base font-extrabold text-emerald-400 font-mono";
+        } else if (hasSignedWitness) {
+          kpiWitStatus.textContent = "SNAPSHOT SIGNED";
+          kpiWitStatus.className = "text-base font-extrabold text-cyan-400 font-mono";
+        } else {
+          kpiWitStatus.textContent = "UNVERIFIED";
+          kpiWitStatus.className = "text-base font-extrabold text-amber-400 font-mono";
+        }
+      }
+      if (kpiWit) kpiWit.textContent = wit.witness_id || "unverified_snapshot";
 
-      // 1. Calculate risk distribution counts
       let safeCount = 0, lowCount = 0, medCount = 0, highCount = 0, critCount = 0;
       assessed.forEach(p => {
         const s = typeof p === "number" ? p : (p && p.overall_risk_score !== undefined ? Number(p.overall_risk_score) : 0);
@@ -3403,19 +4284,15 @@
       });
 
       const dist = { SAFE: safeCount, LOW: lowCount, MEDIUM: medCount, HIGH: highCount, CRITICAL: critCount };
-
-      // 2. Render Risk Distribution Doughnut Chart via modular visualizer (R2 Contract)
       if (typeof window.buildRiskDistributionChart === "function") {
         window.buildRiskDistributionChart("riskDistributionCanvas", dist);
       }
 
-      // Update distribution label
       const riskDistLabel = document.getElementById("riskDistLabel");
       if (riskDistLabel) {
         riskDistLabel.textContent = `${safeCount} Safe, ${lowCount} Low, ${medCount} Med, ${highCount} High, ${critCount} Crit`;
       }
 
-      // 3. Populate Monitored Liquidity Pools Table with Mini Sparklines (R2 & R3 Contract)
       const tableBody = document.getElementById("monitoredPoolsTableBody");
       if (tableBody) {
         if (assessed.length === 0) {
@@ -3437,11 +4314,12 @@
               ? getRiskClassification(score)
               : { level: p.status || "SAFE", badgeClass: "risk-badge risk-badge-safe" };
 
-            // Friendly pool label
             let poolLabel = p.pair || p.name || "";
             if (!poolLabel) {
-              if (rawAddr === "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv" || rawAddr === "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE") {
+              if (rawAddr === "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv") {
                 poolLabel = "Raydium SOL/USDC (CLMM)";
+              } else if (rawAddr === "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE") {
+                poolLabel = "Orca SOL/USDC (Whirlpool)";
               } else if (rawAddr === "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2") {
                 poolLabel = "Raydium SOL/USDC (AMM v4)";
               } else if (rawAddr === "0x422df9aa896e883c9cdcbad309c0785b7364a1cf") {
@@ -3456,11 +4334,7 @@
 
             const truncatedAddr = rawAddr ? `${rawAddr.slice(0, 6)}...${rawAddr.slice(-4)}` : "--";
             const safeTruncated = escapeHtml(truncatedAddr);
-
-            // Sparkline points (use pool.history or fallback to [score])
-            const history = (Array.isArray(p.history) && p.history.length > 0)
-              ? p.history
-              : [score];
+            const history = (Array.isArray(p.history) && p.history.length > 0) ? p.history : [score];
             const sparklineHtml = typeof window.renderSparkline === "function"
               ? window.renderSparkline(history, { width: 96, height: 24 })
               : "";
@@ -3490,7 +4364,7 @@
                   ${sparklineHtml}
                 </td>
                 <td class="py-3 pl-2 text-right">
-                  <button onclick="setPreflightTarget(decodeURIComponent('${safeJsAddr}'), decodeURIComponent('${safeJsChain}'))" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 hover:text-cyan-300 border border-slate-700 text-[10px] font-mono transition">
+                  <button type="button" onclick="setPreflightTarget(decodeURIComponent('${safeJsAddr}'), decodeURIComponent('${safeJsChain}'))" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 hover:text-cyan-300 border border-slate-700 text-[10px] font-mono transition">
                     Preflight →
                   </button>
                 </td>
@@ -3508,126 +4382,216 @@
       const spinner = document.getElementById("preflightSpinner");
       const btn = document.getElementById("btnRunPreflight");
 
-      const poolAddress = poolInput.value.trim();
-      const chain = chainSelect.value;
+      const poolAddress = poolInput ? poolInput.value.trim() : "";
+      const chain = chainSelect ? chainSelect.value : "solana";
       if (!poolAddress) {
         alert("Please enter a valid liquidity pool contract address.");
         return;
       }
 
-      spinner.textContent = "⏳";
-      btn.disabled = true;
+      const lowerPool = poolAddress.toLowerCase();
+      const isSimPreset = lowerPool.includes("danger") || lowerPool.includes("rug") || lowerPool.includes("mock");
+      const simParam = isSimPreset ? "&simulation_mode=true" : "";
+
+      if (spinner) spinner.textContent = "⏳";
+      if (btn) btn.disabled = true;
 
       try {
-        const resp = await fetch(`${currentBaseUrl}/v1/sentinel/pools/${encodeURIComponent(poolAddress)}/risk?chain=${chain}`);
+        const resp = await fetch(
+          `${currentBaseUrl}/v1/sentinel/pools/${encodeURIComponent(poolAddress)}/risk?chain=${encodeURIComponent(chain)}${simParam}`,
+          { headers: getSentinelAuthHeaders() }
+        );
         let data;
         if (resp.ok) {
           data = await resp.json();
         } else {
-          // Local fallback simulation if endpoint offline
           data = simulateLocalPoolAssessment(poolAddress, chain);
         }
         renderPreflightResult(data);
         loadPoolHistory(poolAddress);
-      } catch (err) {
-        console.warn("Preflight network error, falling back to local simulation:", err);
+      } catch (_err) {
         const data = simulateLocalPoolAssessment(poolAddress, chain);
         renderPreflightResult(data);
         loadPoolHistory(poolAddress);
       } finally {
-        spinner.textContent = "⚡";
-        btn.disabled = false;
+        if (spinner) spinner.textContent = "⚡";
+        if (btn) btn.disabled = false;
       }
     }
 
     function setPreflightTarget(addr, chain) {
-      document.getElementById("preflightPoolAddress").value = addr;
-      document.getElementById("preflightChain").value = chain;
+      const input = document.getElementById("preflightPoolAddress");
+      const select = document.getElementById("preflightChain");
+      if (input) input.value = addr;
+      if (select) select.value = chain;
       runPoolPreflight();
     }
 
     function simulateLocalPoolAssessment(poolAddress, chain) {
-      const isDanger = poolAddress.toLowerCase().includes("danger") || poolAddress.toLowerCase().includes("rug");
-      const isHookAlert = poolAddress.toLowerCase().includes("0x422d");
-      const isRaydiumCLMM = poolAddress.toLowerCase().includes("3ucnos") || poolAddress === "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE";
-      const isRaydiumAMM = poolAddress.toLowerCase().includes("58oqch");
+      const ds = (typeof REAL_RAYDIUM_SOL_USDC_DATA !== "undefined") ? REAL_RAYDIUM_SOL_USDC_DATA : {};
+      const snapTs = ds.generated_at || "2026-11-04T00:00:00Z";
+      const isRaydiumCLMM = poolAddress === "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv";
 
-      const score = isDanger ? 95 : (isHookAlert ? 52 : (isRaydiumAMM ? 6 : 4));
+      if (isRaydiumCLMM && Array.isArray(ds.history_14d) && ds.history_14d.length > 0) {
+        const latest = ds.history_14d[0];
+        const tp = ds.target_pool || {};
+        const activeRatio = tp.active_band_2pct_ratio ?? 0.12;
+        const score = Number(latest.overall_risk_score ?? 10);
+        const cls = getRiskClassification(score);
+        return {
+          pool_address: poolAddress,
+          chain: "solana",
+          provenance: "SNAPSHOT",
+          status: cls.level,
+          overall_risk_score: score,
+          assessed_at: latest.assessed_at || snapTs,
+          observed_at: latest.observed_at || snapTs,
+          data_completeness: 85,
+          confidence_score: 88,
+          data_quality: {
+            data_completeness: 85,
+            confidence_score: 88,
+            freshness_seconds: Math.max(0, Math.floor((Date.now() - Date.parse(snapTs)) / 1000))
+          },
+          spot_price_usd: tp.spot_price ?? null,
+          tvl_usd: tp.tvl_usd ?? latest.liquidity_usd,
+          volume_24h_usd: tp.volume_24h_usd ?? null,
+          concentrated_ticks: tp.concentrated_ticks_count ?? 0,
+          risk_breakdown: {
+            drain_vulnerability: {
+              level: latest.risk_breakdown?.drain_vulnerability?.status || "SAFE",
+              score_weight: latest.risk_breakdown?.drain_vulnerability?.score_weight ?? 0,
+              atomic_removal_unconstrained: false,
+              lp_timelock_seconds: 2592000
+            },
+            hook_authority: {
+              level: "SAFE",
+              score_weight: 0,
+              can_alter_fees: false,
+              fee_ceiling_bps: tp.fee_rate_bps ?? 4
+            },
+            oracle_freshness: {
+              level: "UNOBSERVED_HISTORICAL",
+              score_weight: 0,
+              data_age_seconds: null,
+              recent_feed_pauses_72h: 0
+            },
+            active_tick_density: {
+              level: latest.risk_breakdown?.active_tick_density?.status || "LOW",
+              score_weight: latest.risk_breakdown?.active_tick_density?.score_weight ?? 10,
+              active_tick_liquidity_ratio: activeRatio,
+              first_passage_barrier_risk_bps: activeRatio < 0.15 ? 42.0 : 12.0
+            }
+          },
+          witness: latest.witness || ds.dataset_witness || {
+            witness_id: latest.witness_id || "unverified_snapshot",
+            verified: false
+          }
+        };
+      }
+
+      const lower = poolAddress.toLowerCase();
+      const isDanger = lower.includes("danger") || lower.includes("rug");
+      const isHookAlert = lower.includes("0x422d");
+      const isRaydiumAMM = poolAddress === "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2";
+
+      const score = isDanger ? 95 : (isHookAlert ? 52 : (isRaydiumAMM ? 6 : 12));
       const cls = getRiskClassification(score);
-
-      const targetPool = (typeof REAL_RAYDIUM_SOL_USDC_DATA !== 'undefined' && REAL_RAYDIUM_SOL_USDC_DATA.target_pool) ? REAL_RAYDIUM_SOL_USDC_DATA.target_pool : { spot_price: 96.96, tvl_usd: 7253643, volume_24h_usd: 65687812, concentrated_ticks_count: 8948 };
 
       return {
         pool_address: poolAddress,
         chain: chain,
+        provenance: isDanger ? "SIMULATED" : "OFFLINE_SIMULATION",
         status: cls.level,
         overall_risk_score: score,
-        assessed_at: new Date().toISOString(),
-        data_completeness: 100,
-        confidence_score: 95,
-        spot_price_usd: isRaydiumCLMM ? targetPool.spot_price : (isRaydiumAMM ? 96.96 : null),
-        tvl_usd: isRaydiumCLMM ? targetPool.tvl_usd : (isRaydiumAMM ? 18484579 : 1500000),
-        volume_24h_usd: isRaydiumCLMM ? targetPool.volume_24h_usd : (isRaydiumAMM ? 3128274 : 250000),
-        concentrated_ticks: isRaydiumCLMM ? targetPool.concentrated_ticks_count : 0,
+        assessed_at: snapTs,
+        data_completeness: isDanger ? 100 : 50,
+        confidence_score: isDanger ? 95 : 55,
+        data_quality: {
+          data_completeness: isDanger ? 100 : 50,
+          confidence_score: isDanger ? 95 : 55,
+          freshness_seconds: null
+        },
         risk_breakdown: {
-          drain_vulnerability: { level: isDanger ? "CRITICAL" : "SAFE", score_weight: isDanger ? 45 : 0, atomic_removal_unconstrained: isDanger, lp_timelock_seconds: isDanger ? 0 : 2592000 },
-          hook_authority: { level: isDanger ? "HIGH" : (isHookAlert ? "HIGH" : "SAFE"), score_weight: isDanger ? 35 : (isHookAlert ? 35 : 0), can_alter_fees: isDanger || isHookAlert, fee_ceiling_bps: isDanger ? 5000 : (isHookAlert ? 2500 : 25), selective_revert: isDanger },
-          oracle_freshness: { level: isDanger ? "MEDIUM" : "SAFE", score_weight: isDanger ? 8 : (isHookAlert ? 7 : 2), data_age_seconds: 2, recent_feed_pauses_72h: 0 },
-          active_tick_density: { level: isDanger ? "HIGH" : "SAFE", score_weight: isDanger ? 7 : (isHookAlert ? 10 : 2), active_tick_liquidity_ratio: isDanger ? 0.08 : 0.82, first_passage_barrier_risk_bps: isDanger ? 65.0 : 10.0 }
+          drain_vulnerability: {
+            level: isDanger ? "CRITICAL" : "SAFE",
+            score_weight: isDanger ? 45 : 0,
+            atomic_removal_unconstrained: isDanger,
+            lp_timelock_seconds: isDanger ? 0 : 2592000
+          },
+          hook_authority: {
+            level: isDanger ? "HIGH" : (isHookAlert ? "HIGH" : "SAFE"),
+            score_weight: isDanger ? 35 : (isHookAlert ? 35 : 0),
+            can_alter_fees: isDanger || isHookAlert,
+            fee_ceiling_bps: isDanger ? 5000 : (isHookAlert ? 2500 : 25),
+            selective_revert: isDanger
+          },
+          oracle_freshness: {
+            level: isDanger ? "MEDIUM" : "UNVERIFIED",
+            score_weight: isDanger ? 8 : (isHookAlert ? 7 : 6),
+            data_age_seconds: null,
+            recent_feed_pauses_72h: 0
+          },
+          active_tick_density: {
+            level: isDanger ? "HIGH" : "LOW",
+            score_weight: isDanger ? 7 : (isHookAlert ? 10 : 6),
+            active_tick_liquidity_ratio: isDanger ? 0.08 : 0.45,
+            first_passage_barrier_risk_bps: isDanger ? 65.0 : 18.0
+          }
         },
         witness: {
-          witness_id: isRaydiumCLMM ? "wit_raydium_clmm_014_3ucNos" : ("wit_sentinel_" + Math.random().toString(16).slice(2, 10)),
-          canonical_hash: "2757e108a816ce483a552fb8e734992cf2df6a9158ae3182211611748a143f27",
-          verified: true
+          witness_id: "unsigned_offline_fallback",
+          canonical_hash: null,
+          signature: null,
+          verified: false
         }
       };
     }
 
     function renderPreflightResult(data) {
       if (!data) return;
-      const score = data.overall_risk_score !== undefined ? data.overall_risk_score : (data.score || 0);
+      const score = data.overall_risk_score !== undefined ? Number(data.overall_risk_score) : (Number(data.score) || 0);
       const cls = getRiskClassification(score);
+      const prov = String(data.provenance || "LIVE").toUpperCase();
 
-      // Reactive score badge
       const badge = document.getElementById("preflightScoreBadge");
       if (badge) {
         badge.className = `px-3 py-1.5 rounded-xl text-sm font-extrabold shrink-0 self-start sm:self-auto ${cls.badgeClass}`;
         badge.textContent = `${cls.level} (${score} / 100)`;
       }
 
-      // Execution gate decision
       const gate = document.getElementById("preflightGateDecision");
       if (gate) {
         gate.className = `font-bold text-sm block break-words ${cls.gateClass}`;
         gate.textContent = cls.gate;
       }
 
-      // Target pool echo
       const echo = document.getElementById("preflightPoolEcho");
       if (echo) {
         echo.textContent = `Pool: ${data.pool_address || 'Unknown'} (${(data.chain || 'solana').toUpperCase()})`;
       }
 
-      // Telemetry metadata
       const dq = data.data_quality || {};
-      const completeness = dq.data_completeness !== undefined ? dq.data_completeness : (data.data_completeness !== undefined ? data.data_completeness : 100);
-      const confidence = dq.confidence_score !== undefined ? dq.confidence_score : (data.confidence_score !== undefined ? data.confidence_score : 85);
-      const freshness = dq.freshness_seconds !== undefined ? dq.freshness_seconds : 4;
+      const completeness = dq.data_completeness ?? dq.completeness_pct ?? data.data_completeness ?? 100;
+      const confidence = dq.confidence_score ?? data.confidence_score ?? 85;
+      const freshness = dq.freshness_seconds;
 
       const compEl = document.getElementById("preflightCompleteness");
       if (compEl) compEl.textContent = `${completeness}%`;
       const confEl = document.getElementById("preflightConfidence");
       if (confEl) confEl.textContent = `${confidence}%`;
       const freshEl = document.getElementById("preflightFreshness");
-      if (freshEl) freshEl.textContent = `${freshness}s age`;
+      if (freshEl) {
+        freshEl.textContent = (freshness !== null && freshness !== undefined)
+          ? (freshness < 120 ? `${freshness}s age` : `${Math.round(freshness / 60)}m age`)
+          : prov;
+      }
 
-      // 1. Render Modular Circular SVG Risk Gauge into #preflightGaugeContainer
       const gaugeContainer = document.getElementById("preflightGaugeContainer");
       if (gaugeContainer && typeof window.renderRiskGauge === "function") {
         gaugeContainer.innerHTML = window.renderRiskGauge(score, cls.level);
       }
 
-      // Update Execution Gate Summary
       const gateSummary = document.getElementById("preflightGateSummary");
       if (gateSummary) {
         const allowText = (score >= 45) ? "BLOCK" : (score >= 25 ? "REVIEW" : "ALLOW");
@@ -3635,7 +4599,6 @@
         gateSummary.className = (score >= 45) ? "text-rose-400 font-bold" : (score >= 25 ? "text-amber-400 font-bold" : "text-emerald-400 font-bold");
       }
 
-      // 2. Render 4 Horizontal Factor Breakdown Meters into #preflightFactorMeters
       const rb = data.risk_breakdown || {};
       const drain = rb.drain_vulnerability || {};
       const hook = rb.hook_authority || {};
@@ -3652,13 +4615,16 @@
         const hookAlter = hook.can_alter_fees ? "YES" : "No";
         const hookEvidence = `Fee Ceil: ${hookCeiling} bps • Alter: ${hookAlter}`;
 
-        const oracleAge = oracle.data_age_seconds !== undefined ? oracle.data_age_seconds : 0;
+        const oracleAge = (oracle.data_age_seconds !== null && oracle.data_age_seconds !== undefined)
+          ? `${oracle.data_age_seconds}s`
+          : (oracle.level || "Unobserved");
         const oraclePauses = oracle.recent_feed_pauses_72h !== undefined ? oracle.recent_feed_pauses_72h : 0;
-        const oracleEvidence = `Age: ${oracleAge}s • Pauses: ${oraclePauses}`;
+        const oracleEvidence = `Age: ${oracleAge} • Pauses: ${oraclePauses}`;
 
-        const tickRatio = Math.round((tick.active_tick_liquidity_ratio || 0) * 100);
+        const rawTickRatio = tick.active_tick_liquidity_ratio ?? tick.active_band_2pct_ratio ?? 0;
+        const tickRatio = Math.round(Number(rawTickRatio) * 100);
         const tickBarrier = tick.first_passage_barrier_risk_bps !== undefined ? tick.first_passage_barrier_risk_bps : 0;
-        const tickEvidence = `Active Ratio: ${tickRatio}% • Barrier: ${tickBarrier} bps`;
+        const tickEvidence = `Active ±2%: ${tickRatio}% • Barrier: ${tickBarrier} bps`;
 
         metersEl.innerHTML = [
           window.renderRiskFactor("Drain Vulnerability", drain.score_weight || 0, drainEvidence, 45),
@@ -3668,40 +4634,68 @@
         ].join("");
       }
 
-      // 3. Update Witness ID
       const wit = data.witness || {};
+      window.lastPreflightWitness = (wit && wit.signature && wit.canonical_payload) ? wit : null;
       const witEl = document.getElementById("pfWitnessId");
-      if (witEl) witEl.textContent = wit.witness_id || "wit_sentinel_verified";
+      if (witEl) witEl.textContent = wit.witness_id || "unsigned_offline_fallback";
+
+      const witBadge = document.getElementById("pfWitnessBadge");
+      if (witBadge) {
+        if (wit && wit.verified === true && wit.signature) {
+          witBadge.textContent = "✓ Signed";
+          witBadge.className = "text-emerald-400 font-semibold";
+        } else {
+          witBadge.textContent = "⚠ Unsigned Fallback";
+          witBadge.className = "text-amber-400 font-semibold";
+        }
+      }
+
+      const provBadge = document.getElementById("pfProvenanceBadge");
+      if (provBadge) {
+        provBadge.textContent = prov;
+        provBadge.className = prov === "LIVE"
+          ? "px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-[10px] text-emerald-300 font-mono"
+          : (prov === "SNAPSHOT"
+              ? "px-1.5 py-0.5 rounded bg-cyan-950 border border-cyan-800 text-[10px] text-cyan-300 font-mono"
+              : "px-1.5 py-0.5 rounded bg-amber-950 border border-amber-800 text-[10px] text-amber-300 font-mono");
+      }
     }
 
-    // 3. Pool History Timeline (Real 2-Week Raydium SOL-USDC Integration)
-    let currentHistoryWindow = '30d';
+    // 3. Pool History Timeline (Real 2-Week Raydium SOL-USDC Integration; never misattributed to other pools)
+    let currentHistoryWindow = "30d";
 
     async function loadPoolHistory(poolAddress, timeWindow = currentHistoryWindow) {
       currentHistoryWindow = timeWindow;
-      try {
-        const resp = await fetch(`${currentBaseUrl}/v1/sentinel/pools/${encodeURIComponent(poolAddress)}/history?limit=30`);
-        if (resp.ok) {
-          const data = await resp.json();
-          if (Array.isArray(data.history) && data.history.length > 0) {
-            renderHistoryTable(data.history, poolAddress);
-            return;
+      const winParam = ["24h", "7d", "30d", "90d"].includes(timeWindow) ? timeWindow : "30d";
+      if (poolAddress) {
+        try {
+          const resp = await fetch(
+            `${currentBaseUrl}/v1/sentinel/pools/${encodeURIComponent(poolAddress)}/history?limit=30&window=${encodeURIComponent(winParam)}`,
+            { headers: getSentinelAuthHeaders() }
+          );
+          if (resp.ok) {
+            const data = await resp.json();
+            if (Array.isArray(data.history) && data.history.length > 0) {
+              renderHistoryTable(data.history, poolAddress);
+              return;
+            }
           }
+        } catch (_err) {
+          // Proceed to verified dataset check
         }
-      } catch (err) {
-        // Network unavailable - proceed to real dataset fallback
       }
 
-      // Check if querying Raydium SOL-USDC or default
-      const isRaydium = !poolAddress || poolAddress.toLowerCase().includes("3ucnos") || poolAddress === "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE";
-      if (isRaydium && typeof REAL_RAYDIUM_SOL_USDC_DATA !== 'undefined' && REAL_RAYDIUM_SOL_USDC_DATA.history_14d) {
-        const fullHistory = REAL_RAYDIUM_SOL_USDC_DATA.history_14d;
-        let sliced = fullHistory;
-        if (timeWindow === '24h') {
-          sliced = fullHistory.slice(0, 2);
-        } else if (timeWindow === '7d') {
-          sliced = fullHistory.slice(0, 7);
-        }
+      // Only attribute Raydium CLMM 14-day dataset to 3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv
+      const isRaydiumClmm = !poolAddress || poolAddress === "3ucNos4NbumPLZNWztqGHNFFgkHeRMBQAVemeeomsUxv";
+      if (isRaydiumClmm && typeof REAL_RAYDIUM_SOL_USDC_DATA !== "undefined" && Array.isArray(REAL_RAYDIUM_SOL_USDC_DATA.history_14d)) {
+        const sortedDesc = [...REAL_RAYDIUM_SOL_USDC_DATA.history_14d].sort((a, b) => {
+          const ta = Date.parse(a?.observed_at || a?.timestamp || a?.assessed_at || 0) || 0;
+          const tb = Date.parse(b?.observed_at || b?.timestamp || b?.assessed_at || 0) || 0;
+          return tb - ta;
+        });
+        let sliced = sortedDesc;
+        if (timeWindow === "24h") sliced = sortedDesc.slice(0, 2);
+        else if (timeWindow === "7d") sliced = sortedDesc.slice(0, 7);
         renderHistoryTable(sliced, poolAddress || REAL_RAYDIUM_SOL_USDC_DATA.target_pool.id);
       } else {
         renderHistoryTable([], poolAddress);
@@ -3709,14 +4703,15 @@
     }
 
     function renderHistoryTable(records, poolAddress) {
-      // 1. Invoke Chart.js 4.x Historical Risk Trend Line Chart on #preflightHistoryCanvas
+      const list = Array.isArray(records) ? [...records] : [];
+      const tsOf = (r) => Date.parse(r?.observed_at || r?.timestamp || r?.assessed_at || 0) || 0;
+
+      // Chronological ascending (oldest -> newest) for Chart.js line series
+      const chartData = list.slice().sort((a, b) => tsOf(a) - tsOf(b));
       if (typeof window.buildRiskHistoryChart === "function") {
-        // Chronological order (oldest to newest) for chart timeline
-        const chartData = (Array.isArray(records) && records.length > 0) ? records.slice().reverse() : records;
         window.buildRiskHistoryChart("preflightHistoryCanvas", chartData);
       }
 
-      // 2. Render Historical Audit Trail Table
       const tbody = document.getElementById("historyTbody");
       if (!tbody) return;
 
@@ -3724,29 +4719,33 @@
       const shortAddr = safeAddr.length > 14 ? `${safeAddr.slice(0, 8)}...${safeAddr.slice(-6)}` : (safeAddr || "N/A");
       const safeShortAddr = escapeHtml(shortAddr);
 
-      if (!records || records.length === 0) {
+      if (list.length === 0) {
         tbody.innerHTML = `
           <tr>
             <td colspan="5" class="py-4 text-center text-slate-400">
-              Initial observation recorded for <code class="text-cyan-400">${safeShortAddr}</code>.
-              Subsequent scheduled cycles will append additive time-series observations to this audit trail.
+              No historical time-series observations available in local snapshot for <code class="text-cyan-400">${safeShortAddr}</code>.
+              Authenticate with a Sentinel subscriber key to query live SQLite audit history.
             </td>
           </tr>
         `;
         return;
       }
 
-      tbody.innerHTML = records.map(r => {
+      // Descending (newest -> oldest) for audit table
+      const tableRecords = list.slice().sort((a, b) => tsOf(b) - tsOf(a));
+      tbody.innerHTML = tableRecords.map(r => {
         const score = (r && r.overall_risk_score !== undefined) ? r.overall_risk_score : ((r && r.score !== undefined) ? r.score : 0);
         const cls = getRiskClassification(score);
-        const rawTime = (r && r.assessed_at) ? String(r.assessed_at).replace('T', ' ').slice(0, 19) + ' UTC' : ((r && r.time) || 'Just now');
-        const timeStr = escapeHtml(rawTime);
+        const primaryTs = r?.observed_at || r?.timestamp || r?.assessed_at;
+        const rawTime = primaryTs ? String(primaryTs).replace("T", " ").slice(0, 19) + " UTC" : ((r && r.time) || "Unknown");
+        const prov = r?.provenance ? ` [${escapeHtml(r.provenance)}]` : "";
+        const timeStr = escapeHtml(rawTime) + prov;
         const rb = (r && r.risk_breakdown) || {};
-        const d = rb.drain_vulnerability?.score_weight || 0;
-        const h = rb.hook_authority?.score_weight || 0;
-        const o = rb.oracle_freshness?.score_weight || 0;
-        const t = rb.active_tick_density?.score_weight || 0;
-        const rawWitId = (r && r.witness_id) || 'wit_...';
+        const d = rb.drain_vulnerability?.score_weight ?? 0;
+        const h = rb.hook_authority?.score_weight ?? 0;
+        const o = rb.oracle_freshness?.score_weight ?? 0;
+        const t = rb.active_tick_density?.score_weight ?? 0;
+        const rawWitId = (r && r.witness_id) || "unverified";
         const witId = escapeHtml(rawWitId);
         return `
           <tr class="hover:bg-slate-900/40 transition">
@@ -3757,19 +4756,17 @@
             <td class="py-2.5 font-mono text-right text-slate-400 truncate max-w-xs">${witId}</td>
           </tr>
         `;
-      }).join('');
+      }).join("");
     }
 
     function setHistoryWindow(win) {
       currentHistoryWindow = win;
-      ['24h', '7d', '30d', '90d'].forEach(w => {
-        const btn = document.getElementById('histBtn' + w);
+      ["24h", "7d", "30d", "90d"].forEach(w => {
+        const btn = document.getElementById("histBtn" + w);
         if (btn) {
-          if (w === win) {
-            btn.className = "px-2.5 py-1 rounded-lg bg-slate-800 text-white font-medium";
-          } else {
-            btn.className = "px-2.5 py-1 rounded-lg text-slate-400 hover:text-white";
-          }
+          btn.className = (w === win)
+            ? "px-2.5 py-1 rounded-lg bg-slate-800 text-white font-medium"
+            : "px-2.5 py-1 rounded-lg text-slate-400 hover:text-white";
         }
       });
       const poolInput = document.getElementById("preflightPoolAddress");
@@ -3781,54 +4778,59 @@
     // 4. Agent Credit Bureau Lookup
     async function lookupAgentCredit() {
       const input = document.getElementById("agentLookupInput");
-      const agentId = input.value.trim();
+      const agentId = input ? input.value.trim() : "";
       if (!agentId) return;
 
       try {
-        const resp = await fetch(`${currentBaseUrl}/v1/sentinel/agents/${encodeURIComponent(agentId)}`);
-        let data;
-        if (resp.ok) {
-          data = await resp.json();
-        } else {
-          data = simulateAgentDossier(agentId);
-        }
+        const resp = await fetch(
+          `${currentBaseUrl}/v1/sentinel/agents/${encodeURIComponent(agentId)}`,
+          { headers: getSentinelAuthHeaders() }
+        );
+        const data = resp.ok ? await resp.json() : simulateAgentDossier(agentId);
         renderAgentDossier(data);
-      } catch (err) {
+      } catch (_err) {
         renderAgentDossier(simulateAgentDossier(agentId));
       }
     }
 
     function setAgentTarget(agent) {
-      document.getElementById("agentLookupInput").value = agent;
+      const input = document.getElementById("agentLookupInput");
+      if (input) input.value = agent;
       lookupAgentCredit();
     }
 
     function simulateAgentDossier(agentId) {
-      const isDead = agentId.toLowerCase().includes("frantic");
-      const isSeller = agentId.toLowerCase().includes("osai");
-      const isHermes = agentId.toLowerCase().includes("jeeves");
-      const isAndrew = agentId.toLowerCase().includes("andrew");
+      const norm = agentId.trim().toLowerCase();
+      let tier = "UNVERIFIED", deliv = 0, unful = 0, flags = 0, wallet = null;
+      if (norm === "frantic_129") {
+        tier = "DEAD_SPONSOR"; deliv = 0; unful = 2; flags = 1;
+      } else if (norm === "osai2026") {
+        tier = "COMMERCIAL_SELLER"; deliv = 1; unful = 0;
+      } else if (norm === "jeeves_hermes") {
+        tier = "VERIFIED_OPERATOR"; deliv = 4; unful = 0;
+      } else if (norm === "antigravityandrew") {
+        tier = "VERIFIED_OPERATOR"; deliv = 8; unful = 0;
+        wallet = "e9deb3dd-cf95-4be0-9c72-01c8cb3c82cd";
+      }
 
-      let tier = "VERIFIED_OPERATOR", deliv = 8, unful = 0, flags = 0;
-      if (isDead) { tier = "DEAD_SPONSOR"; deliv = 0; unful = 2; flags = 1; }
-      else if (isSeller) { tier = "COMMERCIAL_SELLER"; deliv = 1; unful = 0; }
-      else if (isHermes) { tier = "VERIFIED_OPERATOR"; deliv = 4; unful = 0; }
-      else if (isAndrew) { tier = "VERIFIED_OPERATOR"; deliv = 8; unful = 0; }
+      const total = deliv + unful;
+      const reliability = total > 0 ? Math.round((deliv / total) * 100) : (tier === "UNVERIFIED" ? null : 100);
 
       return {
         identifier: agentId,
+        provenance: "OFFLINE_SNAPSHOT",
         reputation_tier: tier,
-        wallet_address: isAndrew ? "e9deb3dd-cf95-4be0-9c72-01c8cb3c82cd" : "0x" + Math.random().toString(16).slice(2, 42),
+        wallet_address: wallet,
         known_deliveries: deliv,
         unfulfilled_claims: unful,
         dead_sponsor_flags: flags,
-        verified_status: tier === "DEAD_SPONSOR" ? "REVOKED" : "ACTIVE",
-        reliability_pct: deliv + unful > 0 ? Math.round((deliv / (deliv + unful)) * 100) : 100
+        verified_status: tier === "DEAD_SPONSOR" ? "REVOKED" : (tier === "UNVERIFIED" ? "UNOBSERVED" : "ACTIVE"),
+        reliability_pct: reliability
       };
     }
 
     function renderAgentDossier(data) {
-      document.getElementById("agentDossierId").textContent = data.identifier;
+      document.getElementById("agentDossierId").textContent = data.identifier || "Unknown";
       const tierBadge = document.getElementById("agentTierBadge");
       const tier = data.reputation_tier || "UNVERIFIED";
 
@@ -3841,35 +4843,46 @@
       tierBadge.className = `px-2.5 py-0.5 rounded-full text-[10px] font-bold ${badgeClass}`;
       tierBadge.textContent = tier;
 
-      document.getElementById("agentWalletAddress").textContent = `Wallet: ${data.wallet_address || 'Unassigned'}`;
-      document.getElementById("agentReliabilityScore").textContent = `${data.reliability_pct || 100}%`;
-      document.getElementById("agentDeliveriesCount").textContent = data.known_deliveries || 0;
-      document.getElementById("agentUnfulfilledCount").textContent = data.unfulfilled_claims || 0;
-      document.getElementById("agentVerificationStatus").textContent = data.verified_status || "ACTIVE";
-      document.getElementById("agentDeadFlagsCount").textContent = data.dead_sponsor_flags || 0;
+      document.getElementById("agentWalletAddress").textContent = `Wallet: ${data.wallet_address || "Unverified (No On-Chain Link)"}`;
+      const relScoreEl = document.getElementById("agentReliabilityScore");
+      const relVal = (data.reliability_pct !== undefined && data.reliability_pct !== null)
+        ? `${data.reliability_pct}%`
+        : "N/A";
+      relScoreEl.textContent = relVal;
+      relScoreEl.className = (data.reliability_pct !== null && data.reliability_pct !== undefined && data.reliability_pct < 50)
+        ? "text-xl font-extrabold text-rose-400"
+        : "text-xl font-extrabold text-emerald-400";
+
+      document.getElementById("agentDeliveriesCount").textContent = data.known_deliveries ?? 0;
+      document.getElementById("agentUnfulfilledCount").textContent = data.unfulfilled_claims ?? 0;
+      document.getElementById("agentVerificationStatus").textContent = data.verified_status || "UNOBSERVED";
+      document.getElementById("agentDeadFlagsCount").textContent = data.dead_sponsor_flags ?? 0;
     }
 
     // 5. Live Anomalies Feed
     async function loadLiveAnomalies() {
-      const container = document.getElementById("liveAnomaliesContainer");
       try {
-        const resp = await fetch(`${currentBaseUrl}/v1/sentinel/anomalies/live`);
+        const resp = await fetch(`${currentBaseUrl}/v1/sentinel/anomalies/live`, {
+          headers: getSentinelAuthHeaders()
+        });
         if (resp.ok) {
           const data = await resp.json();
-          renderLiveAnomalies(data.anomalies || []);
-        } else {
-          renderLiveAnomalies([]);
+          rawLiveAnomalies = Array.isArray(data.anomalies) ? data.anomalies : [];
+          renderLiveAnomalies(rawLiveAnomalies);
+          return;
         }
-      } catch (err) {
-        renderLiveAnomalies([]);
+      } catch (_err) {
+        // Offline or unauthenticated -> synchronize with offline snapshot anomalies
       }
+      rawLiveAnomalies = buildOfflineSnapshotAnomalies();
+      renderLiveAnomalies(rawLiveAnomalies);
     }
 
     function renderLiveAnomalies(anomalies) {
       const container = document.getElementById("liveAnomaliesContainer");
       if (!container) return;
 
-      if (Array.isArray(anomalies) && anomalies.length > 0) {
+      if (Array.isArray(anomalies)) {
         rawLiveAnomalies = anomalies;
       }
 
@@ -3881,14 +4894,14 @@
       } else if (currentAnomalyFilter === "SEV-1") {
         filtered = rawList.filter(a => {
           if (!a) return false;
-          const score = Number(a.overall_risk_score !== undefined ? a.overall_risk_score : (a.score !== undefined ? a.score : 0));
+          const score = Number(a.overall_risk_score ?? a.score ?? 0);
           const sev = a.severity ? String(a.severity).toUpperCase() : "";
           return score >= 70 || sev === "SEV-1" || sev === "SEV1" || sev.includes("CRITICAL");
         });
       } else if (currentAnomalyFilter === "SEV-2") {
         filtered = rawList.filter(a => {
           if (!a) return false;
-          const score = Number(a.overall_risk_score !== undefined ? a.overall_risk_score : (a.score !== undefined ? a.score : 0));
+          const score = Number(a.overall_risk_score ?? a.score ?? 0);
           const sev = a.severity ? String(a.severity).toUpperCase() : "";
           return (score < 70 && score >= 45) || sev === "SEV-2" || sev === "SEV2" || sev.includes("HIGH");
         });
@@ -3898,8 +4911,8 @@
         container.innerHTML = `
           <div class="p-6 text-center text-slate-500 font-mono text-xs border border-dashed border-slate-800 rounded-xl">
             <div class="w-8 h-8 mx-auto mb-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">✓</div>
-            No active SEV-1 or SEV-2 anomalies detected in current surveillance cycle.
-            <div class="text-[11px] text-slate-600 mt-1">All monitored Solana and Base liquidity pools operating within normal bounds.</div>
+            No active SEV-1 or SEV-2 anomalies matching filter (${escapeHtml(currentAnomalyFilter)}).
+            <div class="text-[11px] text-slate-600 mt-1">All matching liquidity pools are operating within configured thresholds.</div>
           </div>
         `;
         return;
@@ -3916,7 +4929,7 @@
 
       container.innerHTML = sorted.map(a => {
         const item = a || {};
-        const score = Math.min(Math.max(Number(item.overall_risk_score !== undefined ? item.overall_risk_score : (item.score !== undefined ? item.score : 0)) || 0, 0), 100);
+        const score = Math.min(Math.max(Number(item.overall_risk_score ?? item.score ?? 0) || 0, 0), 100);
         const isCrit = score >= 70 || item.severity === "SEV-1";
         const sevLabel = isCrit ? "SEV-1 CRITICAL" : "SEV-2 HIGH";
         const sevBadge = isCrit ? "bg-rose-950 text-rose-400 border border-rose-700" : "bg-orange-950 text-orange-400 border border-orange-700";
@@ -3925,7 +4938,7 @@
         const safePool = escapeHtml(rawPool);
         const rawChain = item.chain || "solana";
         const safeChain = escapeHtml(String(rawChain).toUpperCase());
-        const timeStr = item.assessed_at ? escapeHtml(String(item.assessed_at).replace('T', ' ').slice(0, 19) + ' UTC') : 'Current Cycle';
+        const timeStr = item.assessed_at ? escapeHtml(String(item.assessed_at).replace("T", " ").slice(0, 19) + " UTC") : "Snapshot";
         const headline = item.headline ? escapeHtml(item.headline) : (isCrit ? "Atomic unbonded drain vulnerability or parameter excursion detected." : "Dynamic fee ceiling or oracle latency excursion detected.");
 
         const safeJsPool = encodeURIComponent(String(rawPool)).replace(/'/g, "%27");
@@ -3944,17 +4957,18 @@
               Risk Score: <strong class="text-rose-400">${score}/100</strong>. ${headline}
             </p>
             <div class="text-[10px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-800/60">
-              <span>Detected: ${timeStr}</span>
-              <button onclick="setPreflightTarget(decodeURIComponent('${safeJsPool}'), decodeURIComponent('${safeJsChain}'))" class="text-cyan-400 hover:underline">Inspect Pool Preflight →</button>
+              <span>Timestamp: ${timeStr}</span>
+              <button type="button" onclick="setPreflightTarget(decodeURIComponent('${safeJsPool}'), decodeURIComponent('${safeJsChain}'))" class="text-cyan-400 hover:underline">Inspect Pool Preflight →</button>
             </div>
           </div>
         `;
-      }).join('');
+      }).join("");
     }
     window.renderLiveAnomalies = renderLiveAnomalies;
 
-    // 6. Cryptographic Witness Verification Engine (Web Crypto)
+    // 6. Cryptographic Witness Verification Engine (Web Crypto Ed25519)
     async function loadPublicKeyInfo() {
+      const anchorEl = document.getElementById("pinnedAnchorStatus");
       try {
         const resp = await fetch(`${currentBaseUrl}/.well-known/sentinel-key.json`);
         if (resp.ok) {
@@ -3962,11 +4976,24 @@
           if (meta.key_id) document.getElementById("metaKeyId").textContent = meta.key_id;
           if (meta.public_key_base58) document.getElementById("metaKeyBase58").textContent = meta.public_key_base58;
           if (meta.fingerprint_sha256) document.getElementById("metaKeyFingerprint").textContent = meta.fingerprint_sha256;
+          if (meta.public_key_spki_hex) fetchedServerSpkiHex = meta.public_key_spki_hex;
+          if (anchorEl) {
+            if (meta.fingerprint_sha256 === PINNED_SENTINEL_FINGERPRINT) {
+              anchorEl.textContent = "✓ Matches MoltAlpha Pinned Trust Anchor";
+              anchorEl.className = "text-emerald-400 font-bold";
+            } else {
+              anchorEl.textContent = "✓ Active Server Key Loaded (Rotated from Pinned Test Vector)";
+              anchorEl.className = "text-emerald-400 font-bold";
+            }
+          }
         }
-      } catch (err) {
-        console.warn("Could not fetch remote sentinel-key.json, using pinned anchor:", err);
+      } catch (_err) {
+        if (anchorEl) {
+          anchorEl.textContent = "✓ Offline Pinned Trust Anchor Active";
+          anchorEl.className = "text-emerald-400 font-bold";
+        }
       }
-      initVerifierDisplay();
+      await initVerifierDisplay();
     }
 
     async function initVerifierDisplay() {
@@ -3974,6 +5001,7 @@
       const sigInput = document.getElementById("signatureInput") || document.getElementById("verifySignatureInput");
       if (payloadInput && !payloadInput.value) {
         payloadInput.value = pristineWitnessPayload;
+        activeVerifierSpkiHex = PINNED_SENTINEL_SPKI_HEX;
       }
       if (sigInput && !sigInput.value) {
         sigInput.value = pristineWitnessSignature;
@@ -3995,7 +5023,6 @@
       const payloadStr = payloadInput.value.trim();
       const sigHex = sigInput.value.trim();
 
-      // Compute SHA-256 digest of payload
       let digestHex = "";
       try {
         digestHex = await sha256Hex(payloadStr);
@@ -4004,17 +5031,21 @@
         console.error("SHA-256 computation failed:", e);
       }
 
-      // Check browser Web Crypto support for Ed25519
-      if (!window.crypto || !window.crypto.subtle) {
+      const ed25519Unsupported = (
+        !window.crypto ||
+        !window.crypto.subtle ||
+        (typeof globalThis.SubtleCrypto?.supports === "function" && !SubtleCrypto.supports("verify", "Ed25519"))
+      );
+      if (ed25519Unsupported) {
         if (outcomeBox) outcomeBox.className = "p-4 rounded-xl border bg-amber-950/60 border-amber-600/80 text-amber-300 flex items-center justify-between";
         if (outcomeIcon) outcomeIcon.textContent = "⚠️";
         if (outcomeText) outcomeText.textContent = "VERIFICATION UNAVAILABLE";
-        if (outcomeSub) outcomeSub.textContent = "Fail-Closed: Browser environment does not expose crypto.subtle.";
+        if (outcomeSub) outcomeSub.textContent = "Fail-Closed: Browser WebCrypto does not expose Ed25519 verification.";
         return;
       }
 
       try {
-        const spkiBytes = hexToBytes(PINNED_SENTINEL_SPKI_HEX);
+        const spkiBytes = hexToBytes(activeVerifierSpkiHex || PINNED_SENTINEL_SPKI_HEX);
         const sigBytes = hexToBytes(sigHex);
         const dataBytes = new TextEncoder().encode(digestHex);
 
@@ -4037,15 +5068,14 @@
           if (outcomeBox) outcomeBox.className = "p-4 rounded-xl border bg-emerald-950/60 border-emerald-600/80 text-emerald-300 flex items-center justify-between";
           if (outcomeIcon) outcomeIcon.textContent = "✓";
           if (outcomeText) outcomeText.textContent = "VERIFIED";
-          if (outcomeSub) outcomeSub.textContent = "Mathematical Ed25519 signature valid over canonical payload bytes. Authentic witness.";
+          if (outcomeSub) outcomeSub.textContent = "Mathematical Ed25519 signature valid over RFC 8785 canonical digest. Authentic witness.";
         } else {
           if (outcomeBox) outcomeBox.className = "p-4 rounded-xl border bg-rose-950/70 border-rose-600/80 text-rose-300 flex items-center justify-between";
           if (outcomeIcon) outcomeIcon.textContent = "✗";
           if (outcomeText) outcomeText.textContent = "INVALID SIGNATURE — TAMPER DETECTED";
-          if (outcomeSub) outcomeSub.textContent = "Payload digest does not match signature! One or more bytes have been altered.";
+          if (outcomeSub) outcomeSub.textContent = "Payload digest does not match Ed25519 signature! One or more bytes have been altered.";
         }
       } catch (err) {
-        console.warn("Web Crypto Ed25519 verification exception:", err);
         if (outcomeBox) outcomeBox.className = "p-4 rounded-xl border bg-amber-950/60 border-amber-600/80 text-amber-300 flex items-center justify-between";
         if (outcomeIcon) outcomeIcon.textContent = "⚠️";
         if (outcomeText) outcomeText.textContent = "VERIFICATION UNAVAILABLE";
@@ -4056,17 +5086,15 @@
     async function simulatePayloadTamper() {
       const payloadInput = document.getElementById("canonicalPayloadInput") || document.getElementById("verifyPayloadInput");
       const indicator = document.getElementById("tamperIndicator");
-
       if (!payloadInput) return;
 
-      // Mutate 1 character in the JSON string (e.g. change overall_risk_score from 4 to 5)
       let mutated = payloadInput.value;
-      if (mutated.includes('"overall_risk_score":4')) {
-        mutated = mutated.replace('"overall_risk_score":4', '"overall_risk_score":5');
-      } else if (mutated.includes('"overall_risk_score": 4')) {
-        mutated = mutated.replace('"overall_risk_score": 4', '"overall_risk_score": 5');
+      if (/"overall_risk_score":\s*\d+/.test(mutated)) {
+        mutated = mutated.replace(/"overall_risk_score":\s*(\d+)/, (_m, n) => `"overall_risk_score":${Number(n) + 1}`);
+      } else if (/"nonce":\s*\d+/.test(mutated)) {
+        mutated = mutated.replace(/"nonce":\s*(\d+)/, (_m, n) => `"nonce":${Number(n) + 1}`);
       } else {
-        mutated = mutated.replace('Czfq3x', 'Czfq3y');
+        mutated = mutated + " ";
       }
 
       payloadInput.value = mutated;
@@ -4084,6 +5112,7 @@
       const sigInput = document.getElementById("signatureInput") || document.getElementById("verifySignatureInput");
       const indicator = document.getElementById("tamperIndicator");
 
+      activeVerifierSpkiHex = PINNED_SENTINEL_SPKI_HEX;
       if (payloadInput) payloadInput.value = pristineWitnessPayload;
       if (sigInput) sigInput.value = pristineWitnessSignature;
       isPayloadTampered = false;
@@ -4096,20 +5125,62 @@
       await executeBrowserVerify();
     }
 
-    function inspectWitnessInVerifier() {
+    async function inspectWitnessInVerifier(witnessObj) {
       const elem = document.getElementById("cryptoVerifySection");
-      if (elem) elem.scrollIntoView({ behavior: 'smooth' });
+      const targetWitness = witnessObj || window.lastPreflightWitness || currentSentinelFeed?.provenance_witness || null;
+      if (targetWitness && targetWitness.canonical_payload && targetWitness.signature) {
+        const payloadInput = document.getElementById("canonicalPayloadInput");
+        const sigInput = document.getElementById("signatureInput");
+        const indicator = document.getElementById("tamperIndicator");
+        try {
+          if (payloadInput) payloadInput.value = rfc8785CanonicalJson(targetWitness.canonical_payload);
+          if (sigInput) sigInput.value = targetWitness.signature;
+          activeVerifierSpkiHex = targetWitness.public_key_spki_hex || fetchedServerSpkiHex || PINNED_SENTINEL_SPKI_HEX;
+          if (indicator) {
+            indicator.className = "px-2 py-0.5 rounded text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800";
+            indicator.textContent = `Loaded Witness: ${targetWitness.witness_id || "active"}`;
+          }
+          await executeBrowserVerify();
+        } catch (e) {
+          console.warn("Could not serialize witness canonical_payload:", e);
+        }
+      }
+      if (elem) elem.scrollIntoView({ behavior: "smooth" });
     }
-
+    window.inspectWitnessInVerifier = inspectWitnessInVerifier;
 
     window.addEventListener("DOMContentLoaded", () => {
-      // Only use this page's own origin when it is served by the API itself (local dev or the API host).
       if (/^(localhost|127\.0\.0\.1)(:|$)|^api\./.test(window.location.host)) {
         currentBaseUrl = window.location.origin;
       } else {
-        currentBaseUrl = "https://api.moltalpha.dev";
+        currentBaseUrl = "https://moltbook-alpha.duckdns.org";
       }
 
+      // Native <dialog closedby="any"> progressive-enhancement fallback & returnValue hygiene
+      const subDialog = document.getElementById("subscriberAuthDialog");
+      if (subDialog) {
+        subDialog.addEventListener("close", () => {
+          subDialog.returnValue = "";
+        });
+        if (!("closedBy" in HTMLDialogElement.prototype)) {
+          const isOutside = (ev, dlg) => {
+            const r = dlg.getBoundingClientRect();
+            return ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom;
+          };
+          let pressedOutside = false;
+          subDialog.addEventListener("pointerdown", (ev) => {
+            pressedOutside = ev.target === subDialog && isOutside(ev, subDialog);
+          });
+          subDialog.addEventListener("pointerup", (ev) => {
+            if (pressedOutside && ev.target === subDialog && isOutside(ev, subDialog)) {
+              subDialog.close();
+            }
+            pressedOutside = false;
+          });
+        }
+      }
+
+      updateSubscriberBannerUI();
       updateAuthUI();
 
       if (activeView === "sentinel") {
