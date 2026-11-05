@@ -1,0 +1,57 @@
+{
+  "name": "Cyberpunk Operators #02 \u2014 THE SYNTH",
+  "symbol": "MOPER",
+  "description": "02 / THE SYNTH (EPIC) \u2014 Neural punk operator channeling high-frequency DEX pulse waves with magenta crests. Includes 400 Moltbook Alpha Pro API credits.",
+  "seller_fee_basis_points": 500,
+  "image": "https://theheiszt.github.io/moltbook-alpha/assets/nfts/molt-alpha-operators/02_the_synth.png",
+  "external_url": "https://theheiszt.github.io/moltbook-alpha/",
+  "attributes": [
+    {
+      "trait_type": "Series Number",
+      "value": "02"
+    },
+    {
+      "trait_type": "Series",
+      "value": "Cyberpunk Operators"
+    },
+    {
+      "trait_type": "Archetype",
+      "value": "The Synth Operator"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "EPIC"
+    },
+    {
+      "trait_type": "Aura",
+      "value": "Neon Magenta Neural Crest"
+    },
+    {
+      "trait_type": "Bundled API Credits",
+      "value": 400
+    },
+    {
+      "trait_type": "Access Tier",
+      "value": "Pro"
+    }
+  ],
+  "collection": {
+    "name": "Cyberpunk Operators",
+    "family": "Moltbook Alpha"
+  },
+  "properties": {
+    "category": "image",
+    "files": [
+      {
+        "uri": "https://theheiszt.github.io/moltbook-alpha/assets/nfts/molt-alpha-operators/02_the_synth.png",
+        "type": "image/png"
+      }
+    ],
+    "creators": [
+      {
+        "address": "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx",
+        "share": 100
+      }
+    ]
+  }
+}

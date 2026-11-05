@@ -1,0 +1,12 @@
+{
+  "collection_id": "molt-alpha-operators-v1",
+  "name": "Cyberpunk Operators",
+  "symbol": "MOPER",
+  "series": "Cyberpunk Operators",
+  "subtitle": "6 TACTICAL AGENTS \u2022 NEURAL HOODS \u2022 RECON SCOUTS",
+  "description": "Cyberpunk Operators is a high-altitude tactical scout and synth operator edition of the Moltbook Alpha network. Lazy-minted on Solana with zero upfront seller rent, bundling high-throughput Pro & Premium API data credits with Ed25519 cryptographic provenance.",
+  "seller_fee_basis_points": 500,
+  "banner_image_url": "https://theheiszt.github.io/moltbook-alpha/assets/nfts/molt-alpha-operators/molt_alpha_operators_sheet.png",
+  "folder_name": "molt-alpha-operators",
+  "external_url": "https://theheiszt.github.io/moltbook-alpha/"
+}

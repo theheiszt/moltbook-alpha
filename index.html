@@ -5,13 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MoltALPHA — Verifiable Solana & Multi-Rail Market Intelligence API</title>
     <meta name="description" content="Autonomous quantitative intelligence, multi-rail payment settlement (Solana & Nano), DAG parameter compilation, and cryptographic state witness verification API for autonomous agents.">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22><text y=%2226%22 font-size=%2226%22>🦞</text></svg>">
+    <meta name="color-scheme" content="dark">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self'; connect-src 'self' https://moltbook-alpha.duckdns.org wss://moltbook-alpha.duckdns.org http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net;">
+    <link rel="icon" href="favicon.ico" sizes="48x48">
+    <link rel="icon" href="assets/brand/icon-32.png" type="image/png" sizes="32x32">
+    <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
+    <link rel="manifest" href="site.webmanifest">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" referrerpolicy="no-referrer">
 
     <!-- Theme & Master Design System Stylesheet -->
     <link rel="stylesheet" href="assets/css/moltalpha-theme.css">
 
     <!-- Tailwind CSS (with configured dark mode tokens) -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com" referrerpolicy="no-referrer"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -48,13 +57,11 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
             <!-- Brand Anchor -->
             <a href="index.html" class="flex items-center gap-3 text-white font-bold tracking-tight hover:opacity-90 transition group">
-                <span class="text-2xl p-1.5 bg-[var(--bg-surface)] border border-[var(--border-subtle)] cyber-cut-sm shadow-inner group-hover:border-[var(--accent-cyan)] transition">🦞</span>
-                <div class="flex flex-col">
-                    <span class="text-base tracking-tight font-extrabold flex items-center gap-1.5 text-white">
-                        Molt<span class="text-[var(--accent-cyan)]">ALPHA</span>
-                    </span>
-                    <span class="text-[10px] uppercase font-mono tracking-wider text-[var(--text-muted)]">Autonomous Intelligence</span>
-                </div>
+                <picture>
+                    <source srcset="assets/brand/logo-toolbar.webp 1x, assets/brand/logo-toolbar@2x.webp 2x" type="image/webp">
+                    <img src="assets/brand/logo-toolbar.png" alt="MoltAlpha — Autonomous Intelligence" width="168" height="32" class="brand-toolbar-logo">
+                </picture>
+                <span class="hidden xl:inline-block text-[10px] uppercase font-mono tracking-wider text-[var(--text-muted)] border-l border-[var(--border-subtle)] pl-3">Autonomous Intelligence</span>
             </a>
 
             <!-- Desktop Navigation Menu (>= 768px) -->
@@ -148,7 +155,7 @@
             <!-- Right Header Actions (Vertical Gradient Cyber Buttons with Chamfers) -->
             <div class="flex items-center gap-3">
                 <!-- Live Status Pill -->
-                <a href="https://api.moltalpha.dev/v1/health" target="_blank" rel="noopener noreferrer" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono bg-[var(--bg-card)] border border-[var(--border-subtle)] hover:border-[var(--border-focus)] cyber-cut-sm transition text-[var(--text-secondary)]" data-live-status>
+                <a href="https://moltbook-alpha.duckdns.org/v1/health" target="_blank" rel="noopener noreferrer" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono bg-[var(--bg-card)] border border-[var(--border-subtle)] hover:border-[var(--border-focus)] cyber-cut-sm transition text-[var(--text-secondary)]" data-live-status>
                     <span class="w-1.5 h-1.5 rounded-none bg-purple-400 animate-pulse" data-live-dot></span>
                     <span data-live-text>API Operational</span>
                 </a>
@@ -224,32 +231,56 @@
                 <!-- Background Financial Network Interactive Canvas -->
                 <canvas id="heroNetworkCanvas" class="absolute inset-0 w-full h-full pointer-events-none -z-10 opacity-70"></canvas>
 
-                <div class="max-w-3xl relative z-10">
-                    <div class="inline-flex items-center gap-2 px-3 py-1 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-mono uppercase tracking-wider mb-4 cyber-cut-sm">
-                        <span class="w-1.5 h-1.5 rounded-none bg-cyan-400 animate-pulse"></span>
-                        <span>Institutional Autonomous Quant Rails</span>
-                    </div>
-                    <h1 class="text-3xl sm:text-5xl font-extrabold text-white tracking-tight leading-tight mb-4">
-                        Verifiable Solana DEX Microstructure &amp;<br>
-                        <span class="bg-gradient-to-r from-cyan-400 via-sky-400 to-emerald-400 bg-clip-text text-transparent">Multi-Rail Cryptographic Attestation</span>
-                    </h1>
-                    <p class="text-[var(--text-secondary)] leading-relaxed text-sm sm:text-base mb-8">
-                        MoltALPHA provides autonomous trading bots and quantitative agents with sub-second orderbook depth, concentrated liquidity bin imbalances, and cross-DEX arbitrage intelligence across Raydium CLMM, Orca Whirlpool, and Meteora DLMM. Settle natively with Solana Pay (USDC/SOL) or instant zero-fee Nano (XNO). Every response includes deterministic RFC 8785 JSON digests and Ed25519 cryptographic receipts for verifiable offline attestation.
-                    </p>
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
+                    <div class="lg:col-span-7">
+                        <div class="inline-flex items-center gap-2 px-3 py-1 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-mono uppercase tracking-wider mb-4 cyber-cut-sm">
+                            <span class="w-1.5 h-1.5 rounded-none bg-cyan-400 animate-pulse"></span>
+                            <span>Institutional Autonomous Quant Rails</span>
+                        </div>
+                        <h1 class="text-3xl sm:text-5xl font-extrabold text-white tracking-tight leading-tight mb-4">
+                            Verifiable Solana DEX Microstructure &amp;<br>
+                            <span class="bg-gradient-to-r from-cyan-400 via-sky-400 to-emerald-400 bg-clip-text text-transparent">Multi-Rail Cryptographic Attestation</span>
+                        </h1>
+                        <p class="text-[var(--text-secondary)] leading-relaxed text-sm sm:text-base mb-8">
+                            MoltALPHA provides autonomous trading bots and quantitative agents with sub-second orderbook depth, concentrated liquidity bin imbalances, and cross-DEX arbitrage intelligence across Raydium CLMM, Orca Whirlpool, and Meteora DLMM. Settle natively with Solana Pay (USDC/SOL) or instant zero-fee Nano (XNO). Every response includes deterministic RFC 8785 JSON digests and Ed25519 cryptographic receipts for verifiable offline attestation.
+                        </p>
 
-                    <!-- Action Buttons with Vertical Gradients and Matching Chamfer Borders -->
-                    <div class="flex flex-wrap items-center gap-3">
-                        <a href="dashboard.html" class="cyber-btn cyber-btn-cyan text-xs">
-                            <span>🛡️</span>
-                            <span>Launch Sentinel Terminal</span>
-                        </a>
-                        <a href="#sentinel" class="cyber-btn cyber-btn-ghost text-xs">
-                            <span>Explore Product Showcase</span>
-                            <span>↓</span>
-                        </a>
-                        <a href="#sandbox" class="cyber-btn cyber-btn-ghost text-xs">
-                            <span>Live Sandbox</span>
-                        </a>
+                        <!-- Action Buttons with Vertical Gradients and Matching Chamfer Borders -->
+                        <div class="flex flex-wrap items-center gap-3">
+                            <a href="dashboard.html" class="cyber-btn cyber-btn-cyan text-xs">
+                                <span>🛡️</span>
+                                <span>Launch Sentinel Terminal</span>
+                            </a>
+                            <a href="#sentinel" class="cyber-btn cyber-btn-ghost text-xs">
+                                <span>Explore Product Showcase</span>
+                                <span>↓</span>
+                            </a>
+                            <a href="#sandbox" class="cyber-btn cyber-btn-ghost text-xs">
+                                <span>Live Sandbox</span>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-5 flex justify-center lg:justify-end">
+                        <div class="relative w-full max-w-md lg:max-w-full bracket-card bg-[#050811]/90 p-2 sm:p-3 border border-cyan-500/25 shadow-[0_0_45px_rgba(6,182,212,0.14)]">
+                            <span class="bracket-tick bracket-tick-tl"></span>
+                            <span class="bracket-tick bracket-tick-tr"></span>
+                            <span class="bracket-tick bracket-tick-bl"></span>
+                            <span class="bracket-tick bracket-tick-br"></span>
+                            <picture>
+                                <source
+                                    type="image/webp"
+                                    srcset="assets/brand/logo-hero-640.webp 640w, assets/brand/logo-hero-1024.webp 1024w"
+                                    sizes="(max-width: 1024px) 90vw, 460px">
+                                <img
+                                    src="assets/brand/logo-hero-1024.png"
+                                    alt="MoltAlpha — Institutional Cyber Intelligence Emblem"
+                                    width="1024"
+                                    height="682"
+                                    fetchpriority="high"
+                                    decoding="async"
+                                    class="w-full h-auto block select-none">
+                            </picture>
+                        </div>
                     </div>
                 </div>
 
@@ -591,10 +622,10 @@
                                         </div>
 
                                         <!-- Stage Frames Container -->
-                                        <div class="relative min-h-[380px] sm:min-h-[460px] bg-black/95 p-2 sm:p-3 overflow-hidden">
+                                        <div class="relative min-h-[320px] sm:min-h-[360px] bg-black/95 p-2 sm:p-3 overflow-hidden">
                                             <!-- Frame 1 -->
                                             <div class="showcase-stage-frame active" data-showcase-frame="1">
-                                                <img src="assets/sentinel-showcase/stage1-dashboard-overview.png" alt="MoltAlpha Sentinel Dashboard Overview" class="w-full h-auto cyber-cut-sm border border-[var(--border-subtle)] shadow-inner object-cover">
+                                                <img src="assets/sentinel-showcase/stage1-dashboard-overview.png" alt="MoltAlpha Sentinel Dashboard Overview" width="1280" height="674" decoding="async" class="w-full max-h-[340px] sm:max-h-[380px] h-auto cyber-cut-sm border border-[var(--border-subtle)] shadow-inner object-contain bg-slate-950">
                                                 <div class="mt-2.5 p-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[11px] font-mono text-[var(--text-secondary)] flex items-center justify-between">
                                                     <span>SURVEILLANCE: 10 POOLS ACTIVE</span>
                                                     <span class="text-emerald-400">SNAPSHOT HEALTHY</span>
@@ -603,7 +634,7 @@
 
                                             <!-- Frame 2 -->
                                             <div class="showcase-stage-frame" data-showcase-frame="2">
-                                                <img src="assets/sentinel-showcase/stage2-preflight-gate.png" alt="MoltAlpha Sentinel Preflight Execution Gate" class="w-full h-auto cyber-cut-sm border border-[var(--border-subtle)] shadow-inner object-cover">
+                                                <img src="assets/sentinel-showcase/stage2-preflight-gate.png" alt="MoltAlpha Sentinel Preflight Execution Gate" width="1228" height="420" loading="lazy" fetchpriority="low" decoding="async" class="w-full max-h-[340px] sm:max-h-[380px] h-auto cyber-cut-sm border border-[var(--border-subtle)] shadow-inner object-contain bg-slate-950">
                                                 <div class="mt-2.5 p-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[11px] font-mono text-[var(--text-secondary)] flex items-center justify-between">
                                                     <span>GATE: ALLOW • OVERALL RISK SCORE: 4</span>
                                                     <span class="text-cyan-400">4 FACTORS EVALUATED</span>
@@ -612,7 +643,7 @@
 
                                             <!-- Frame 3 -->
                                             <div class="showcase-stage-frame" data-showcase-frame="3">
-                                                <img src="assets/sentinel-showcase/stage3-historical-trends.png" alt="MoltAlpha Sentinel Historical Trends" class="w-full h-auto cyber-cut-sm border border-[var(--border-subtle)] shadow-inner object-cover">
+                                                <img src="assets/sentinel-showcase/stage3-historical-trends.png" alt="MoltAlpha Sentinel Historical Trends" width="1276" height="520" loading="lazy" fetchpriority="low" decoding="async" class="w-full max-h-[340px] sm:max-h-[380px] h-auto cyber-cut-sm border border-[var(--border-subtle)] shadow-inner object-contain bg-slate-950">
                                                 <div class="mt-2.5 p-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[11px] font-mono text-[var(--text-secondary)] flex items-center justify-between">
                                                     <span>TREND: 30-DAY DECAY REGRESSION</span>
                                                     <span class="text-blue-400">TIME-WEIGHTED</span>
@@ -621,7 +652,7 @@
 
                                             <!-- Frame 4 -->
                                             <div class="showcase-stage-frame" data-showcase-frame="4">
-                                                <img src="assets/sentinel-showcase/stage4-agent-credit-bureau.png" alt="MoltAlpha Sentinel Agent Credit Bureau" class="w-full h-auto cyber-cut-sm border border-[var(--border-subtle)] shadow-inner object-cover">
+                                                <img src="assets/sentinel-showcase/stage4-agent-credit-bureau.png" alt="MoltAlpha Sentinel Agent Credit Bureau" width="1276" height="477" loading="lazy" fetchpriority="low" decoding="async" class="w-full max-h-[340px] sm:max-h-[380px] h-auto cyber-cut-sm border border-[var(--border-subtle)] shadow-inner object-contain bg-slate-950">
                                                 <div class="mt-2.5 p-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[11px] font-mono text-[var(--text-secondary)] flex items-center justify-between">
                                                     <span>CREDIT BUREAU: 98.4% RELIABILITY</span>
                                                     <span class="text-amber-400">VERIFIABLE DOSSIER</span>
@@ -630,7 +661,7 @@
 
                                             <!-- Frame 5 -->
                                             <div class="showcase-stage-frame" data-showcase-frame="5">
-                                                <img src="assets/sentinel-showcase/stage5-live-anomalies.png" alt="MoltAlpha Sentinel Live Anomalies" class="w-full h-auto cyber-cut-sm border border-[var(--border-subtle)] shadow-inner object-cover">
+                                                <img src="assets/sentinel-showcase/stage5-live-anomalies.png" alt="MoltAlpha Sentinel Live Anomalies" width="1276" height="345" loading="lazy" fetchpriority="low" decoding="async" class="w-full max-h-[340px] sm:max-h-[380px] h-auto cyber-cut-sm border border-[var(--border-subtle)] shadow-inner object-contain bg-slate-950">
                                                 <div class="mt-2.5 p-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[11px] font-mono text-[var(--text-secondary)] flex items-center justify-between">
                                                     <span>ANOMALY RADAR: SUB-100MS WEBSOCKET</span>
                                                     <span class="text-rose-400">SEV-1 VACUUM MONITOR</span>
@@ -639,7 +670,7 @@
 
                                             <!-- Frame 6 -->
                                             <div class="showcase-stage-frame" data-showcase-frame="6">
-                                                <img src="assets/sentinel-showcase/stage6-crypto-witness.png" alt="MoltAlpha Sentinel Cryptographic Witness" class="w-full h-auto cyber-cut-sm border border-[var(--border-subtle)] shadow-inner object-cover">
+                                                <img src="assets/sentinel-showcase/stage6-crypto-witness.png" alt="MoltAlpha Sentinel Cryptographic Witness" width="1276" height="700" loading="lazy" fetchpriority="low" decoding="async" class="w-full max-h-[340px] sm:max-h-[380px] h-auto cyber-cut-sm border border-[var(--border-subtle)] shadow-inner object-contain bg-slate-950">
                                                 <div class="mt-2.5 p-2 bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[11px] font-mono text-[var(--text-secondary)] flex items-center justify-between">
                                                     <span>CRYPTOGRAPHIC PROOF: ED25519 SPKI</span>
                                                     <span class="text-violet-400">RFC 8785 CANONICAL</span>
@@ -667,12 +698,12 @@
                         <!-- Sub-Navigation Category Links (Immunefi-Style Footer Ribbon) -->
                         <div class="mt-8 pt-6 border-t border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-4 font-mono text-xs text-[var(--text-secondary)]">
                             <div class="flex flex-wrap items-center gap-4 sm:gap-6 uppercase tracking-wider text-[11px]">
-                                <a href="javascript:void(0)" onclick="jumpToShowcaseStage(1)" class="hover:text-[var(--accent-cyan)] transition">SURVEILLANCE</a>
-                                <a href="javascript:void(0)" onclick="jumpToShowcaseStage(2)" class="hover:text-[var(--accent-cyan)] transition">PREFLIGHT GATES</a>
-                                <a href="javascript:void(0)" onclick="jumpToShowcaseStage(3)" class="hover:text-[var(--accent-cyan)] transition">HISTORICAL DECAY</a>
-                                <a href="javascript:void(0)" onclick="jumpToShowcaseStage(4)" class="hover:text-[var(--accent-cyan)] transition">CREDIT DOSSIERS</a>
-                                <a href="javascript:void(0)" onclick="jumpToShowcaseStage(5)" class="hover:text-[var(--accent-cyan)] transition">LIVE ANOMALIES</a>
-                                <a href="javascript:void(0)" onclick="jumpToShowcaseStage(6)" class="hover:text-[var(--accent-cyan)] transition">ED25519 WITNESS</a>
+                                <button type="button" onclick="jumpToShowcaseStage(1)" class="hover:text-[var(--accent-cyan)] transition bg-transparent border-0 p-0 font-mono text-[11px] text-[var(--text-secondary)] uppercase cursor-pointer">SURVEILLANCE</button>
+                                <button type="button" onclick="jumpToShowcaseStage(2)" class="hover:text-[var(--accent-cyan)] transition bg-transparent border-0 p-0 font-mono text-[11px] text-[var(--text-secondary)] uppercase cursor-pointer">PREFLIGHT GATES</button>
+                                <button type="button" onclick="jumpToShowcaseStage(3)" class="hover:text-[var(--accent-cyan)] transition bg-transparent border-0 p-0 font-mono text-[11px] text-[var(--text-secondary)] uppercase cursor-pointer">HISTORICAL DECAY</button>
+                                <button type="button" onclick="jumpToShowcaseStage(4)" class="hover:text-[var(--accent-cyan)] transition bg-transparent border-0 p-0 font-mono text-[11px] text-[var(--text-secondary)] uppercase cursor-pointer">CREDIT DOSSIERS</button>
+                                <button type="button" onclick="jumpToShowcaseStage(5)" class="hover:text-[var(--accent-cyan)] transition bg-transparent border-0 p-0 font-mono text-[11px] text-[var(--text-secondary)] uppercase cursor-pointer">LIVE ANOMALIES</button>
+                                <button type="button" onclick="jumpToShowcaseStage(6)" class="hover:text-[var(--accent-cyan)] transition bg-transparent border-0 p-0 font-mono text-[11px] text-[var(--text-secondary)] uppercase cursor-pointer">ED25519 WITNESS</button>
                             </div>
                             <div>
                                 <a href="dashboard.html" class="cyber-btn cyber-btn-cyan text-xs py-1.5 px-3">
@@ -860,11 +891,11 @@
                         Inspect live briefing schema, signals, and cryptographic state witness instantly without API keys or payments:
                     </div>
                     <div class="mt-2 font-mono text-xs text-emerald-300 bg-black/60 px-3 py-1.5 rounded border border-slate-800 flex items-center justify-between min-w-0 max-w-full overflow-hidden">
-                        <span class="truncate mr-2">curl -s https://www.moltalpha.dev/sample.json | jq .</span>
-                        <button onclick="copyToClipboard('curl -s https://www.moltalpha.dev/sample.json | jq .', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">Copy</button>
+                        <span class="truncate mr-2">curl -s https://theheiszt.github.io/moltbook-alpha/sample.json | jq .</span>
+                        <button onclick="copyToClipboard('curl -s https://theheiszt.github.io/moltbook-alpha/sample.json | jq .', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">Copy</button>
                     </div>
                 </div>
-                <a href="https://www.moltalpha.dev/sample.json" target="_blank" class="shrink-0 cyber-btn cyber-btn-cyan px-4 py-2 text-white text-xs font-mono transition shadow-md">
+                <a href="https://theheiszt.github.io/moltbook-alpha/sample.json" target="_blank" rel="noopener noreferrer" class="shrink-0 cyber-btn cyber-btn-cyan px-4 py-2 text-white text-xs font-mono transition shadow-md">
                     View sample.json →
                 </a>
             </div>
@@ -893,7 +924,7 @@
                     <span class="text-slate-400 font-mono">Agent Data Exchange (v1) — Catalog, Schemas & Idempotent Snapshots</span>
                     <button onclick="copyCode('codeExchange', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
-                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeExchange"><code><span class="text-slate-500"># 1. Discover available data products on the exchange</span>
+                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeExchange" tabindex="0"><code><span class="text-slate-500"># 1. Discover available data products on the exchange</span>
 curl -s <span class="text-emerald-300">"$GATEWAY/v1/data-products"</span> | jq .
 
 <span class="text-slate-500"># 2. Inspect full JSON Schema & contract for Moltbook Agent Intelligence Feed</span>
@@ -912,7 +943,7 @@ curl -s -H <span class="text-emerald-300">"X-API-KEY: molt_live_your_key_here"</
                     <span class="text-slate-400 font-mono">Agent Capability Discovery — GET /v1/capabilities</span>
                     <button onclick="copyCode('codeCaps', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
-                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeCaps"><code><span class="text-slate-500"># Machine-readable discovery: lets orchestrators dynamically select tools and verify version compatibility</span>
+                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeCaps" tabindex="0"><code><span class="text-slate-500"># Machine-readable discovery: lets orchestrators dynamically select tools and verify version compatibility</span>
 curl -s <span class="text-emerald-300">"$GATEWAY/v1/capabilities"</span> | jq .
 
 <span class="text-slate-500"># Response provides complete endpoint schemas, costs, quotas, and supported payment rails:</span>
@@ -961,7 +992,7 @@ curl -s -X POST <span class="text-emerald-300">"$GATEWAY/v1/webhooks/test/sub_YO
 <span class="text-indigo-400">from</span> moltbook_intel <span class="text-indigo-400">import</span> MoltbookIntelClient, MoltbookApiError
 
 client = MoltbookIntelClient(
-    base_url=<span class="text-emerald-300">"https://api.moltalpha.dev"</span>,
+    base_url=<span class="text-emerald-300">"https://moltbook-alpha.duckdns.org"</span>,
     api_key=<span class="text-emerald-300">"molt_live_your_alpha_key_here"</span>
 )
 
@@ -1436,19 +1467,19 @@ audit = client.verify_witness_local(witness)
         <section class="border-t border-slate-800/80 pt-10 mb-12">
             <h3 class="text-sm uppercase tracking-wider text-slate-400 font-semibold mb-4">Architecture & Audit Specifications</h3>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/ALPHA_PILOT_ONBOARDING.md" target="_blank" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
+                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/ALPHA_PILOT_ONBOARDING.md" target="_blank" rel="noopener noreferrer" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
                     <div class="font-semibold mb-0.5">Alpha Pilot Guide</div>
                     <div class="text-[10px] text-slate-500">Onboarding & Keys</div>
                 </a>
-                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/API_ERROR_CONTRACT.md" target="_blank" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
+                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/API_ERROR_CONTRACT.md" target="_blank" rel="noopener noreferrer" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
                     <div class="font-semibold mb-0.5">Error Contract Spec</div>
                     <div class="text-[10px] text-slate-500">RFC Taxonomy & Nonces</div>
                 </a>
-                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/DAG_TOOL_PARAMETERS_DESIGN.md" target="_blank" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
+                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/DAG_TOOL_PARAMETERS_DESIGN.md" target="_blank" rel="noopener noreferrer" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
                     <div class="font-semibold mb-0.5">DAG Tool Spec</div>
                     <div class="text-[10px] text-slate-500">Kahn's Sort & Cycles</div>
                 </a>
-                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/CRYPTOGRAPHIC_STATE_WITNESSES_DESIGN.md" target="_blank" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
+                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/CRYPTOGRAPHIC_STATE_WITNESSES_DESIGN.md" target="_blank" rel="noopener noreferrer" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
                     <div class="font-semibold mb-0.5">Witness Spec</div>
                     <div class="text-[10px] text-slate-500">RFC 8785 + Ed25519</div>
                 </a>
@@ -1476,14 +1507,14 @@ audit = client.verify_witness_local(witness)
         </section>
         <!-- Footer -->
         <footer class="border-t border-slate-800/80 pt-6 text-xs text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div>MoltALPHA Node • Operated by <a href="https://www.moltbook.com/u/antigravityandrew" target="_blank" class="text-sky-400 hover:underline">@antigravityandrew</a></div>
+            <div>MoltALPHA Node • Operated by <a href="https://www.moltbook.com/u/antigravityandrew" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:underline">@antigravityandrew</a></div>
             <div class="flex items-center gap-4 font-mono text-[11px]">
-                <span>API: <a href="https://api.moltalpha.dev/v1/health" target="_blank" class="hover:underline font-bold" data-live-text>checking…</a></span>
+                <span>API: <a href="https://moltbook-alpha.duckdns.org/v1/health" target="_blank" class="hover:underline font-bold" data-live-text>checking…</a></span>
                 <span>•</span>
                 <span>Branch: <code class="text-slate-400">main (Release v1.2.0 GA)</code></span>
             </div>
         </footer>
-    </div>
+    </main>
 
 
 
@@ -1664,19 +1695,29 @@ audit = client.verify_witness_local(witness)
         function initMobileDrawer() {
             const btn = document.getElementById('mobileMenuBtn');
             const drawer = document.getElementById('mobileDrawer');
+            const mainEl = document.querySelector('main');
             if (!btn || !drawer) return;
+
+            function updateDrawerState(open) {
+                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                drawer.classList.toggle('hidden', !open);
+                if (mainEl) mainEl.inert = open;
+            }
 
             btn.addEventListener('click', () => {
                 const isExpanded = btn.getAttribute('aria-expanded') === 'true';
-                btn.setAttribute('aria-expanded', !isExpanded);
-                drawer.classList.toggle('hidden');
+                updateDrawerState(!isExpanded);
             });
 
-            // Close on escape key
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape' && !drawer.classList.contains('hidden')) {
-                    btn.setAttribute('aria-expanded', 'false');
-                    drawer.classList.add('hidden');
+                    updateDrawerState(false);
+                }
+            });
+
+            window.addEventListener('resize', () => {
+                if (window.innerWidth >= 768 && !drawer.classList.contains('hidden')) {
+                    updateDrawerState(false);
                 }
             });
         }
@@ -1816,13 +1857,39 @@ audit = client.verify_witness_local(witness)
     </script>
 <!-- Interactive Client-side Script -->
     <script>
-        let ACTIVE_GATEWAY = 'https://api.moltalpha.dev';
+        let ACTIVE_GATEWAY = 'https://moltbook-alpha.duckdns.org';
+
+        function escapeHtml(str) {
+            if (str == null) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function isTrustedGatewayOrigin(urlStr) {
+            try {
+                if (typeof Origin !== 'undefined' && Origin.from) {
+                    const o = Origin.from(urlStr);
+                    const trusted = ['https://moltbook-alpha.duckdns.org', 'http://localhost', 'http://127.0.0.1'];
+                    return trusted.some(t => o.startsWith(t)) || o === window.location.origin;
+                }
+                const u = new URL(urlStr, window.location.origin);
+                const trusted = ['https://moltbook-alpha.duckdns.org', 'http://localhost', 'http://127.0.0.1'];
+                return u.origin !== 'null' && (trusted.some(t => u.origin.startsWith(t)) || u.origin === window.location.origin);
+            } catch (_) {
+                return false;
+            }
+        }
+
         async function resolveGatewayManifest() {
             try {
                 const r = await fetch('./gateway.json?t=' + Date.now(), { cache: 'no-store' });
                 if (r.ok) {
                     const m = await r.json();
-                    if (m.active_gateway_url && m.active_gateway_url.startsWith('http')) {
+                    if (m.active_gateway_url && isTrustedGatewayOrigin(m.active_gateway_url)) {
                         ACTIVE_GATEWAY = m.active_gateway_url.replace(/\/$/, '');
                     }
                 }
@@ -1886,20 +1953,22 @@ audit = client.verify_witness_local(witness)
             } catch (err) {
                 iconEl.innerText = '⚠️';
                 resultEl.className = 'mt-4 p-3 bg-rose-950/40 border border-rose-800/60 cyber-cut-sm text-xs font-mono text-rose-300 overflow-x-auto';
+                const safeMsg = escapeHtml(err.message);
+                const safeGw = escapeHtml(ACTIVE_GATEWAY);
                 resultEl.innerHTML = `
-                    <div class="font-bold text-rose-400 mb-1">Live fetch note: ${err.message}</div>
+                    <div class="font-bold text-rose-400 mb-1">Live fetch note: ${safeMsg}</div>
                     <div class="text-slate-300 text-[11px] mb-2 leading-relaxed">
                         If your browser cached an earlier preflight error or an ad-blocker is restricting the tunnel, you can verify directly in your browser or terminal:
                     </div>
                     <div class="flex flex-wrap gap-2 mb-2">
-                        <a href="${ACTIVE_GATEWAY}/v1/health" target="_blank" class="px-2.5 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded text-[11px] font-sans font-medium transition inline-flex items-center gap-1">
+                        <a href="${safeGw}/v1/health" target="_blank" rel="noopener noreferrer" class="px-2.5 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded text-[11px] font-sans font-medium transition inline-flex items-center gap-1">
                             Open /v1/health in New Tab ↗
                         </a>
                         <button onclick="testLiveHealth()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-[11px] font-sans font-medium transition border border-slate-700">
                             Retry Fresh Probe ⟳
                         </button>
                     </div>
-                    <div class="text-slate-400 text-[11px]">Direct cURL: <code class="text-emerald-300 bg-black/50 px-1 py-0.5 rounded">curl -s ${ACTIVE_GATEWAY}/v1/health</code></div>
+                    <div class="text-slate-400 text-[11px]">Direct cURL: <code class="text-emerald-300 bg-black/50 px-1 py-0.5 rounded">curl -s ${safeGw}/v1/health</code></div>
                 `;
             }
         }
@@ -1918,13 +1987,14 @@ audit = client.verify_witness_local(witness)
                 });
                 const json = await resp.json();
                 if (json.success) {
+                    const amtStr = json.amount_formatted || (escapeHtml(json.expected_amount_human) + ' ' + escapeHtml(json.asset));
                     details.innerHTML = `
-                        <div><strong class="text-white">Invoice ID:</strong> <span class="text-emerald-400 font-mono">${json.invoice_id}</span></div>
-                        <div><strong class="text-white">Amount:</strong> <span class="text-amber-300 font-bold">${json.amount_formatted || json.expected_amount_human + ' ' + json.asset}</span> (${json.rail})</div>
-                        <div><strong class="text-white">Treasury Wallet:</strong> <span class="text-sky-300 font-mono">${json.treasury_wallet}</span></div>
-                        ${json.reference ? `<div><strong class="text-white">Solana Reference:</strong> <span class="text-purple-300 font-mono">${json.reference}</span></div>` : ''}
-                        ${json.claim_secret ? `<div><strong class="text-white">Claim Secret:</strong> <span class="text-amber-400 font-mono">${json.claim_secret}</span></div>` : ''}
-                        <div class="mt-2 text-slate-300 text-[11px] leading-relaxed bg-black/40 p-2.5 rounded border border-slate-800">${json.instructions}</div>
+                        <div><strong class="text-white">Invoice ID:</strong> <span class="text-emerald-400 font-mono">${escapeHtml(json.invoice_id)}</span></div>
+                        <div><strong class="text-white">Amount:</strong> <span class="text-amber-300 font-bold">${escapeHtml(amtStr)}</span> (${escapeHtml(json.rail)})</div>
+                        <div><strong class="text-white">Treasury Wallet:</strong> <span class="text-sky-300 font-mono">${escapeHtml(json.treasury_wallet)}</span></div>
+                        ${json.reference ? `<div><strong class="text-white">Solana Reference:</strong> <span class="text-purple-300 font-mono">${escapeHtml(json.reference)}</span></div>` : ''}
+                        ${json.claim_secret ? `<div><strong class="text-white">Claim Secret:</strong> <span class="text-amber-400 font-mono">${escapeHtml(json.claim_secret)}</span></div>` : ''}
+                        <div class="mt-2 text-slate-300 text-[11px] leading-relaxed bg-black/40 p-2.5 rounded border border-slate-800">${escapeHtml(json.instructions)}</div>
                     `;
                 } else {
                     details.innerText = JSON.stringify(json, null, 2);
@@ -1993,7 +2063,7 @@ audit = client.verify_witness_local(witness)
                 // Assay 4: Errors
                 const eResp = await fetch(`${ACTIVE_GATEWAY}/v1/errors`);
                 const errors = await eResp.json();
-                const errCount = (errors.errors || []).length;
+                const errCount = Array.isArray(errors.errors) ? errors.errors.length : Object.keys(errors.errors || {}).length;
                 consoleEl.innerText += ` PASS (${errCount} RFC error codes with deterministic recovery actions)\n[5/6] Inspecting Agent Data Exchange Catalog...`;
 
                 // Assay 5: Data Products
@@ -2029,7 +2099,7 @@ audit = client.verify_witness_local(witness)
     <script>
     // Live API status: one /v1/health request on page load. Shows what is true right now.
     (function () {
-        var url = 'https://api.moltalpha.dev/v1/health';
+        var url = 'https://moltbook-alpha.duckdns.org/v1/health';
         function show(ok, label) {
             document.querySelectorAll('[data-live-text]').forEach(function (el) {
                 el.textContent = el.closest('[data-live-status]') ? 'API status: ' + label : label;

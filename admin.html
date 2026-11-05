@@ -3,6 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self'; connect-src 'self' https://moltbook-alpha.duckdns.org wss://moltbook-alpha.duckdns.org http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net;">
+  <link rel="icon" href="favicon.ico" sizes="48x48">
+  <link rel="icon" href="assets/brand/icon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
   <title>MoltAlpha Operations Console — Admin Access</title>
   <script>
     window.location.replace("dashboard.html#admin");
@@ -10,7 +17,7 @@
 </head>
 <body style="background:#080d16;color:#94a3b8;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
   <div style="text-align:center;padding:2rem;background:#0d1424;border:1px solid #1e293b;border-radius:1rem;">
-    <div style="font-size:2rem;margin-bottom:0.75rem;">🔒</div>
+    <img src="assets/brand/logo-toolbar.png" alt="MoltAlpha" width="168" height="32" style="display:block;margin:0 auto 12px;">
     <h2 style="color:#ffffff;margin:0 0 0.5rem 0;font-size:1.125rem;">MoltAlpha Operations Console</h2>
     <p style="margin:0 0 1rem 0;font-size:0.875rem;">Redirecting to Administrator Session...</p>
     <a href="dashboard.html#admin" style="display:inline-block;padding:0.5rem 1rem;background:#06b6d4;color:#000000;font-weight:600;text-decoration:none;border-radius:0.5rem;font-size:0.75rem;">Click here if not redirected</a>

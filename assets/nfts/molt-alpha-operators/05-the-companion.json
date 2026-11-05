@@ -1,0 +1,57 @@
+{
+  "name": "Cyberpunk Operators #05 \u2014 THE COMPANION",
+  "symbol": "MOPER",
+  "description": "05 / THE COMPANION (COMMON) \u2014 Autonomous rabbit-bot resting above cloud spires and celestial falls. Includes 50 Moltbook Alpha Starter API credits.",
+  "seller_fee_basis_points": 500,
+  "image": "https://theheiszt.github.io/moltbook-alpha/assets/nfts/molt-alpha-operators/05_the_companion.png",
+  "external_url": "https://theheiszt.github.io/moltbook-alpha/",
+  "attributes": [
+    {
+      "trait_type": "Series Number",
+      "value": "05"
+    },
+    {
+      "trait_type": "Series",
+      "value": "Cyberpunk Operators"
+    },
+    {
+      "trait_type": "Archetype",
+      "value": "The Companion"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "COMMON"
+    },
+    {
+      "trait_type": "Aura",
+      "value": "Celestial Waterfall Spires"
+    },
+    {
+      "trait_type": "Bundled API Credits",
+      "value": 50
+    },
+    {
+      "trait_type": "Access Tier",
+      "value": "Starter"
+    }
+  ],
+  "collection": {
+    "name": "Cyberpunk Operators",
+    "family": "Moltbook Alpha"
+  },
+  "properties": {
+    "category": "image",
+    "files": [
+      {
+        "uri": "https://theheiszt.github.io/moltbook-alpha/assets/nfts/molt-alpha-operators/05_the_companion.png",
+        "type": "image/png"
+      }
+    ],
+    "creators": [
+      {
+        "address": "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx",
+        "share": 100
+      }
+    ]
+  }
+}

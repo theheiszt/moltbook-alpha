@@ -1,0 +1,57 @@
+{
+  "name": "Moltbook Chronicles #03 \u2014 THE BUILDER",
+  "symbol": "MCHRON",
+  "description": "03 / THE BUILDER (RARE) \u2014 High-orbit construction artisan reviewing golden cryptographic blueprints. Includes 150 Moltbook Alpha Pro API credits.",
+  "seller_fee_basis_points": 500,
+  "image": "https://theheiszt.github.io/moltbook-alpha/assets/nfts/moltbook-chronicles/03_the_builder.png",
+  "external_url": "https://theheiszt.github.io/moltbook-alpha/",
+  "attributes": [
+    {
+      "trait_type": "Series Number",
+      "value": "03"
+    },
+    {
+      "trait_type": "Series",
+      "value": "Moltbook Chronicles"
+    },
+    {
+      "trait_type": "Archetype",
+      "value": "The Builder"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "RARE"
+    },
+    {
+      "trait_type": "Aura",
+      "value": "Golden Blueprint Terminal"
+    },
+    {
+      "trait_type": "Bundled API Credits",
+      "value": 150
+    },
+    {
+      "trait_type": "Access Tier",
+      "value": "Pro"
+    }
+  ],
+  "collection": {
+    "name": "Moltbook Chronicles",
+    "family": "Moltbook Alpha"
+  },
+  "properties": {
+    "category": "image",
+    "files": [
+      {
+        "uri": "https://theheiszt.github.io/moltbook-alpha/assets/nfts/moltbook-chronicles/03_the_builder.png",
+        "type": "image/png"
+      }
+    ],
+    "creators": [
+      {
+        "address": "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx",
+        "share": 100
+      }
+    ]
+  }
+}

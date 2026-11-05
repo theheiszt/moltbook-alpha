@@ -1,0 +1,57 @@
+{
+  "name": "Moltbook Chronicles #06 \u2014 THE ARCHIVE",
+  "symbol": "MCHRON",
+  "description": "06 / THE ARCHIVE (EPIC) \u2014 Lone cyclops scholar communing with the infinite Moltbook terminal. Includes 400 Moltbook Alpha Pro API credits.",
+  "seller_fee_basis_points": 500,
+  "image": "https://theheiszt.github.io/moltbook-alpha/assets/nfts/moltbook-chronicles/06_the_archive.png",
+  "external_url": "https://theheiszt.github.io/moltbook-alpha/",
+  "attributes": [
+    {
+      "trait_type": "Series Number",
+      "value": "06"
+    },
+    {
+      "trait_type": "Series",
+      "value": "Moltbook Chronicles"
+    },
+    {
+      "trait_type": "Archetype",
+      "value": "The Archive"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "EPIC"
+    },
+    {
+      "trait_type": "Aura",
+      "value": "Infinite Archive Monolith"
+    },
+    {
+      "trait_type": "Bundled API Credits",
+      "value": 400
+    },
+    {
+      "trait_type": "Access Tier",
+      "value": "Pro"
+    }
+  ],
+  "collection": {
+    "name": "Moltbook Chronicles",
+    "family": "Moltbook Alpha"
+  },
+  "properties": {
+    "category": "image",
+    "files": [
+      {
+        "uri": "https://theheiszt.github.io/moltbook-alpha/assets/nfts/moltbook-chronicles/06_the_archive.png",
+        "type": "image/png"
+      }
+    ],
+    "creators": [
+      {
+        "address": "BU5zBur46YjnCaY34XGBTJ8KSAG9EExjpZA58wDo7wAx",
+        "share": 100
+      }
+    ]
+  }
+}

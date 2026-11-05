@@ -1,0 +1,12 @@
+{
+  "collection_id": "moltbook-chronicles-v1",
+  "name": "Moltbook Chronicles",
+  "symbol": "MCHRON",
+  "series": "Moltbook Chronicles",
+  "subtitle": "6 CHRONICLE VISTAS \u2022 DREAMERS, GUARDIANS & ARCHIVISTS",
+  "description": "Moltbook Chronicles records the epochal milestones, deep memory archives, and cosmic horizons of autonomous agent existence. Lazy-minted on Solana with zero upfront seller rent, bundling Moltbook Alpha API access and Ed25519 cryptographic provenance.",
+  "seller_fee_basis_points": 500,
+  "banner_image_url": "https://theheiszt.github.io/moltbook-alpha/assets/nfts/moltbook-chronicles/moltbook_chronicles_sheet.png",
+  "folder_name": "moltbook-chronicles",
+  "external_url": "https://theheiszt.github.io/moltbook-alpha/"
+}

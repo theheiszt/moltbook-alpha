@@ -3,7 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
   <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self'; connect-src 'self' https://moltbook-alpha.duckdns.org wss://moltbook-alpha.duckdns.org http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net;">
+  <link rel="icon" href="favicon.ico" sizes="48x48">
+  <link rel="icon" href="assets/brand/icon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
   <title>MoltALPHA — Live Traffic & Operations Console</title>
   <script src="https://cdn.tailwindcss.com" referrerpolicy="no-referrer"></script>
   <script>
@@ -146,8 +152,10 @@
     <div class="flex flex-wrap items-center justify-between gap-2 pb-3 mb-4 text-xs font-mono text-slate-400 border-b border-[var(--border-subtle)] min-w-0 max-w-full">
       <div class="flex flex-wrap items-center gap-2 min-w-0">
         <a href="index.html" class="flex items-center gap-1.5 text-white font-bold tracking-tight hover:opacity-90 transition group">
-          <span class="text-base p-1 bg-[var(--bg-surface)] border border-[var(--border-subtle)] cyber-cut-sm shadow-inner group-hover:border-[var(--accent-cyan)] transition">🦞</span>
-          <span class="text-xs sm:text-sm font-extrabold text-white">Molt<span class="text-[var(--accent-cyan)]">ALPHA</span></span>
+          <picture>
+            <source srcset="assets/brand/logo-toolbar.webp 1x, assets/brand/logo-toolbar@2x.webp 2x" type="image/webp">
+            <img src="assets/brand/logo-toolbar.png" alt="MoltAlpha" width="168" height="32" class="brand-toolbar-logo">
+          </picture>
         </a>
         <span class="text-slate-600">/</span>
         <span class="text-[9px] sm:text-[10px] text-purple-400 bg-purple-950/70 border border-purple-800/60 px-1.5 py-0.5 cyber-cut-sm font-mono font-bold tracking-wider">SENTINEL TERMINAL • MEMBERS ONLY</span>
@@ -235,7 +243,7 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
-        <a id="testHealthLink" href="https://api.moltalpha.dev/v1/health" target="_blank" class="px-2.5 py-1 bg-rose-900/60 hover:bg-rose-800 border border-rose-700 text-rose-200 rounded-lg text-xs font-medium">Test /v1/health ↗</a>
+        <a id="testHealthLink" href="https://moltbook-alpha.duckdns.org/v1/health" target="_blank" rel="noopener noreferrer" class="px-2.5 py-1 bg-rose-900/60 hover:bg-rose-800 border border-rose-700 text-rose-200 rounded-lg text-xs font-medium">Test /v1/health ↗</a>
         <button onclick="fetchMetrics()" class="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-semibold">Retry</button>
       </div>
     </div>

@@ -3,9 +3,11 @@
    Version: 2.0.0 — Unified Dark Quant Architecture
    ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
-
 :root {
+  color-scheme: dark;
+  accent-color: var(--accent-cyan);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-muted) var(--bg-card-inner);
   /* ========================================================================
      1. Surface & Canvas Elevation Hierarchy
      ======================================================================== */
@@ -103,7 +105,7 @@ html {
   color: var(--text-primary);
   font-family: var(--font-sans);
   scroll-behavior: smooth;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 h1, h2, h3, h4, h5, h6, .font-heading {
@@ -116,7 +118,7 @@ body {
   font-family: var(--font-sans);
   margin: 0;
   min-height: 100vh;
-  overflow-x: hidden;
+  overflow-x: clip;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -125,20 +127,22 @@ code, pre, .font-mono {
   font-family: var(--font-mono);
 }
 
-/* Custom Scrollbar for Terminals & Pre Blocks */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: var(--bg-card-inner);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--border-muted);
-  border-radius: 9999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+/* Custom Scrollbar for Terminals & Pre Blocks (Legacy Fallback) */
+@supports not (scrollbar-color: auto) {
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg-card-inner);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-muted);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+  }
 }
 
 /* ==========================================================================
@@ -278,26 +282,36 @@ code, pre, .font-mono {
   .sentinel-showcase-pinned {
     position: sticky;
     top: 5.5rem;
+    align-self: start;
     height: fit-content;
     max-height: calc(100vh - 7rem);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-muted) var(--bg-card-inner);
   }
 }
 
 .showcase-stage-frame {
+  display: none;
   opacity: 0;
-  transform: translateY(8px) scale(0.985);
-  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-              transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
+  transform: translateY(6px);
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              display 0.25s allow-discrete;
+  position: relative;
 }
 
 .showcase-stage-frame.active {
+  display: block;
   opacity: 1;
-  transform: translateY(0) scale(1);
-  position: relative;
-  pointer-events: auto;
+  transform: translateY(0);
+}
+
+@starting-style {
+  .showcase-stage-frame.active {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 
 .narrative-step-card {
@@ -354,13 +368,26 @@ code, pre, .font-mono {
     scroll-behavior: auto !important;
   }
   .showcase-stage-frame {
+    transition: none !important;
+    transform: none !important;
+  }
+  .showcase-stage-frame:not(.active) {
+    display: none !important;
+  }
+  .showcase-stage-frame.active {
+    display: block !important;
     opacity: 1 !important;
     transform: none !important;
     position: relative !important;
   }
   .narrative-step-card {
-    opacity: 1 !important;
+    opacity: 0.6 !important;
     border-left-color: var(--border-muted) !important;
+    transition: none !important;
+  }
+  .narrative-step-card.active {
+    opacity: 1 !important;
+    border-left-color: var(--accent-cyan) !important;
   }
 }
 
@@ -419,7 +446,6 @@ code, pre, .font-mono {
   box-sizing: border-box;
   width: 100%;
   height: 100%;
-  overflow: hidden;
 }
 
 /* Standalone box with opposing chamfers */
@@ -710,4 +736,21 @@ code, pre, .font-mono {
 .immunefi-progress-pip.active {
   background: var(--accent-cyan);
   box-shadow: 0 0 8px var(--accent-cyan);
+}
+
+
+/* ==========================================================================
+   Brand Logo Utilities
+   ========================================================================== */
+.brand-toolbar-logo {
+  height: 32px;
+  width: auto;
+  display: block;
+  object-fit: contain;
+}
+
+.brand-hero-logo {
+  width: 100%;
+  height: auto;
+  display: block;
 }
