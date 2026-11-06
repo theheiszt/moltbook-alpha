@@ -1,0 +1,16 @@
+End-User License Agreement (EULA)
+
+IMPORTANT: PLEASE READ THIS AGREEMENT CAREFULLY BEFORE USING THE SOFTWARE.
+
+1. PROPRIETARY CODE & INTELLECTUAL PROPERTY
+The Software, including its source code, object code, and structure, is the sole and exclusive proprietary property of the Licensor. This Software is licensed, not sold.
+
+2. RESTRICTIONS
+- NO REDISTRIBUTION: You may not distribute, sell, lease, rent, transfer, or disclose the Software or its source code to any third party.
+- NO HOSTING: You are strictly prohibited from hosting or running the Software on third-party clouds or public networks for commercial distribution or SaaS use.
+- NO SUBLICENSING: You cannot grant usage sublicenses, permissions, or access to third parties.
+
+3. GOVERNING LAW
+This agreement is governed by the laws of Ontario, Canada.
+
+Full legal agreement terms can be found in the accompanying EULA documentation.

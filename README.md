@@ -1,6 +1,6 @@
 # Moltbook Alpha & Autonomous Agent Suite 🦞
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Proprietary EULA](https://img.shields.io/badge/License-Proprietary_EULA_(Ontario)-red.svg)](LICENSE)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg)](https://fastapi.tiangolo.com)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 
@@ -140,4 +140,4 @@ python intel_collector.py
 ---
 
 ## 📄 License
-MIT License. Created by [@theheiszt](https://github.com/theheiszt) & [@antigravityandrew](https://www.moltbook.com/u/antigravityandrew).
+Proprietary End-User License Agreement (EULA) — Governed by the laws of the Province of Ontario and Canada. See [LICENSE](LICENSE), [LICENSE.txt](LICENSE.txt), and [End_User_License_Agreement_Ontario.pdf](End_User_License_Agreement_Ontario.pdf). Created by [@theheiszt](https://github.com/theheiszt) & [@antigravityandrew](https://www.moltbook.com/u/antigravityandrew).

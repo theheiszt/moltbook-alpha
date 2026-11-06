@@ -1,21 +1,28 @@
-MIT License
+END-USER LICENSE AGREEMENT (EULA)
 
-Copyright (c) 2026 Moltbook Alpha Team
+This End-User License Agreement ("Agreement") is a binding legal contract between you (either an individual or a single legal entity, hereinafter "Licensee") and the owner/licensor of the software ("Licensor"). By installing, copying, or otherwise using the software platform ("Software"), you agree to be bound by the terms of this Agreement. If you do not agree, do not install or use the Software.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. INTELLECTUAL PROPERTY AND PROPRIETARY CODE
+The Software, including but not limited to its source code, object code, structure, sequence, and organization, is and shall remain the sole and exclusive proprietary property of the Licensor. Nothing in this Agreement grants the Licensee any ownership rights, title, or interest in the Software's underlying code, which is protected by copyright, trade secret, and other intellectual property laws.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+2. GRANT OF LICENSE AND RESTRICTIONS
+Subject to compliance with this Agreement, Licensor grants Licensee a limited, non-exclusive, non-transferable, revocable license to use the Software solely for internal business operations.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+- No Redistribution: The Licensee shall not redistribute, sell, lease, rent, assign, give, or otherwise transfer or disclose the Software, its source code, or any copies thereof, to any third party without the express, prior written consent of the Licensor.
+- No Hosting: The Licensee is strictly prohibited from hosting, deploying, or running the Software on any public network, third-party cloud environment, or unauthorized external server for the purpose of commercial distribution, commercial hosting, or providing a service bureau. The Software may only be installed and executed on hardware owned, leased, or directly controlled by the Licensee for internal operational use.
+- No Sublicensing: The license granted under this Agreement is strictly personal to the Licensee and is non-transferable. The Licensee shall not sublicense, authorize, or permit any third party, subsidiary, affiliate, or end-user to use, access, or modify the Software or its code. Any attempted sublicensing or delegation of rights under this Agreement without the Licensor's explicit written approval shall be null and void.
+
+3. TERMINATION
+This Agreement is effective until terminated. Your rights under this Agreement will terminate automatically without notice from the Licensor if you fail to comply with any term(s) of this Agreement. Upon termination, you must cease all use of the Software and destroy all copies, full or partial, of the Software.
+
+4. DISCLAIMER OF WARRANTIES
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+5. LIMITATION OF LIABILITY
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL LICENSOR BE LIABLE FOR ANY SPECIAL, INCIDENTAL, INDIRECT, OR CONSEQUENTIAL DAMAGES WHATSOEVER (INCLUDING, WITHOUT LIMITATION, DAMAGES FOR LOSS OF BUSINESS PROFITS, BUSINESS INTERRUPTION, LOSS OF BUSINESS INFORMATION, OR ANY OTHER PECUNIARY LOSS) ARISING OUT OF THE USE OF OR INABILITY TO USE THE SOFTWARE.
+
+6. GOVERNING LAW
+This Agreement shall be governed by and construed in accordance with the laws of the Province of Ontario and the federal laws of Canada applicable therein, without regard to its conflict of law principles. Any legal action or proceeding relating to this Agreement shall be brought exclusively in the courts located in Ontario, Canada.
+
+7. ENTIRE AGREEMENT
+This Agreement constitutes the entire agreement between the parties concerning the subject matter hereof and supersedes all prior or contemporaneous oral or written understandings.
