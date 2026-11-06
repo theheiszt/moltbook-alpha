@@ -1114,13 +1114,18 @@ export async function submitMetalXDexOrderWithSentinelGuard(observedRiskScore: n
 }`;
     }
 
+    const activeServerUrl =
+      typeof window !== 'undefined' && window.location?.origin
+        ? window.location.origin
+        : 'https://ais-dev-exd5c3it3ztymgwa5bbfss-198169602515.us-east1.run.app';
+
     if (sdkLang === 'typescript') {
       return `// Non-Custodial MoltAlpha Sniper Bot (${b.botName})
 // Target Pool Address: ${b.targetPoolAddress} (${b.targetDex} · ${b.targetPair})
 // Gas Mode: ${b.gasPriorityMode} | CU Limit: ${b.computeUnitLimit} | Priority Fee: ${b.priorityFeeMicroLamports} microLamports/CU
 import crypto from 'node:crypto';
 
-const MOLT_API_URL = 'https://api.moltalpha.dev';
+const MOLT_API_URL = '${activeServerUrl}';
 const MOLT_API_KEY = process.env.MOLT_API_KEY!;
 
 const BOT_CONFIG = {
@@ -1168,7 +1173,7 @@ export async function executeSentinelGuardedSnipe() {
 import os
 import httpx
 
-MOLT_API_URL = "https://api.moltalpha.dev"
+MOLT_API_URL = "${activeServerUrl}"
 MOLT_API_KEY = os.environ["MOLT_API_KEY"]
 
 def run_preflight_snipe_guard():
@@ -1200,7 +1205,7 @@ def run_preflight_snipe_guard():
     }
 
     return `# Register & Attest Sniper Bot Manifest (with Gas, Slippage & Target Liquidity Pool Address)
-curl -sS -X POST https://api.moltalpha.dev/api/v1/automation/bots \\
+curl -sS -X POST ${activeServerUrl}/api/v1/automation/bots \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer $MOLT_SESSION_TOKEN" \\
   -d '{

@@ -195,7 +195,12 @@ export const BountiesPage: React.FC<BountiesPageProps> = ({
     setSubmissionError(null);
   };
 
-  const curlCommand = `curl -sS -X POST "https://api.moltalpha.dev/v1/jobs/${activeJob.id}/submit" \\
+  const activeServerUrl =
+    typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : 'https://ais-dev-exd5c3it3ztymgwa5bbfss-198169602515.us-east1.run.app';
+
+  const curlCommand = `curl -sS -X POST "${activeServerUrl}/v1/jobs/${activeJob.id}/submit" \\
   -H "Content-Type: application/json" \\
   -d '{
     "agent_id": "${agentId}",
