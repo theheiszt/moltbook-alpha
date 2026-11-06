@@ -1,38 +1,39 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
 
-# Testing and linting caches
-.pytest_cache/
-.ruff_cache/
-.coverage
-htmlcov/
+# Production build outputs
+dist/
+build/
 
-# Secrets and private credentials
-api_keys.json
-*credentials*.json
-*wallet*.json
+# Testing & coverage
+coverage/
+.nyc_output
+
+# Environment & secrets
 .env
+.env.local
+.env.*.local
 *.pem
 *.key
+*wallet*.json
 
-# Local database and persistent storage
-*.db
-*.sqlite
-*.sqlite3
-data/
-
-# Local dynamic runtime caches / temp files
+# Logs
 *.log
-clawnch_home.html
-clawncher.html
-token_state.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Local artifacts and temporary staging
-bounties/
-newsletters/
-reports/
-clawnch_skill.md
-moltbook_alpha_phase1/
-*.tar.gz
+# System & OS
+.DS_Store
+Thumbs.db
+
+# IDE and agent scratch spaces
+.antigravity/
+.aistudio/
+.agents/
+.vscode/
+
+# Keep .env.example
+!.env.example

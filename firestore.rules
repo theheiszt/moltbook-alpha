@@ -1,0 +1,497 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 1: Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Trusted Admin Verification: Only via server-managed /admins/{uid} document or verified owner email
+    function isAdmin() {
+      return isVerifiedUser() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == 'syntheticinquiry@gmail.com'
+      );
+    }
+
+    // ============================================================================
+    // Blueprint Validators (Pillar 4, 5, 6: Key Whitelisting, Type & Bounds Checks)
+    // ============================================================================
+
+    // 1. User Profiles
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'displayName', 'tier', 'credits', 'rateLimitRps', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'displayName', 'tier', 'credits', 'rateLimitRps', 'status', 'createdAt', 'updatedAt']) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid == userId &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+        data.tier is string && data.tier.size() <= 20 && data.tier in ['Micro', 'Starter', 'Pro', 'Enterprise'] &&
+        data.credits is number && data.credits >= 0 && data.credits <= 1000000000 &&
+        data.rateLimitRps is number && data.rateLimitRps >= 1 && data.rateLimitRps <= 100000 &&
+        data.status is string && data.status.size() <= 20 && data.status in ['Active', 'Suspended', 'Audit'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidUserPrivateInfo(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'createdAt']) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid == userId &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+        data.createdAt is timestamp;
+    }
+
+    // 2. Developer Accounts
+    function isValidDeveloperAccount(data, accountId) {
+      return data.keys().hasAll(['accountId', 'ownerId', 'orgName', 'tier', 'quotaRps', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['accountId', 'ownerId', 'orgName', 'tier', 'quotaRps', 'status', 'createdAt', 'updatedAt']) &&
+        data.accountId is string && data.accountId.size() >= 1 && data.accountId.size() <= 128 && data.accountId == accountId &&
+        data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.orgName is string && data.orgName.size() >= 2 && data.orgName.size() <= 80 &&
+        data.tier is string && data.tier.size() <= 20 && data.tier in ['Micro', 'Starter', 'Pro', 'Enterprise'] &&
+        data.quotaRps is number && data.quotaRps >= 1 && data.quotaRps <= 10000 &&
+        data.status is string && data.status.size() <= 20 && data.status in ['Active', 'Suspended'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // 3. API Keys & Metadata (Stores ONLY keyPrefix and SHA-256 hash, NEVER raw keys)
+    function isValidApiKeyMetadata(data, keyId) {
+      return data.keys().hasAll(['keyId', 'ownerId', 'keyPrefix', 'keyHashSha256', 'scopes', 'rateLimitRps', 'status', 'createdAt']) &&
+        data.keys().hasOnly(['keyId', 'ownerId', 'keyPrefix', 'keyHashSha256', 'scopes', 'rateLimitRps', 'status', 'createdAt']) &&
+        data.keyId is string && data.keyId.size() >= 4 && data.keyId.size() <= 128 && data.keyId == keyId &&
+        data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.keyPrefix is string && data.keyPrefix.size() >= 6 && data.keyPrefix.size() <= 16 &&
+        data.keyHashSha256 is string && data.keyHashSha256.size() == 64 && data.keyHashSha256.matches('^[a-f0-9]{64}$') &&
+        data.scopes is list && data.scopes.size() >= 1 && data.scopes.size() <= 10 &&
+        data.rateLimitRps is number && data.rateLimitRps >= 1 && data.rateLimitRps <= 5000 &&
+        data.status is string && data.status.size() <= 20 && data.status in ['Active', 'Revoked'] &&
+        data.createdAt is timestamp;
+    }
+
+    // 4. Agent Identities
+    function isValidAgentIdentity(data, agentId) {
+      return data.keys().hasAll(['agentId', 'ownerId', 'handle', 'identityPubKeyEd25519', 'verificationStatus', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['agentId', 'ownerId', 'handle', 'identityPubKeyEd25519', 'verificationStatus', 'createdAt', 'updatedAt']) &&
+        data.agentId is string && data.agentId.size() >= 2 && data.agentId.size() <= 64 && data.agentId == agentId &&
+        data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.handle is string && data.handle.size() >= 2 && data.handle.size() <= 64 &&
+        data.identityPubKeyEd25519 is string && data.identityPubKeyEd25519.size() >= 16 && data.identityPubKeyEd25519.size() <= 128 &&
+        data.verificationStatus is string && data.verificationStatus.size() <= 24 && data.verificationStatus in ['UNVERIFIED', 'ACTIVE', 'REVOKED'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // 5. Agent Reputation Records (Server/Admin Authoritative Only)
+    function isValidAgentReputation(data, agentId) {
+      return data.keys().hasAll(['agentId', 'reputationTier', 'reliabilityPct', 'knownDeliveries', 'unfulfilledClaims', 'deadSponsorFlags', 'duesProofStatus', 'updatedAt']) &&
+        data.keys().hasOnly(['agentId', 'reputationTier', 'reliabilityPct', 'knownDeliveries', 'unfulfilledClaims', 'deadSponsorFlags', 'duesProofStatus', 'updatedAt']) &&
+        data.agentId is string && data.agentId.size() >= 2 && data.agentId.size() <= 64 && data.agentId == agentId &&
+        data.reputationTier is string && data.reputationTier.size() <= 32 && data.reputationTier in ['VERIFIED_OPERATOR', 'COMMERCIAL_SELLER', 'PROMPT_ECHO', 'DEAD_SPONSOR', 'UNVERIFIED'] &&
+        data.reliabilityPct is number && data.reliabilityPct >= 0 && data.reliabilityPct <= 100 &&
+        data.knownDeliveries is number && data.knownDeliveries >= 0 && data.knownDeliveries <= 1000000 &&
+        data.unfulfilledClaims is number && data.unfulfilledClaims >= 0 && data.unfulfilledClaims <= 1000000 &&
+        data.deadSponsorFlags is number && data.deadSponsorFlags >= 0 && data.deadSponsorFlags <= 10000 &&
+        data.duesProofStatus is string && data.duesProofStatus.size() <= 32 && data.duesProofStatus in ['DUESPROOF_VERIFIED', 'DUES_DEFAULT_REVOKED', 'PROVISIONAL'] &&
+        data.updatedAt is timestamp;
+    }
+
+    // 6. Agent Proof Records (Deliverables & Provenance)
+    function isValidAgentProof(data, proofId) {
+      return data.keys().hasAll(['proofId', 'ownerId', 'agentId', 'jobId', 'deliverableUri', 'summary', 'provenance', 'verifiedByBackend', 'createdAt']) &&
+        data.keys().hasOnly(['proofId', 'ownerId', 'agentId', 'jobId', 'deliverableUri', 'summary', 'provenance', 'verifiedByBackend', 'createdAt']) &&
+        data.proofId is string && data.proofId.size() >= 4 && data.proofId.size() <= 128 && data.proofId == proofId &&
+        data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.agentId is string && data.agentId.size() >= 2 && data.agentId.size() <= 64 &&
+        data.jobId is string && data.jobId.size() >= 2 && data.jobId.size() <= 64 &&
+        data.deliverableUri is string && data.deliverableUri.size() >= 8 && data.deliverableUri.size() <= 512 &&
+        (data.deliverableUri.matches('^https://.*') || data.deliverableUri.matches('^ipfs://.*')) &&
+        data.summary is string && data.summary.size() >= 40 && data.summary.size() <= 500 &&
+        data.provenance is string && data.provenance.size() <= 36 && data.provenance in ['SELF_REPORTED', 'THIRD_PARTY_CLAIM', 'INDEPENDENTLY_VERIFIED', 'CRYPTOGRAPHICALLY_VERIFIED'] &&
+        data.verifiedByBackend is bool &&
+        data.createdAt is timestamp;
+    }
+
+    // 7. Sentinel Risk Assessments (Server/Admin Authoritative Only)
+    function isValidSentinelAssessment(data, assessmentId) {
+      return data.keys().hasAll(['assessmentId', 'pair', 'dex', 'slot', 'riskScore', 'status', 'scoringVersion', 'provenance', 'witnessHashSha256', 'signatureEd25519', 'createdAt']) &&
+        data.keys().hasOnly(['assessmentId', 'pair', 'dex', 'slot', 'riskScore', 'status', 'scoringVersion', 'provenance', 'witnessHashSha256', 'signatureEd25519', 'createdAt']) &&
+        data.assessmentId is string && data.assessmentId.size() >= 4 && data.assessmentId.size() <= 128 && data.assessmentId == assessmentId &&
+        data.pair is string && data.pair.size() >= 3 && data.pair.size() <= 32 &&
+        data.dex is string && data.dex.size() >= 2 && data.dex.size() <= 32 &&
+        data.slot is number && data.slot >= 1 &&
+        data.riskScore is number && data.riskScore >= 0 && data.riskScore <= 10 &&
+        data.status is string && data.status.size() <= 16 && data.status in ['SAFE', 'WATCH', 'HIGH', 'CRITICAL'] &&
+        data.scoringVersion is string && data.scoringVersion.size() >= 2 && data.scoringVersion.size() <= 40 &&
+        data.provenance is string && data.provenance.size() <= 32 && data.provenance in ['SIMULATED_DEMO', 'VERIFIED_ENGINE'] &&
+        data.witnessHashSha256 is string && data.witnessHashSha256.size() == 64 &&
+        data.signatureEd25519 is string && data.signatureEd25519.size() >= 32 && data.signatureEd25519.size() <= 128 &&
+        data.createdAt is timestamp;
+    }
+
+    // 8. Cryptographic Witness Metadata & Key Epochs
+    function isValidWitnessKey(data, keyId) {
+      return data.keys().hasAll(['ownerId', 'keyId', 'publicKey', 'algorithm', 'status', 'createdAt']) &&
+        data.keys().hasOnly(['ownerId', 'keyId', 'publicKey', 'algorithm', 'status', 'createdAt']) &&
+        data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.keyId is string && data.keyId.size() >= 3 && data.keyId.size() <= 64 && data.keyId == keyId &&
+        data.publicKey is string && data.publicKey.size() >= 16 && data.publicKey.size() <= 128 &&
+        data.algorithm is string && data.algorithm.size() <= 16 && data.algorithm == 'Ed25519' &&
+        data.status is string && data.status.size() <= 20 && data.status in ['Active', 'Rotated', 'Revoked'] &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidWitnessMetadata(data, witnessId) {
+      return data.keys().hasAll(['witnessId', 'keyEpochId', 'targetPair', 'slot', 'witnessHashSha256', 'signatureEd25519', 'createdAt']) &&
+        data.keys().hasOnly(['witnessId', 'keyEpochId', 'targetPair', 'slot', 'witnessHashSha256', 'signatureEd25519', 'createdAt']) &&
+        data.witnessId is string && data.witnessId.size() >= 4 && data.witnessId.size() <= 128 && data.witnessId == witnessId &&
+        data.keyEpochId is string && data.keyEpochId.size() >= 3 && data.keyEpochId.size() <= 64 &&
+        data.targetPair is string && data.targetPair.size() >= 3 && data.targetPair.size() <= 32 &&
+        data.slot is number && data.slot >= 1 &&
+        data.witnessHashSha256 is string && data.witnessHashSha256.size() == 64 &&
+        data.signatureEd25519 is string && data.signatureEd25519.size() >= 32 && data.signatureEd25519.size() <= 128 &&
+        data.createdAt is timestamp;
+    }
+
+    // 9. Platform Analytics
+    function isValidPlatformAnalytics(data, metricId) {
+      return data.keys().hasAll(['metricId', 'monitoredPoolsCount', 'avgRiskScore', 'volume24hUsd', 'provenance', 'updatedAt']) &&
+        data.keys().hasOnly(['metricId', 'monitoredPoolsCount', 'avgRiskScore', 'volume24hUsd', 'provenance', 'updatedAt']) &&
+        data.metricId is string && data.metricId.size() >= 2 && data.metricId.size() <= 64 && data.metricId == metricId &&
+        data.monitoredPoolsCount is number && data.monitoredPoolsCount >= 0 &&
+        data.avgRiskScore is number && data.avgRiskScore >= 0 && data.avgRiskScore <= 10 &&
+        data.volume24hUsd is number && data.volume24hUsd >= 0 &&
+        data.provenance is string && data.provenance.size() <= 32 && data.provenance in ['SIMULATED_DEMO', 'VERIFIED_TELEMETRY'] &&
+        data.updatedAt is timestamp;
+    }
+
+    // 10. Credit and Payment Records (Settlements)
+    function isValidSettlement(data) {
+      return data.keys().hasAll(['ownerId', 'userHandle', 'amountUsd', 'rail', 'creditsGranted', 'txHash', 'status', 'createdAt']) &&
+        data.keys().hasOnly(['ownerId', 'userHandle', 'amountUsd', 'rail', 'creditsGranted', 'txHash', 'status', 'createdAt']) &&
+        data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.userHandle is string && data.userHandle.size() >= 1 && data.userHandle.size() <= 64 &&
+        data.amountUsd is number && data.amountUsd >= 0 && data.amountUsd <= 1000000 &&
+        data.rail is string && data.rail.size() <= 16 && data.rail in ['SOL', 'USDC', 'Nano'] &&
+        data.creditsGranted is number && data.creditsGranted >= 1 && data.creditsGranted <= 100000000 &&
+        data.txHash is string && data.txHash.size() >= 8 && data.txHash.size() <= 128 &&
+        data.status is string && data.status.size() <= 20 && data.status in ['PendingVerification', 'Completed', 'Rejected'] &&
+        data.createdAt is timestamp;
+    }
+
+    // 11. Administrative Configuration
+    function isValidAdminConfig(data, configId) {
+      return data.keys().hasAll(['configId', 'globalBurstLimitRps', 'strictMtlsEnabled', 'autoKeyRotationHours', 'updatedBy', 'updatedAt']) &&
+        data.keys().hasOnly(['configId', 'globalBurstLimitRps', 'strictMtlsEnabled', 'autoKeyRotationHours', 'updatedBy', 'updatedAt']) &&
+        data.configId is string && data.configId.size() >= 2 && data.configId.size() <= 64 && data.configId == configId &&
+        data.globalBurstLimitRps is number && data.globalBurstLimitRps >= 10 && data.globalBurstLimitRps <= 10000 &&
+        data.strictMtlsEnabled is bool &&
+        data.autoKeyRotationHours is number && data.autoKeyRotationHours >= 1 && data.autoKeyRotationHours <= 720 &&
+        data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128 &&
+        data.updatedAt is timestamp;
+    }
+
+    // 12. Security Audit Events
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['ownerId', 'actor', 'action', 'details', 'createdAt']) &&
+        data.keys().hasOnly(['ownerId', 'actor', 'action', 'details', 'createdAt']) &&
+        data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.actor is string && data.actor.size() >= 1 && data.actor.size() <= 64 && data.actor in ['user', 'admin', 'system', 'sentinel', 'witness'] &&
+        data.action is string && data.action.size() >= 1 && data.action.size() <= 80 &&
+        data.details is string && data.details.size() >= 1 && data.details.size() <= 400 &&
+        data.createdAt is timestamp;
+    }
+
+    // ============================================================================
+    // Collection Security Policies
+    // ============================================================================
+
+    // Admins lookup collection (strictly read-only from client; never client-writable)
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && (request.auth.uid == adminId || isAdmin());
+      allow list, create, update, delete: if false;
+    }
+
+    // Connection test path (read-only verification)
+    match /test/{docId} {
+      allow get: if isValidId(docId) && docId == 'connection';
+      allow list, create, update, delete: if false;
+    }
+
+    // 1. User Profiles Collection (Protected against self-credit/tier/rate-limit tampering)
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isSignedIn() && (existing().uid == request.auth.uid || isAdmin());
+      allow create: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (
+          (isOwner(userId) && incoming().tier == 'Micro' && incoming().credits == 0 && incoming().rateLimitRps == 15 && incoming().status == 'Active') ||
+          isAdmin()
+        );
+      allow update: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (
+            isOwner(userId) &&
+            incoming().tier == existing().tier &&
+            incoming().credits == existing().credits &&
+            incoming().rateLimitRps == existing().rateLimitRps &&
+            incoming().status == existing().status &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt'])
+          ) ||
+          isAdmin()
+        );
+      allow delete: if isValidId(userId) && isAdmin();
+
+      // PII Isolated Subcollection
+      match /private/{docId} {
+        allow get: if isSignedIn() &&
+          isValidId(userId) &&
+          isValidId(docId) &&
+          docId == 'info' &&
+          (isOwner(userId) || isAdmin()) &&
+          exists(/databases/$(database)/documents/users/$(userId));
+        allow list: if false;
+        allow create: if isVerifiedUser() &&
+          isValidId(userId) &&
+          isValidId(docId) &&
+          docId == 'info' &&
+          isValidUserPrivateInfo(incoming(), userId) &&
+          incoming().createdAt == request.time &&
+          (isOwner(userId) || isAdmin()) &&
+          exists(/databases/$(database)/documents/users/$(userId));
+        allow update, delete: if false;
+      }
+    }
+
+    // 2. Developer Accounts
+    match /developerAccounts/{accountId} {
+      allow get: if isSignedIn() && isValidId(accountId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin());
+      allow create: if isVerifiedUser() &&
+        isValidId(accountId) &&
+        isValidDeveloperAccount(incoming(), accountId) &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().tier == 'Micro' &&
+        incoming().quotaRps == 15 &&
+        incoming().status == 'Active' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser() &&
+        isValidId(accountId) &&
+        isValidDeveloperAccount(incoming(), accountId) &&
+        incoming().accountId == existing().accountId &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+      allow delete: if isValidId(accountId) && isAdmin();
+    }
+
+    // 3. API Keys & Metadata (Stores only hashed keys, never raw secrets)
+    match /apiKeys/{keyId} {
+      allow get: if isSignedIn() && isValidId(keyId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin());
+      allow create: if isVerifiedUser() &&
+        isValidId(keyId) &&
+        isValidApiKeyMetadata(incoming(), keyId) &&
+        incoming().createdAt == request.time &&
+        isAdmin();
+      allow update: if isVerifiedUser() &&
+        isValidId(keyId) &&
+        isValidApiKeyMetadata(incoming(), keyId) &&
+        incoming().keyId == existing().keyId &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().keyPrefix == existing().keyPrefix &&
+        incoming().keyHashSha256 == existing().keyHashSha256 &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status']) &&
+        incoming().status == 'Revoked' &&
+        (existing().ownerId == request.auth.uid || isAdmin());
+      allow delete: if false;
+    }
+
+    // 4. Agent Identities
+    match /agentIdentities/{agentId} {
+      allow get, list: if isSignedIn();
+      allow create: if isVerifiedUser() &&
+        isValidId(agentId) &&
+        isValidAgentIdentity(incoming(), agentId) &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().verificationStatus == 'UNVERIFIED' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser() &&
+        isValidId(agentId) &&
+        isValidAgentIdentity(incoming(), agentId) &&
+        incoming().agentId == existing().agentId &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+      allow delete: if false;
+    }
+
+    // 5. Agent Reputation Records (Users/Agents can NEVER modify reputation scores)
+    match /agentReputations/{agentId} {
+      allow get, list: if isSignedIn();
+      allow create, update: if isVerifiedUser() &&
+        isValidId(agentId) &&
+        isValidAgentReputation(incoming(), agentId) &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+      allow delete: if false;
+    }
+
+    // 6. Agent Proof Records (Users can only submit SELF_REPORTED unverified claims)
+    match /agentProofs/{proofId} {
+      allow get, list: if isSignedIn();
+      allow create: if isVerifiedUser() &&
+        isValidId(proofId) &&
+        isValidAgentProof(incoming(), proofId) &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().provenance == 'SELF_REPORTED' &&
+        incoming().verifiedByBackend == false &&
+        incoming().createdAt == request.time;
+      allow update: if isVerifiedUser() &&
+        isValidId(proofId) &&
+        isValidAgentProof(incoming(), proofId) &&
+        incoming().proofId == existing().proofId &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().agentId == existing().agentId &&
+        incoming().createdAt == existing().createdAt &&
+        isAdmin();
+      allow delete: if false;
+    }
+
+    // 7. Sentinel Risk Assessments (Client can NEVER mark an asset SAFE or forge scores)
+    match /sentinelAssessments/{assessmentId} {
+      allow get, list: if isSignedIn();
+      allow create, update: if isVerifiedUser() &&
+        isValidId(assessmentId) &&
+        isValidSentinelAssessment(incoming(), assessmentId) &&
+        incoming().createdAt == request.time &&
+        isAdmin();
+      allow delete: if false;
+    }
+
+    // 8a. Cryptographic Witness Metadata
+    match /witnessMetadata/{witnessId} {
+      allow get, list: if isSignedIn();
+      allow create: if isVerifiedUser() &&
+        isValidId(witnessId) &&
+        isValidWitnessMetadata(incoming(), witnessId) &&
+        incoming().createdAt == request.time &&
+        isAdmin();
+      allow update, delete: if false;
+    }
+
+    // 8b. Cryptographic Ed25519 Witness Key Epochs
+    match /witnessKeys/{keyId} {
+      allow get: if isSignedIn() && isValidId(keyId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin());
+      allow create: if isVerifiedUser() &&
+        isValidId(keyId) &&
+        isValidWitnessKey(incoming(), keyId) &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        isAdmin();
+      allow update: if isVerifiedUser() &&
+        isValidId(keyId) &&
+        isValidWitnessKey(incoming(), keyId) &&
+        existing().status != 'Revoked' &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().keyId == existing().keyId &&
+        incoming().publicKey == existing().publicKey &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status']) &&
+        isAdmin();
+      allow delete: if false;
+    }
+
+    // 9. Platform Analytics
+    match /platformAnalytics/{metricId} {
+      allow get, list: if isSignedIn();
+      allow create, update: if isVerifiedUser() &&
+        isValidId(metricId) &&
+        isValidPlatformAnalytics(incoming(), metricId) &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+      allow delete: if false;
+    }
+
+    // 10. Multi-Rail Payment Settlements (Client cannot forge Completed settlements; Admin/Backend only)
+    match /settlements/{settlementId} {
+      allow get: if isSignedIn() && isValidId(settlementId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin());
+      allow create: if isVerifiedUser() &&
+        isValidId(settlementId) &&
+        isValidSettlement(incoming()) &&
+        incoming().createdAt == request.time &&
+        isAdmin();
+      allow update: if isVerifiedUser() &&
+        isValidId(settlementId) &&
+        isValidSettlement(incoming()) &&
+        existing().status != 'Completed' &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        isAdmin();
+      allow delete: if false;
+    }
+
+    // 11. Administrative Configuration
+    match /adminConfig/{configId} {
+      allow get, list: if isAdmin();
+      allow create, update: if isVerifiedUser() &&
+        isValidId(configId) &&
+        isValidAdminConfig(incoming(), configId) &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+      allow delete: if false;
+    }
+
+    // 12. Immutable Security & Operational Audit Logs (Non-admins restricted to actor == 'user')
+    match /auditLogs/{logId} {
+      allow get: if isSignedIn() && isValidId(logId) && (existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin());
+      allow create: if isVerifiedUser() &&
+        isValidId(logId) &&
+        isValidAuditLog(incoming()) &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        (incoming().actor == 'user' || isAdmin());
+      allow update, delete: if false;
+    }
+  }
+}

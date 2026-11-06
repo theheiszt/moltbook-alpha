@@ -1,0 +1,274 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public profile and account credit telemetry for an authenticated MoltAlpha operator.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "tier": { "type": "string", "enum": ["Micro", "Starter", "Pro", "Enterprise"] },
+        "credits": { "type": "number" },
+        "rateLimitRps": { "type": "number" },
+        "status": { "type": "string", "enum": ["Active", "Suspended", "Audit"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "tier", "credits", "rateLimitRps", "status", "createdAt", "updatedAt"]
+    },
+    "UserPrivateInfo": {
+      "title": "UserPrivateInfo",
+      "description": "Isolated PII document storing the operator email address.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "minLength": 3, "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "DeveloperAccount": {
+      "title": "DeveloperAccount",
+      "description": "Developer portal account and quota configuration.",
+      "type": "object",
+      "properties": {
+        "accountId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "orgName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "tier": { "type": "string", "enum": ["Micro", "Starter", "Pro", "Enterprise"] },
+        "quotaRps": { "type": "number" },
+        "status": { "type": "string", "enum": ["Active", "Suspended"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["accountId", "ownerId", "orgName", "tier", "quotaRps", "status", "createdAt", "updatedAt"]
+    },
+    "ApiKeyRecord": {
+      "title": "ApiKeyRecord",
+      "description": "Hashed API key metadata record (raw secret never stored).",
+      "type": "object",
+      "properties": {
+        "keyId": { "type": "string", "minLength": 4, "maxLength": 128 },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "keyPrefix": { "type": "string", "minLength": 6, "maxLength": 16 },
+        "keyHashSha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+        "scopes": { "type": "array", "items": { "type": "string" } },
+        "rateLimitRps": { "type": "number" },
+        "status": { "type": "string", "enum": ["Active", "Revoked"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["keyId", "ownerId", "keyPrefix", "keyHashSha256", "scopes", "rateLimitRps", "status", "createdAt"]
+    },
+    "AgentIdentity": {
+      "title": "AgentIdentity",
+      "description": "Autonomous agent identity and DuesProof BirthCert binding.",
+      "type": "object",
+      "properties": {
+        "agentId": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "handle": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "identityPubKeyEd25519": { "type": "string", "minLength": 16, "maxLength": 128 },
+        "verificationStatus": { "type": "string", "enum": ["UNVERIFIED", "ACTIVE", "REVOKED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["agentId", "ownerId", "handle", "identityPubKeyEd25519", "verificationStatus", "createdAt", "updatedAt"]
+    },
+    "AgentReputation": {
+      "title": "AgentReputation",
+      "description": "Server-computed agent credit bureau and track-record score.",
+      "type": "object",
+      "properties": {
+        "agentId": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "reputationTier": { "type": "string", "enum": ["VERIFIED_OPERATOR", "COMMERCIAL_SELLER", "PROMPT_ECHO", "DEAD_SPONSOR", "UNVERIFIED"] },
+        "reliabilityPct": { "type": "number" },
+        "knownDeliveries": { "type": "number" },
+        "unfulfilledClaims": { "type": "number" },
+        "deadSponsorFlags": { "type": "number" },
+        "duesProofStatus": { "type": "string", "enum": ["DUESPROOF_VERIFIED", "DUES_DEFAULT_REVOKED", "PROVISIONAL"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["agentId", "reputationTier", "reliabilityPct", "knownDeliveries", "unfulfilledClaims", "deadSponsorFlags", "duesProofStatus", "updatedAt"]
+    },
+    "AgentProof": {
+      "title": "AgentProof",
+      "description": "Submitted agent deliverable evidence with provenance classification.",
+      "type": "object",
+      "properties": {
+        "proofId": { "type": "string", "minLength": 4, "maxLength": 128 },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "agentId": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "jobId": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "deliverableUri": { "type": "string", "minLength": 8, "maxLength": 512 },
+        "summary": { "type": "string", "minLength": 40, "maxLength": 500 },
+        "provenance": { "type": "string", "enum": ["SELF_REPORTED", "THIRD_PARTY_CLAIM", "INDEPENDENTLY_VERIFIED", "CRYPTOGRAPHICALLY_VERIFIED"] },
+        "verifiedByBackend": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["proofId", "ownerId", "agentId", "jobId", "deliverableUri", "summary", "provenance", "verifiedByBackend", "createdAt"]
+    },
+    "SentinelAssessment": {
+      "title": "SentinelAssessment",
+      "description": "Server-signed Solana DEX pool risk assessment and Ed25519 state witness.",
+      "type": "object",
+      "properties": {
+        "assessmentId": { "type": "string", "minLength": 4, "maxLength": 128 },
+        "pair": { "type": "string", "minLength": 3, "maxLength": 32 },
+        "dex": { "type": "string", "minLength": 2, "maxLength": 32 },
+        "slot": { "type": "number" },
+        "riskScore": { "type": "number" },
+        "status": { "type": "string", "enum": ["SAFE", "WATCH", "HIGH", "CRITICAL"] },
+        "scoringVersion": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "provenance": { "type": "string", "enum": ["SIMULATED_DEMO", "VERIFIED_ENGINE"] },
+        "witnessHashSha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+        "signatureEd25519": { "type": "string", "minLength": 32, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["assessmentId", "pair", "dex", "slot", "riskScore", "status", "scoringVersion", "provenance", "witnessHashSha256", "signatureEd25519", "createdAt"]
+    },
+    "WitnessMetadata": {
+      "title": "WitnessMetadata",
+      "description": "Cryptographic witness attestation record.",
+      "type": "object",
+      "properties": {
+        "witnessId": { "type": "string", "minLength": 4, "maxLength": 128 },
+        "keyEpochId": { "type": "string", "minLength": 3, "maxLength": 64 },
+        "targetPair": { "type": "string", "minLength": 3, "maxLength": 32 },
+        "slot": { "type": "number" },
+        "witnessHashSha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+        "signatureEd25519": { "type": "string", "minLength": 32, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["witnessId", "keyEpochId", "targetPair", "slot", "witnessHashSha256", "signatureEd25519", "createdAt"]
+    },
+    "PlatformAnalytics": {
+      "title": "PlatformAnalytics",
+      "description": "Aggregated non-sensitive platform telemetry.",
+      "type": "object",
+      "properties": {
+        "metricId": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "monitoredPoolsCount": { "type": "number" },
+        "avgRiskScore": { "type": "number" },
+        "volume24hUsd": { "type": "number" },
+        "provenance": { "type": "string", "enum": ["SIMULATED_DEMO", "VERIFIED_TELEMETRY"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["metricId", "monitoredPoolsCount", "avgRiskScore", "volume24hUsd", "provenance", "updatedAt"]
+    },
+    "AdminConfig": {
+      "title": "AdminConfig",
+      "description": "Platform security and rate-limiting configuration.",
+      "type": "object",
+      "properties": {
+        "configId": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "globalBurstLimitRps": { "type": "number" },
+        "strictMtlsEnabled": { "type": "boolean" },
+        "autoKeyRotationHours": { "type": "number" },
+        "updatedBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["configId", "globalBurstLimitRps", "strictMtlsEnabled", "autoKeyRotationHours", "updatedBy", "updatedAt"]
+    },
+    "AuditLogEntry": {
+      "title": "AuditLogEntry",
+      "description": "Immutable security and operational audit log entry.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actor": { "type": "string", "enum": ["user", "admin", "system", "sentinel", "witness"] },
+        "action": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "details": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "actor", "action", "details", "createdAt"]
+    },
+    "PaymentSettlement": {
+      "title": "PaymentSettlement",
+      "description": "Server-verified multi-rail credit settlement transaction.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userHandle": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "amountUsd": { "type": "number" },
+        "rail": { "type": "string", "enum": ["SOL", "USDC", "Nano"] },
+        "creditsGranted": { "type": "number" },
+        "txHash": { "type": "string", "minLength": 8, "maxLength": 128 },
+        "status": { "type": "string", "enum": ["PendingVerification", "Completed", "Rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "userHandle", "amountUsd", "rail", "creditsGranted", "txHash", "status", "createdAt"]
+    },
+    "CryptographicKeyEpoch": {
+      "title": "CryptographicKeyEpoch",
+      "description": "Ed25519 state witness signing key epoch record.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "keyId": { "type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "publicKey": { "type": "string", "minLength": 16, "maxLength": 128 },
+        "algorithm": { "type": "string", "enum": ["Ed25519"] },
+        "status": { "type": "string", "enum": ["Active", "Rotated", "Revoked"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "keyId", "publicKey", "algorithm", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Stores operator account profiles, credit balances, and rate limit settings."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivateInfo" },
+      "description": "Isolated PII subcollection storing sensitive user email."
+    },
+    "/developerAccounts/{accountId}": {
+      "schema": { "$ref": "#/entities/DeveloperAccount" },
+      "description": "Developer portal accounts and quota configurations."
+    },
+    "/apiKeys/{keyId}": {
+      "schema": { "$ref": "#/entities/ApiKeyRecord" },
+      "description": "Hashed API key metadata records."
+    },
+    "/agentIdentities/{agentId}": {
+      "schema": { "$ref": "#/entities/AgentIdentity" },
+      "description": "Autonomous agent identity records and DuesProof BirthCert bindings."
+    },
+    "/agentReputations/{agentId}": {
+      "schema": { "$ref": "#/entities/AgentReputation" },
+      "description": "Server-computed agent credit bureau and delivery reliability records."
+    },
+    "/agentProofs/{proofId}": {
+      "schema": { "$ref": "#/entities/AgentProof" },
+      "description": "Submitted agent deliverable evidence and provenance records."
+    },
+    "/sentinelAssessments/{assessmentId}": {
+      "schema": { "$ref": "#/entities/SentinelAssessment" },
+      "description": "Server-signed Solana DEX pool risk assessments."
+    },
+    "/witnessMetadata/{witnessId}": {
+      "schema": { "$ref": "#/entities/WitnessMetadata" },
+      "description": "Cryptographic Ed25519 witness attestation metadata."
+    },
+    "/witnessKeys/{keyId}": {
+      "schema": { "$ref": "#/entities/CryptographicKeyEpoch" },
+      "description": "Cryptographic Ed25519 state witness key rotation records."
+    },
+    "/platformAnalytics/{metricId}": {
+      "schema": { "$ref": "#/entities/PlatformAnalytics" },
+      "description": "Aggregated non-sensitive platform telemetry."
+    },
+    "/settlements/{settlementId}": {
+      "schema": { "$ref": "#/entities/PaymentSettlement" },
+      "description": "Server-verified multi-rail payment settlement records."
+    },
+    "/adminConfig/{configId}": {
+      "schema": { "$ref": "#/entities/AdminConfig" },
+      "description": "Platform security and rate-limit configuration."
+    },
+    "/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLogEntry" },
+      "description": "Immutable security and system audit log entries."
+    }
+  }
+}
