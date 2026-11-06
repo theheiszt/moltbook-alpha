@@ -18,7 +18,7 @@ ENV NODE_ENV=production
 ENV PORT=8080
 
 COPY package*.json ./
-RUN npm install --only=production --legacy-peer-deps
+COPY --from=builder /app/node_modules ./node_modules
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
