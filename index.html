@@ -891,133 +891,110 @@
                         Inspect live briefing schema, signals, and cryptographic state witness instantly without API keys or payments:
                     </div>
                     <div class="mt-2 font-mono text-xs text-emerald-300 bg-black/60 px-3 py-1.5 rounded border border-slate-800 flex items-center justify-between min-w-0 max-w-full overflow-hidden">
-                        <span class="truncate mr-2">curl -s https://theheiszt.github.io/moltbook-alpha/sample.json | jq .</span>
-                        <button onclick="copyToClipboard('curl -s https://theheiszt.github.io/moltbook-alpha/sample.json | jq .', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">Copy</button>
+                        <span class="truncate mr-2">curl -s https://api.moltalpha.dev/v1/intel/sample | jq .</span>
+                        <button onclick="copyToClipboard('curl -s https://api.moltalpha.dev/v1/intel/sample | jq .', this)" class="ml-2 text-slate-400 hover:text-white transition px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-[11px]">Copy</button>
                     </div>
                 </div>
-                <a href="https://theheiszt.github.io/moltbook-alpha/sample.json" target="_blank" rel="noopener noreferrer" class="shrink-0 cyber-btn cyber-btn-cyan px-4 py-2 text-white text-xs font-mono transition shadow-md">
-                    View sample.json →
+                <a href="https://api.moltalpha.dev/v1/intel/sample" target="_blank" rel="noopener noreferrer" class="shrink-0 cyber-btn cyber-btn-cyan px-4 py-2 text-white text-xs font-mono transition shadow-md">
+                    View Live Sample →
                 </a>
             </div>
 
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-bold text-white flex items-center gap-2">
-                    <span>⚡</span> Developer & Agent Quickstart
+                    <span>⚡</span> Developer &amp; Agent Integration Evaluation
                 </h3>
                 <div class="flex flex-wrap bg-slate-900 border border-slate-800 p-1 text-xs font-mono gap-1">
                     <button onclick="setTab('exchange')" id="tabBtnExchange" class="px-3 py-1 rounded bg-sky-600 text-white font-medium transition">Agent Exchange (v1)</button>
                     <button onclick="setTab('caps')" id="tabBtnCaps" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Capabilities</button>
-                    <button onclick="setTab('webhooks')" id="tabBtnWebhooks" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Webhooks</button>
-                    <button onclick="setTab('sdk')" id="tabBtnSdk" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Python SDK</button>
-                    <button onclick="setTab('arb')" id="tabBtnArb" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Arbitrage Scanner</button>
-                    <button onclick="setTab('alpha')" id="tabBtnAlpha" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Trading Alpha</button>
+                    <button onclick="setTab('sdk')" id="tabBtnSdk" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">SDK Install</button>
+                    <button onclick="setTab('arb')" id="tabBtnArb" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Arbitrage Example</button>
+                    <button onclick="setTab('alpha')" id="tabBtnAlpha" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Trading Alpha Example</button>
                     <button onclick="setTab('curl')" id="tabBtnCurl" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">Multi-Rail cURL</button>
-                    <button onclick="setTab('dag')" id="tabBtnDag" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">DAG Tools</button>
                     <button onclick="setTab('witness')" id="tabBtnWitness" class="px-3 py-1 rounded text-slate-400 hover:text-white transition">State Witness</button>
-                    <button onclick="setTab('sentinel')" id="tabBtnSentinel" class="px-3 py-1 rounded text-rose-400 hover:text-white transition font-semibold">🛡️ Sentinel</button>
+                    <button onclick="setTab('member')" id="tabBtnMember" class="px-3 py-1 rounded text-amber-300 hover:text-white transition font-semibold">🔒 Account SDK &amp; MCP Bundle</button>
                 </div>
             </div>
 
             <!-- Tab Content: Agent Data Exchange (v1) -->
             <div id="tabExchange" class="bracket-card overflow-hidden shadow-2xl">
                 <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
-                    <span class="text-slate-400 font-mono">Agent Data Exchange (v1) — Catalog, Schemas & Idempotent Snapshots</span>
+                    <span class="text-slate-400 font-mono">Agent Data Exchange (v1) — Catalog, Schemas &amp; Idempotent Snapshots</span>
                     <button onclick="copyCode('codeExchange', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
-                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeExchange" tabindex="0"><code><span class="text-slate-500"># 1. Discover available data products on the exchange</span>
+                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeExchange" tabindex="0"><code><span class="text-slate-500"># 1. Discover available data products on the exchange (Public - 0 credits)</span>
 curl -s <span class="text-emerald-300">"$GATEWAY/v1/data-products"</span> | jq .
 
-<span class="text-slate-500"># 2. Inspect full JSON Schema & contract for Moltbook Agent Intelligence Feed</span>
+<span class="text-slate-500"># 2. Inspect JSON Schema &amp; contract for Moltbook Agent Intelligence Feed (Public - 0 credits)</span>
 curl -s <span class="text-emerald-300">"$GATEWAY/v1/data-products/moltbook-agent-intelligence-feed"</span> | jq .
 
-<span class="text-slate-500"># 3. Retrieve latest validated snapshot (1 credit deducted atomically, zero double-charge on retries)</span>
-curl -s -H <span class="text-emerald-300">"X-API-KEY: molt_live_your_key_here"</span>         -H <span class="text-emerald-300">"Idempotency-Key: agent_req_01a2b3c4"</span>         <span class="text-emerald-300">"$GATEWAY/v1/data-products/moltbook-agent-intelligence-feed/latest"</span> | jq .
+<span class="text-slate-500"># 3. Retrieve live validated snapshot (Paid - 1 credit deducted atomically, idempotent on retries)</span>
+curl -s -H <span class="text-emerald-300">"X-API-KEY: molt_live_your_key_here"</span> -H <span class="text-emerald-300">"Idempotency-Key: agent_req_01a2b3c4"</span> <span class="text-emerald-300">"$GATEWAY/v1/data-products/moltbook-agent-intelligence-feed/latest"</span> | jq .
 
 <span class="text-slate-500"># 4. Check account usage and remaining entitlement without burning credits</span>
-curl -s -H <span class="text-emerald-300">"X-API-KEY: molt_live_your_key_here"</span>         <span class="text-emerald-300">"$GATEWAY/v1/account/usage"</span> | jq .</code></pre>
+curl -s -H <span class="text-emerald-300">"X-API-KEY: molt_live_your_key_here"</span> <span class="text-emerald-300">"$GATEWAY/v1/account/usage"</span> | jq .</code></pre>
             </div>
 
             <!-- Tab Content: Capability Discovery -->
             <div id="tabCaps" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl">
                 <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
-                    <span class="text-slate-400 font-mono">Agent Capability Discovery — GET /v1/capabilities</span>
+                    <span class="text-slate-400 font-mono">API Capabilities &amp; Basic OpenAPI Schema — GET /v1/capabilities &amp; /openapi.json</span>
                     <button onclick="copyCode('codeCaps', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
-                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeCaps" tabindex="0"><code><span class="text-slate-500"># Machine-readable discovery: lets orchestrators dynamically select tools and verify version compatibility</span>
+                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeCaps" tabindex="0"><code><span class="text-slate-500"># 1. Inspect machine-readable capability manifest &amp; pricing (Public - 0 credits)</span>
 curl -s <span class="text-emerald-300">"$GATEWAY/v1/capabilities"</span> | jq .
 
-<span class="text-slate-500"># Response provides complete endpoint schemas, costs, quotas, and supported payment rails:</span>
+<span class="text-slate-500"># 2. Fetch Basic OpenAPI 3.1 Schema for codegen &amp; evaluation (Public - 0 credits)</span>
+curl -s <span class="text-emerald-300">"$GATEWAY/openapi.json"</span> | jq .
+
+<span class="text-slate-500"># Example Capabilities Summary:</span>
 {
   <span class="text-white">"service"</span>: <span class="text-emerald-300">"moltbook-alpha-api"</span>,
   <span class="text-white">"api_version"</span>: <span class="text-emerald-300">"1.2.0"</span>,
   <span class="text-white">"accepted_rails"</span>: [<span class="text-emerald-300">"solana"</span>, <span class="text-emerald-300">"nano"</span>],
   <span class="text-white">"capabilities"</span>: {
     <span class="text-white">"agent_data_exchange"</span>: { <span class="text-white">"status"</span>: <span class="text-emerald-300">"GA"</span>, <span class="text-white">"cost_credits"</span>: 1 },
-    <span class="text-white">"trading_alpha_and_arbitrage"</span>: { <span class="text-white">"status"</span>: <span class="text-emerald-300">"GA"</span> },
-    <span class="text-white">"account_and_usage"</span>: { <span class="text-white">"status"</span>: <span class="text-emerald-300">"GA"</span> },
-    <span class="text-white">"dag_tool_parameters"</span>: { <span class="text-white">"status"</span>: <span class="text-emerald-300">"GA"</span> },
+    <span class="text-white">"trading_alpha_and_arbitrage"</span>: { <span class="text-white">"status"</span>: <span class="text-emerald-300">"GA"</span>, <span class="text-white">"cost_credits"</span>: 1 },
+    <span class="text-white">"sentinel_risk_telemetry"</span>: { <span class="text-white">"status"</span>: <span class="text-emerald-300">"GA"</span>, <span class="text-white">"tier_required"</span>: <span class="text-emerald-300">"SENTINEL_MEMBER"</span> },
     <span class="text-white">"cryptographic_witnesses"</span>: { <span class="text-white">"status"</span>: <span class="text-emerald-300">"GA"</span> }
   }
 }</code></pre>
             </div>
 
-            <!-- Tab Content: Webhooks & Push Alerts -->
-            <div id="tabWebhooks" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl">
-                <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
-                    <span class="text-slate-400 font-mono">Outbound HTTPS Push Webhooks — HMAC-SHA256 Signed Alerts</span>
-                    <button onclick="copyCode('codeWebhooks', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
-                </div>
-                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeWebhooks"><code><span class="text-slate-500"># 1. Register an automated HTTPS push webhook for real-time arbitrage & security anomalies</span>
-curl -s -X POST <span class="text-emerald-300">"$GATEWAY/v1/webhooks/subscribe"</span>   -H <span class="text-emerald-300">"Content-Type: application/json"</span>   -d <span class="text-emerald-300">'{
-    "target_url": "https://your-bot-server.com/api/moltbook-alerts",
-    "secret_token": "your_client_hmac_secret_key_2026",
-    "subscribed_events": ["CROSS_DEX_ARBITRAGE", "SECURITY_ANOMALY"],
-    "min_severity": "HIGH"
-  }'</span> | jq .
-
-<span class="text-slate-500"># 2. Test ping with HMAC-SHA256 signature verification</span>
-curl -s -X POST <span class="text-emerald-300">"$GATEWAY/v1/webhooks/test/sub_YOUR_ID"</span> | jq .</code></pre>
-            </div>
-
-            <!-- Tab Content: Python SDK -->
+            <!-- Tab Content: SDK Installation Instructions -->
             <div id="tabSdk" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl">
                 <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
-                    <span class="text-slate-400 font-mono">agent_workflow.py — Zero-dependency Standard Library SDK</span>
-                    <button onclick="copyCode('codeSdk', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
+                    <span class="text-slate-400 font-mono">SDK Installation &amp; Quick Integration (Python &amp; TypeScript)</span>
+                    <button onclick="copyCode('codeSdkInstall', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
-                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeSdk"><code><span class="text-slate-500"># 1. Install official SDK (Zero external dependencies required)</span>
-<span class="text-emerald-400">pip install ./sdk</span>
+                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeSdkInstall"><code><span class="text-slate-500"># 1. Install standard HTTP / Ed25519 client dependencies</span>
+<span class="text-emerald-400">pip install httpx pynacl</span>
 
-<span class="text-slate-500"># 2. Complete autonomous agent intelligence & trading alpha loop</span>
-<span class="text-indigo-400">from</span> moltbook_intel <span class="text-indigo-400">import</span> MoltbookIntelClient, MoltbookApiError
+<span class="text-slate-500"># 2. Evaluate public sample briefing (0 credits, no key required)</span>
+<span class="text-indigo-400">import</span> httpx
 
-client = MoltbookIntelClient(
-    base_url=<span class="text-emerald-300">"https://moltbook-alpha.duckdns.org"</span>,
-    api_key=<span class="text-emerald-300">"molt_live_your_alpha_key_here"</span>
-)
+GATEWAY = <span class="text-emerald-300">"https://api.moltalpha.dev"</span>
+sample = httpx.get(<span class="text-emerald-300">f"{GATEWAY}/v1/intel/sample"</span>, timeout=<span class="text-amber-300">10.0</span>).json()
+<span class="text-sky-400">print</span>(<span class="text-emerald-300">"Sample Witness ID:"</span>, sample[<span class="text-emerald-300">"state_witness"</span>][<span class="text-emerald-300">"witness_id"</span>])
 
-<span class="text-slate-500"># Scan real-time cross-DEX arbitrage & liquidity gaps</span>
-opps = client.get_opportunities(min_profit_pct=<span class="text-amber-300">0.05</span>)
-<span class="text-sky-400">print</span>(<span class="text-emerald-300">f"Found {len(opps)} live arbitrage paths across Orca, Raydium, and Meteora"</span>)
-
-<span class="text-slate-500"># Retrieve structured machine-readable quantitative trading signals</span>
-signals = client.get_trading_signals(min_confidence=<span class="text-amber-300">0.80</span>)
-<span class="text-indigo-400">for</span> s <span class="text-indigo-400">in</span> signals:
-    <span class="text-sky-400">print</span>(<span class="text-emerald-300">f"{s['asset']} {s['action']} @ ${s['entry_price']} -> Stop: ${s['stop_loss']}"</span>)</code></pre>
+<span class="text-slate-500"># 3. Execute live authenticated queries once you have a paid X-API-KEY</span>
+headers = {<span class="text-emerald-300">"X-API-KEY"</span>: <span class="text-emerald-300">"molt_live_your_alpha_key_here"</span>}
+opps = httpx.get(<span class="text-emerald-300">f"{GATEWAY}/v1/intel/opportunities"</span>, params={<span class="text-emerald-300">"min_profit_pct"</span>: <span class="text-amber-300">0.05</span>}, headers=headers).json()
+<span class="text-sky-400">print</span>(<span class="text-emerald-300">f"Live arbitrage paths: {opps['count']}"</span>)</code></pre>
             </div>
 
-            <!-- Tab Content: Arbitrage Scanner -->
+            <!-- Tab Content: Arbitrage Scanner Response Example -->
             <div id="tabArb" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl">
                 <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
-                    <span class="text-slate-400 font-mono">Terminal — GET /v1/intel/opportunities (Live Cross-DEX Scanner)</span>
+                    <span class="text-slate-400 font-mono">Endpoint &amp; Response Example — GET /v1/intel/opportunities (Paid: 1 credit)</span>
                     <button onclick="copyCode('codeArb', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
                 <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeArb"><code><span class="text-slate-500"># Query real-time cross-DEX arbitrage opportunities with net profit filtering</span>
-curl -s -H <span class="text-emerald-300">"X-API-KEY: $MOLT_KEY"</span> <span class="text-emerald-300">"$GATEWAY/v1/intel/opportunities?min_profit_pct=0.05"</span> | jq .   <span class="text-slate-500"># 1 credit</span>
+curl -s -H <span class="text-emerald-300">"X-API-KEY: $MOLT_KEY"</span> <span class="text-emerald-300">"$GATEWAY/v1/intel/opportunities?min_profit_pct=0.05"</span> | jq .
 
-<span class="text-slate-500"># Sample Response:</span>
+<span class="text-slate-500"># Response Schema Example:</span>
 {
-  <span class="text-white">"count"</span>: 10,
+  <span class="text-white">"count"</span>: 1,
   <span class="text-white">"min_profit_pct"</span>: 0.05,
   <span class="text-white">"opportunities"</span>: [
     {
@@ -1034,16 +1011,16 @@ curl -s -H <span class="text-emerald-300">"X-API-KEY: $MOLT_KEY"</span> <span cl
 }</code></pre>
             </div>
 
-            <!-- Tab Content: Trading Alpha -->
+            <!-- Tab Content: Trading Alpha Response Example -->
             <div id="tabAlpha" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl">
                 <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
-                    <span class="text-slate-400 font-mono">Terminal — GET /v1/intel/signals/trading (Quantitative Directives)</span>
+                    <span class="text-slate-400 font-mono">Endpoint &amp; Response Example — GET /v1/intel/signals/trading (Paid: 1 credit)</span>
                     <button onclick="copyCode('codeAlpha', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
                 <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeAlpha"><code><span class="text-slate-500"># Query structured trading alpha directives for Solana ecosystem assets</span>
-curl -s -H <span class="text-emerald-300">"X-API-KEY: $MOLT_KEY"</span> <span class="text-emerald-300">"$GATEWAY/v1/intel/signals/trading?asset=SOL"</span> | jq .   <span class="text-slate-500"># 1 credit</span>
+curl -s -H <span class="text-emerald-300">"X-API-KEY: $MOLT_KEY"</span> <span class="text-emerald-300">"$GATEWAY/v1/intel/signals/trading?asset=SOL"</span> | jq .
 
-<span class="text-slate-500"># Sample Response:</span>
+<span class="text-slate-500"># Response Schema Example:</span>
 {
   <span class="text-white">"count"</span>: 1,
   <span class="text-white">"trading_signals"</span>: [
@@ -1060,81 +1037,58 @@ curl -s -H <span class="text-emerald-300">"X-API-KEY: $MOLT_KEY"</span> <span cl
 }</code></pre>
             </div>
 
-            <!-- Tab Content: Multi-Rail cURL -->
+            <!-- Tab Content: Multi-Rail cURL (Public Payment & Key Claim Onboarding) -->
             <div id="tabCurl" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl">
                 <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
-                    <span class="text-slate-400 font-mono">Terminal — Multi-Rail Settlement (Solana & Nano)</span>
+                    <span class="text-slate-400 font-mono">Terminal — Multi-Rail Settlement &amp; Key Onboarding (Solana &amp; Nano)</span>
                     <button onclick="copyCode('codeCurl', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
                 <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeCurl"><code><span class="text-slate-500"># --- OPTION A: Instant Zero-Fee Nano Settlement ---</span>
-<span class="text-slate-500"># 1. Create a zero-fee Nano invoice ($0.25 for 15 queries)</span>
-curl -s -X POST $GATEWAY/v1/payments/invoice   -H <span class="text-emerald-300">"Content-Type: application/json"</span>   -d <span class="text-emerald-300">'{"tier": "tier_micro", "rail": "nano"}'</span>
+<span class="text-slate-500"># 1. Create a zero-fee Nano invoice ($0.25 for 25 queries)</span>
+curl -s -X POST $GATEWAY/v1/payments/invoice -H <span class="text-emerald-300">"Content-Type: application/json"</span> -d <span class="text-emerald-300">'{"tier": "tier_micro", "rail": "nano"}'</span>
 
-<span class="text-slate-500"># 2. Verify Nano block hash and mint your API key</span>
-curl -s -X POST $GATEWAY/v1/payments/verify-nano   -H <span class="text-emerald-300">"Content-Type: application/json"</span>   -d <span class="text-emerald-300">'{"block_hash": "YOUR_NANO_BLOCK_HASH", "invoice_id": "inv_YOUR_ID"}'</span>
+<span class="text-slate-500"># 2. Verify Nano block hash and claim your API key</span>
+curl -s -X POST $GATEWAY/v1/payments/verify-nano -H <span class="text-emerald-300">"Content-Type: application/json"</span> -d <span class="text-emerald-300">'{"block_hash": "YOUR_NANO_BLOCK_HASH", "invoice_id": "inv_YOUR_ID", "claim_secret": "YOUR_CLAIM_SECRET"}'</span>
 
 <span class="text-slate-500"># --- OPTION B: Solana Pay Settlement (USDC / SOL) ---</span>
-<span class="text-slate-500"># 1. Create a Solana Pay invoice ($1.00 USDC for 50 credits)</span>
-curl -s -X POST $GATEWAY/v1/payments/invoice   -H <span class="text-emerald-300">"Content-Type: application/json"</span>   -d <span class="text-emerald-300">'{"tier": "tier_starter", "asset": "USDC", "rail": "solana"}'</span>
+<span class="text-slate-500"># 1. Create a Solana Pay invoice ($1.00 USDC for 150 credits)</span>
+curl -s -X POST $GATEWAY/v1/payments/invoice -H <span class="text-emerald-300">"Content-Type: application/json"</span> -d <span class="text-emerald-300">'{"tier": "tier_starter", "asset": "USDC", "rail": "solana"}'</span>
 
-<span class="text-slate-500"># 2. Verify Solana transaction on finalized commitment</span>
-curl -s -X POST $GATEWAY/v1/payments/verify-solana   -H <span class="text-emerald-300">"Content-Type: application/json"</span>   -d <span class="text-emerald-300">'{"transaction_signature": "YOUR_SOLANA_TX_SIG", "invoice_id": "inv_YOUR_ID"}'</span></code></pre>
+<span class="text-slate-500"># 2. Verify Solana transaction on finalized commitment and claim your API key</span>
+curl -s -X POST $GATEWAY/v1/payments/verify-solana -H <span class="text-emerald-300">"Content-Type: application/json"</span> -d <span class="text-emerald-300">'{"transaction_signature": "YOUR_SOLANA_TX_SIG", "invoice_id": "inv_YOUR_ID", "claim_secret": "YOUR_CLAIM_SECRET"}'</span></code></pre>
             </div>
 
-            <!-- Tab Content: DAG Tools -->
-            <div id="tabDag" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl">
-                <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
-                    <span class="text-slate-400 font-mono">dag_tool_planning.py — Kahn's Topological Sorting</span>
-                    <button onclick="copyCode('codeDag', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
-                </div>
-                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeDag"><code><span class="text-slate-500"># Compile and validate parameter requirements before executing tool requests</span>
-resolver = client.get_dag_resolver(<span class="text-emerald-300">"verify_solana_payment"</span>)
-
-<span class="text-sky-400">print</span>(<span class="text-emerald-300">"Schema Version:"</span>, resolver.version)
-<span class="text-sky-400">print</span>(<span class="text-emerald-300">"Execution Stages:"</span>, resolver.topological_stages)
-
-result = resolver.validate({
-    <span class="text-emerald-300">"invoice_id"</span>: <span class="text-emerald-300">"inv_test_123"</span>,
-    <span class="text-emerald-300">"transaction_signature"</span>: <span class="text-emerald-300">"4vJ9JU1bJJE96ZXUsCFHRaeLiMWEx78bsV3S4..."</span>,
-})
-<span class="text-sky-400">print</span>(<span class="text-emerald-300">"Validation result:"</span>, result[<span class="text-emerald-300">"valid"</span>])</code></pre>
-            </div>
-
-            <!-- Tab Content: Offline Witness -->
-            <!-- Tab Content: Sentinel Risk & Preflight -->
-            <div id="tabSentinel" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl">
-                <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
-                    <span class="text-rose-400 font-mono">Terminal — Sentinel Risk Intelligence &amp; Preflight Verification</span>
-                    <button onclick="copyCode('codeSentinel', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
-                </div>
-                <pre class="p-5 text-xs text-rose-300 font-mono overflow-x-auto leading-relaxed" id="codeSentinel"><code><span class="text-slate-500"># 1. Preflight pool risk check before committing capital</span>
-curl -s <span class="text-emerald-300">"$GATEWAY/v1/sentinel/pools/Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE/risk?chain=solana"</span> | jq .
-
-<span class="text-slate-500"># 2. Retrieve public Ed25519 witness key for independent verification</span>
-curl -s <span class="text-emerald-300">"$GATEWAY/.well-known/sentinel-key.json"</span> | jq .
-
-<span class="text-slate-500"># 3. Check active critical DEX anomalies across ecosystems</span>
-curl -s <span class="text-emerald-300">"$GATEWAY/v1/sentinel/anomalies/live"</span> | jq .
-
-<span class="text-slate-500"># 4. Query Agent Credit Bureau dossier</span>
-curl -s <span class="text-emerald-300">"$GATEWAY/v1/sentinel/agents/antigravityandrew"</span> | jq .</code></pre>
-            </div>
-
+            <!-- Tab Content: State Witness Verification -->
             <div id="tabWitness" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl">
                 <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
-                    <span class="text-slate-400 font-mono">offline_witness_verification.py — RFC 8785 + Ed25519</span>
+                    <span class="text-slate-400 font-mono">Cryptographic State Witness Verification — RFC 8785 JCS + Ed25519</span>
                     <button onclick="copyCode('codeWitness', this)" class="text-slate-400 hover:text-white font-mono flex items-center gap-1 text-[11px]">Copy</button>
                 </div>
-                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeWitness"><code><span class="text-slate-500"># Server state transitions emit verifiable digital cryptographic receipts</span>
-witness = client.get_witness(<span class="text-emerald-300">"wit_20261018_000003_d8c73eae"</span>)
+                <pre class="p-5 text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed" id="codeWitness"><code><span class="text-slate-500"># 1. Fetch active Ed25519 public witness keys (Public - 0 credits)</span>
+curl -s <span class="text-emerald-300">"$GATEWAY/v1/witnesses/public-keys"</span> | jq .
 
-<span class="text-slate-500"># Local RFC 8785 canonical hash computation and Ed25519 signature check</span>
-audit = client.verify_witness_local(witness)
+<span class="text-slate-500"># 2. Verify any signed state witness receipt against RFC 8785 canonical digest</span>
+curl -s -X POST <span class="text-emerald-300">"$GATEWAY/v1/witnesses/verify"</span> -H <span class="text-emerald-300">"Content-Type: application/json"</span> -d <span class="text-emerald-300">'{"witness_id": "wit_sample_e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}'</span> | jq .</code></pre>
+            </div>
 
-<span class="text-sky-400">print</span>(<span class="text-emerald-300">"Digest Matches:"</span>, audit[<span class="text-emerald-300">"digest_matches"</span>])
-<span class="text-sky-400">print</span>(<span class="text-emerald-300">"Signature Valid:"</span>, audit[<span class="text-emerald-300">"signature_valid"</span>])
-<span class="text-sky-400">print</span>(<span class="text-emerald-300">"Sequence Number:"</span>, witness[<span class="text-emerald-300">"sequence_number"</span>])
-<span class="text-slate-500"># Hash-chained evidence proves non-repudiation without central authority</span></code></pre>
+            <!-- Tab Content: Paid Member Account-Specific SDK Configuration & Specialized MCP Bundle -->
+            <div id="tabMember" class="hidden glass-card rounded-2xl overflow-hidden shadow-2xl border border-amber-500/30">
+                <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center text-xs">
+                    <span class="text-amber-300 font-mono">🔒 Account-Specific SDK Configuration &amp; Specialized Agent/MCP Bundle</span>
+                    <span class="text-[11px] font-mono text-slate-400">Paid Members Only (0 credits deducted)</span>
+                </div>
+                <div class="p-5 bg-slate-950/80">
+                    <p class="text-xs text-slate-300 mb-3 leading-relaxed">
+                        While product capabilities, endpoint examples, SDK installation instructions, and the basic OpenAPI schema (<code>/openapi.json</code>) are publicly inspectable, <strong>live authenticated API calls, premium Sentinel telemetry, specialized agent/MCP bundles, and account-specific SDK configurations</strong> require an active paid <code>molt_...</code> API key:
+                    </p>
+                    <div class="flex flex-col sm:flex-row gap-2 mb-4">
+                        <input id="memberSdkKeyInput" type="password" placeholder="Enter active paid X-API-KEY (molt_...)" class="grow bg-black/80 border border-slate-700 focus:border-sky-500 rounded px-3 py-2 text-xs font-mono text-white outline-none" />
+                        <button onclick="unlockMemberSdk()" class="cyber-btn cyber-btn-cyan px-4 py-2 text-xs font-mono font-bold text-white shrink-0">
+                            Load Account SDK &amp; MCP Config →
+                        </button>
+                    </div>
+                    <pre id="codeSdk" class="p-4 bg-black/90 border border-slate-800 rounded text-xs text-slate-400 font-mono overflow-x-auto leading-relaxed">🔒 Locked — Enter an active paid X-API-KEY above (or purchase a $0.25+ tier below) to retrieve your account-specific SDK configuration and specialized MCP bundle from GET /v1/account/sdk-access.</pre>
+                </div>
             </div>
         </section>
 
@@ -1463,25 +1417,25 @@ audit = client.verify_witness_local(witness)
             </div>
         </section>
 
-        <!-- Technical Specification Links -->
+        <!-- Legal & Onboarding Specifications -->
         <section class="border-t border-slate-800/80 pt-10 mb-12">
-            <h3 class="text-sm uppercase tracking-wider text-slate-400 font-semibold mb-4">Architecture & Audit Specifications</h3>
+            <h3 class="text-sm uppercase tracking-wider text-slate-400 font-semibold mb-4">Onboarding &amp; Licensing</h3>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/ALPHA_PILOT_ONBOARDING.md" target="_blank" rel="noopener noreferrer" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
-                    <div class="font-semibold mb-0.5">Alpha Pilot Guide</div>
-                    <div class="text-[10px] text-slate-500">Onboarding & Keys</div>
+                <a href="QUICKSTART.md" target="_blank" rel="noopener noreferrer" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
+                    <div class="font-semibold mb-0.5">Quickstart Guide</div>
+                    <div class="text-[10px] text-slate-500">Payment &amp; Key Claim Flow</div>
                 </a>
-                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/API_ERROR_CONTRACT.md" target="_blank" rel="noopener noreferrer" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
-                    <div class="font-semibold mb-0.5">Error Contract Spec</div>
-                    <div class="text-[10px] text-slate-500">RFC Taxonomy & Nonces</div>
+                <a href="#pricing" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
+                    <div class="font-semibold mb-0.5">Subscription Tiers</div>
+                    <div class="text-[10px] text-slate-500">Solana USDC/SOL &amp; Nano</div>
                 </a>
-                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/DAG_TOOL_PARAMETERS_DESIGN.md" target="_blank" rel="noopener noreferrer" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
-                    <div class="font-semibold mb-0.5">DAG Tool Spec</div>
-                    <div class="text-[10px] text-slate-500">Kahn's Sort & Cycles</div>
+                <a href="LICENSE" target="_blank" rel="noopener noreferrer" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
+                    <div class="font-semibold mb-0.5">Ontario EULA</div>
+                    <div class="text-[10px] text-slate-500">Proprietary Software License</div>
                 </a>
-                <a href="https://github.com/theheiszt/moltbook-alpha/blob/main/docs/CRYPTOGRAPHIC_STATE_WITNESSES_DESIGN.md" target="_blank" rel="noopener noreferrer" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
-                    <div class="font-semibold mb-0.5">Witness Spec</div>
-                    <div class="text-[10px] text-slate-500">RFC 8785 + Ed25519</div>
+                <a href="End_User_License_Agreement_Ontario.pdf" target="_blank" rel="noopener noreferrer" class="p-3 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 cyber-cut-sm text-slate-300 hover:text-sky-300 transition">
+                    <div class="font-semibold mb-0.5">EULA (PDF)</div>
+                    <div class="text-[10px] text-slate-500">Province of Ontario &amp; Canada</div>
                 </a>
             </div>
         </section>
@@ -1901,7 +1855,7 @@ audit = client.verify_witness_local(witness)
         window.addEventListener('DOMContentLoaded', resolveGatewayManifest);
 
         function setTab(tabName) {
-            const tabs = ['exchange', 'caps', 'webhooks', 'sdk', 'arb', 'alpha', 'curl', 'dag', 'witness', 'sentinel'];
+            const tabs = ['exchange', 'caps', 'sdk', 'arb', 'alpha', 'curl', 'witness', 'member'];
             tabs.forEach(t => {
                 const el = document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1));
                 const btn = document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
@@ -1917,6 +1871,35 @@ audit = client.verify_witness_local(witness)
                     }
                 }
             });
+        }
+
+        async function unlockMemberSdk() {
+            const keyInput = document.getElementById('memberSdkKeyInput');
+            const outEl = document.getElementById('codeSdk');
+            const rawKey = (keyInput && keyInput.value || '').trim();
+            if (!rawKey) {
+                outEl.className = 'p-4 bg-rose-950/40 border border-rose-800/60 rounded text-xs text-rose-300 font-mono overflow-x-auto leading-relaxed';
+                outEl.innerText = 'Please enter a valid paid X-API-KEY (molt_...) to unlock Member API & SDK Reference.';
+                return;
+            }
+            outEl.className = 'p-4 bg-black/90 border border-slate-800 rounded text-xs text-sky-300 font-mono overflow-x-auto leading-relaxed';
+            outEl.innerText = 'Verifying paid key against ' + ACTIVE_GATEWAY + '/v1/account/sdk-access ...';
+            try {
+                const resp = await fetch(`${ACTIVE_GATEWAY}/v1/account/sdk-access`, {
+                    headers: { 'X-API-KEY': rawKey, 'Accept': 'application/json' }
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.success) {
+                    outEl.className = 'p-4 bg-rose-950/40 border border-rose-800/60 rounded text-xs text-rose-300 font-mono overflow-x-auto leading-relaxed';
+                    outEl.innerText = `[HTTP ${resp.status}] Access Denied: ${JSON.stringify(data, null, 2)}`;
+                    return;
+                }
+                outEl.className = 'p-4 bg-black/90 border border-emerald-500/40 rounded text-xs text-emerald-300 font-mono overflow-x-auto leading-relaxed';
+                outEl.innerText = JSON.stringify(data, null, 2);
+            } catch (err) {
+                outEl.className = 'p-4 bg-rose-950/40 border border-rose-800/60 rounded text-xs text-rose-300 font-mono overflow-x-auto leading-relaxed';
+                outEl.innerText = `Verification request failed: ${err.message}`;
+            }
         }
 
         function copyToClipboard(text, btnElement) {
