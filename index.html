@@ -747,7 +747,7 @@
 
                     <!-- 6 Cryptographic & Audit Guarantees Grid (Properly Un-nested 3x2 Grid) -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                        <!-- Guarantee 1: Zero Quota Leakage -->
+                        <!-- Guarantee 1: Automated Quota Reclamation -->
                         <div class="bracket-card p-4 flex flex-col justify-between hover:border-emerald-500/50 transition">
                             <span class="bracket-tick bracket-tick-tl"></span>
                             <span class="bracket-tick bracket-tick-tr"></span>
@@ -755,7 +755,7 @@
                             <span class="bracket-tick bracket-tick-br"></span>
                             <div>
                                 <div class="text-[11px] font-mono text-emerald-400 font-semibold mb-1 flex items-center gap-1.5">
-                                    <span>🛡️</span> Zero Quota Leakage
+                                    <span>🛡️</span> Automated Quota Reclamation
                                 </div>
                                 <div class="text-[10px] text-slate-400 leading-normal">
                                     60s active background TTL sweeper auto-refunds abandoned reservations.
@@ -764,7 +764,7 @@
                             <div class="mt-2.5 text-[10px] font-mono text-emerald-500/90 font-medium">Auto-Sweeper Active</div>
                         </div>
 
-                        <!-- Guarantee 2: 100% Contract Match -->
+                        <!-- Guarantee 2: Automated Contract Synchronization -->
                         <div class="bracket-card p-4 flex flex-col justify-between hover:border-sky-500/50 transition">
                             <span class="bracket-tick bracket-tick-tl"></span>
                             <span class="bracket-tick bracket-tick-tr"></span>
@@ -772,7 +772,7 @@
                             <span class="bracket-tick bracket-tick-br"></span>
                             <div>
                                 <div class="text-[11px] font-mono text-sky-400 font-semibold mb-1 flex items-center gap-1.5">
-                                    <span>📐</span> 100% Contract Match
+                                    <span>📐</span> Automated Contract Synchronization
                                 </div>
                                 <div class="text-[10px] text-slate-400 leading-normal">
                                     /v1/capabilities is programmatically derived from live runtime validators.
@@ -1074,7 +1074,7 @@ curl -s -X POST $GATEWAY/v1/payments/invoice   -H <span class="text-emerald-300"
 curl -s -X POST $GATEWAY/v1/payments/verify-nano   -H <span class="text-emerald-300">"Content-Type: application/json"</span>   -d <span class="text-emerald-300">'{"block_hash": "YOUR_NANO_BLOCK_HASH", "invoice_id": "inv_YOUR_ID"}'</span>
 
 <span class="text-slate-500"># --- OPTION B: Solana Pay Settlement (USDC / SOL) ---</span>
-<span class="text-slate-500"># 1. Create a Solana Pay invoice ($1.00 USDC)</span>
+<span class="text-slate-500"># 1. Create a Solana Pay invoice ($1.00 USDC for 50 credits)</span>
 curl -s -X POST $GATEWAY/v1/payments/invoice   -H <span class="text-emerald-300">"Content-Type: application/json"</span>   -d <span class="text-emerald-300">'{"tier": "tier_starter", "asset": "USDC", "rail": "solana"}'</span>
 
 <span class="text-slate-500"># 2. Verify Solana transaction on finalized commitment</span>
@@ -1871,14 +1871,17 @@ audit = client.verify_witness_local(witness)
 
         function isTrustedGatewayOrigin(urlStr) {
             try {
-                if (typeof Origin !== 'undefined' && Origin.from) {
-                    const o = Origin.from(urlStr);
-                    const trusted = ['https://moltbook-alpha.duckdns.org', 'http://localhost', 'http://127.0.0.1'];
-                    return trusted.some(t => o.startsWith(t)) || o === window.location.origin;
-                }
                 const u = new URL(urlStr, window.location.origin);
-                const trusted = ['https://moltbook-alpha.duckdns.org', 'http://localhost', 'http://127.0.0.1'];
-                return u.origin !== 'null' && (trusted.some(t => u.origin.startsWith(t)) || u.origin === window.location.origin);
+                if (u.origin === 'null' || !u.origin) return false;
+                const trustedOrigins = new Set([
+                    'https://moltbook-alpha.duckdns.org',
+                    'http://localhost:8080',
+                    'http://127.0.0.1:8080',
+                    'http://localhost',
+                    'http://127.0.0.1',
+                    window.location.origin
+                ]);
+                return trustedOrigins.has(u.origin);
             } catch (_) {
                 return false;
             }
@@ -2079,7 +2082,7 @@ audit = client.verify_witness_local(witness)
 
                 consoleEl.innerText += `===========================================================\n`;
                 consoleEl.innerText += `ASSURANCE ASSAY SUMMARY: ALL 6 CHECKS PASSED (100% HEALTHY)\n`;
-                consoleEl.innerText += `  • Zero Abandoned Quota Leakage: VERIFIED (60s active sweeper)\n`;
+                consoleEl.innerText += `  • Active Quota Sweeper: VERIFIED (60s TTL reclamation)\n`;
                 consoleEl.innerText += `  • Contract & Validator Consistency: VERIFIED (0 schema drift)\n`;
                 consoleEl.innerText += `  • Multi-Rail Payments Engine: VERIFIED (Solana + Nano Zero-Fee)\n`;
                 consoleEl.innerText += `  • Machine-Readable RFC Errors: VERIFIED (${errCount} categorized codes)\n`;

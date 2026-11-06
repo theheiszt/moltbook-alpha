@@ -2739,6 +2739,12 @@
           dashboardMain.classList.add("hidden");
           dashboardMain.style.display = "none";
         }
+        const badge = document.getElementById("connectionBadge");
+        const badgeText = document.getElementById("connectionText");
+        if (badge && badgeText) {
+          badge.className = "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-xl bg-slate-900 text-slate-400 border border-slate-800";
+          badgeText.textContent = "AUTH REQUIRED";
+        }
       } else {
         if (loginOverlay) {
           loginOverlay.classList.add("hidden");
@@ -5184,11 +5190,7 @@
       }
 
       updateSubscriberBannerUI();
-      updateAuthUI();
-
-      if (activeView === "sentinel") {
-        switchView("sentinel");
-      }
+      switchView(activeView);
 
       if (adminToken) {
         fetchMetrics();

@@ -554,14 +554,17 @@
 
         function isTrustedGatewayOrigin(urlStr) {
             try {
-                if (typeof Origin !== 'undefined' && Origin.from) {
-                    const o = Origin.from(urlStr);
-                    const trusted = ['https://moltbook-alpha.duckdns.org', 'http://localhost', 'http://127.0.0.1'];
-                    return trusted.some(t => o.startsWith(t)) || o === window.location.origin;
-                }
                 const u = new URL(urlStr, window.location.origin);
-                const trusted = ['https://moltbook-alpha.duckdns.org', 'http://localhost', 'http://127.0.0.1'];
-                return u.origin !== 'null' && (trusted.some(t => u.origin.startsWith(t)) || u.origin === window.location.origin);
+                if (u.origin === 'null' || !u.origin) return false;
+                const trustedOrigins = new Set([
+                    'https://moltbook-alpha.duckdns.org',
+                    'http://localhost:8080',
+                    'http://127.0.0.1:8080',
+                    'http://localhost',
+                    'http://127.0.0.1',
+                    window.location.origin
+                ]);
+                return trustedOrigins.has(u.origin);
             } catch (_) {
                 return false;
             }
